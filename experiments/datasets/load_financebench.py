@@ -291,6 +291,10 @@ def load_financebench(limit: int | None = None) -> pd.DataFrame:
         answer = row.get("answer", "")
         annotation = classify_severity(question, answer)
 
+        # Extract evidence text from SEC filings
+        evidence_list = row.get("evidence", []) or []
+        evidence_text = "\n\n".join(e.get("evidence_text", "") for e in evidence_list if e.get("evidence_text"))
+
         records.append(
             {
                 "id": row.get("financebench_id", f"financebench_{i}"),
@@ -303,6 +307,7 @@ def load_financebench(limit: int | None = None) -> pd.DataFrame:
                 "question_reasoning": row.get("question_reasoning", ""),
                 "company": row.get("company", ""),
                 "gics_sector": row.get("gics_sector", ""),
+                "evidence": evidence_text,
                 "domain": "finance",
             }
         )

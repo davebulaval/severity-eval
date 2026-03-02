@@ -197,6 +197,24 @@ def load_tatqa(
         if limit is not None and len(records) >= limit:
             break
 
+        # Build passage-level evidence from table + paragraphs
+        evidence_parts = []
+        table_data = passage.get("table", {})
+        if isinstance(table_data, dict):
+            table_rows = table_data.get("table", [])
+        elif isinstance(table_data, list):
+            table_rows = table_data
+        else:
+            table_rows = []
+        if table_rows:
+            table_lines = [" | ".join(str(c) for c in row) for row in table_rows]
+            evidence_parts.append("\n".join(table_lines))
+        for para in passage.get("paragraphs", []):
+            text = para.get("text", "") if isinstance(para, dict) else str(para)
+            if text and text.strip():
+                evidence_parts.append(text.strip())
+        passage_evidence = "\n\n".join(evidence_parts)
+
         questions = passage.get("questions") or []
         for q in questions:
             if limit is not None and len(records) >= limit:
@@ -223,6 +241,7 @@ def load_tatqa(
                     "id": uid,
                     "question": question_text,
                     "answer": answer_str,
+                    "evidence": passage_evidence,
                     "severity": annotation["severity"],
                     "scale": annotation["scale"],
                     "answer_type": annotation["answer_type"],

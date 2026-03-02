@@ -278,11 +278,27 @@ def load_finqa(
         program = qa.get("program", "")
         annotation = classify_severity(question, program)
 
+        # Build evidence from pre_text + table + post_text
+        evidence_parts = []
+        for para in item.get("pre_text", []):
+            if para and para.strip():
+                evidence_parts.append(para.strip())
+        table = item.get("table", [])
+        if table:
+            # Format table as pipe-delimited rows
+            table_lines = [" | ".join(str(c) for c in row) for row in table]
+            evidence_parts.append("\n".join(table_lines))
+        for para in item.get("post_text", []):
+            if para and para.strip():
+                evidence_parts.append(para.strip())
+        evidence = "\n\n".join(evidence_parts)
+
         records.append(
             {
                 "id": item.get("id", f"finqa_{split}_{i}"),
                 "question": question,
                 "answer": str(answer),
+                "evidence": evidence,
                 "severity": annotation["severity"],
                 "program_type": annotation["program_type"],
                 "metric_type": annotation["metric_type"],

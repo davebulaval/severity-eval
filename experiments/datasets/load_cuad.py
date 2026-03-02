@@ -1,17 +1,26 @@
 """Load and annotate CUAD dataset with severity levels.
 
 CUAD: 13,000+ contract clauses from legal documents.
+Source: https://github.com/TheAtticusProject/cuad (SQuAD format)
+License: CC BY 4.0
+
+Note: the theatticusproject/cuad-qa HuggingFace repo uses a deprecated
+loading script that is no longer supported by the datasets library.
+This loader downloads the zip archive directly from the GitHub repo.
+
 Severity is assigned based on the clause type.
 """
 
 from __future__ import annotations
 
+import io
+import json
+import urllib.request
+import zipfile
+
 import pandas as pd
 
-try:
-    from datasets import load_dataset
-except ImportError:
-    load_dataset = None
+_DATA_URL = "https://github.com/TheAtticusProject/cuad/raw/main/data.zip"
 
 # Severity mapping based on clause type.
 # Keys are sorted longest-first within each group so that substring matching
@@ -71,8 +80,29 @@ def classify_severity(clause_type: str) -> str:
     return CLAUSE_SEVERITY.get(clause_type, "minor")
 
 
+def _download_cuad() -> dict:
+    """Download and parse the CUAD SQuAD-format JSON from GitHub."""
+    try:
+        with urllib.request.urlopen(_DATA_URL, timeout=120) as resp:
+            data = resp.read()
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Failed to download CUAD from {_DATA_URL}: {exc}") from exc
+
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        # The zip contains test.json and train.json in SQuAD format
+        for name in zf.namelist():
+            if name.endswith("test.json"):
+                with zf.open(name) as f:
+                    return json.loads(f.read().decode("utf-8"))
+
+    raise RuntimeError("test.json not found in CUAD data.zip")
+
+
 def load_cuad(limit: int | None = None) -> pd.DataFrame:
     """Load CUAD and annotate with severity.
+
+    Downloads data directly from the GitHub repo (SQuAD format) since
+    the HuggingFace dataset script is no longer supported.
 
     Parameters
     ----------
@@ -81,42 +111,55 @@ def load_cuad(limit: int | None = None) -> pd.DataFrame:
 
     Returns
     -------
-    DataFrame with columns: question, answer, severity, domain, clause_type
+    DataFrame with columns: id, question, answer, evidence, clause_type,
+        severity, domain
     """
-    if load_dataset is None:
-        raise ImportError("Install datasets: pip install datasets")
-
-    ds = load_dataset("theatticusproject/cuad-qa", split="test")
+    raw = _download_cuad()
 
     records = []
-    for i, row in enumerate(ds):
-        if limit and i >= limit:
+    for article in raw.get("data", []):
+        for paragraph in article.get("paragraphs", []):
+            context = paragraph.get("context", "")
+            for qa in paragraph.get("qas", []):
+                if limit and len(records) >= limit:
+                    break
+
+                question = qa.get("question", "")
+                answers = qa.get("answers", [])
+                answer_text = answers[0].get("text", "") if answers else ""
+                qa_id = qa.get("id", f"cuad_{len(records)}")
+
+                # Match against known clause types
+                matched_type = None
+                for known_type in sorted(CLAUSE_SEVERITY, key=len, reverse=True):
+                    if known_type.lower() in question.lower():
+                        matched_type = known_type
+                        break
+
+                severity = classify_severity(matched_type) if matched_type else "minor"
+
+                records.append(
+                    {
+                        "id": qa_id,
+                        "question": question,
+                        "answer": answer_text,
+                        "evidence": context,
+                        "clause_type": matched_type or "unknown",
+                        "severity": severity,
+                        "domain": "legal",
+                    }
+                )
+
+            if limit and len(records) >= limit:
+                break
+        if limit and len(records) >= limit:
             break
 
-        question = row.get("question", "")
-        answers = row.get("answers", {})
-        answer_text = answers.get("text", [""])[0] if isinstance(answers, dict) else ""
-
-        # Match against known clause types. Iterate longest keys first so that
-        # specific multi-word clauses (e.g. "Cap On Liability") are matched
-        # before shorter substrings they contain (e.g. "Liability").
-        matched_type = None
-        for known_type in sorted(CLAUSE_SEVERITY, key=len, reverse=True):
-            if known_type.lower() in question.lower():
-                matched_type = known_type
-                break
-
-        severity = classify_severity(matched_type) if matched_type else "minor"
-
-        records.append(
-            {
-                "id": f"cuad_{i}",
-                "question": question,
-                "answer": answer_text,
-                "clause_type": matched_type or "unknown",
-                "severity": severity,
-                "domain": "legal",
-            }
-        )
-
     return pd.DataFrame(records)
+
+
+if __name__ == "__main__":
+    df = load_cuad(limit=5)
+    print(df[["id", "question", "answer", "clause_type", "severity"]].to_string(max_colwidth=60))
+    print(f"\nEvidence present: {'evidence' in df.columns}")
+    print(f"Shape: {df.shape}")

@@ -16,7 +16,15 @@ cd "$PROJECT_DIR"
 
 # --- Configuration -----------------------------------------------------------
 
-MODELS=(gpt-4o claude-sonnet llama-3-70b mistral-large gemini-pro)
+MODELS=(
+    o3 o3-mini o4-mini
+    claude-opus claude-sonnet claude-haiku
+    gemini-3.1-pro gemini-2.5-pro gemini-2.5-flash
+    grok-3 grok-3-mini
+    mistral-large mistral-medium
+    deepseek-r1 deepseek-v3
+    qwen3-235b-thinking qwen3-235b
+)
 
 # Tier 1: public datasets that auto-download (server-ready)
 DATASETS_PUBLIC=(

@@ -33,11 +33,30 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 MODELS = {
-    "gpt-4o": {"provider": "openai", "model_id": "gpt-4o"},
+    # --- OpenAI ---
+    "o3": {"provider": "openai", "model_id": "o3-2025-04-16"},
+    "o3-mini": {"provider": "openai", "model_id": "o3-mini-2025-01-31"},
+    "o4-mini": {"provider": "openai", "model_id": "o4-mini-2025-04-16"},
+    # --- Anthropic ---
+    "claude-opus": {"provider": "anthropic", "model_id": "claude-opus-4-6"},
     "claude-sonnet": {"provider": "anthropic", "model_id": "claude-sonnet-4-6"},
-    "llama-3-70b": {"provider": "openrouter", "model_id": "meta-llama/llama-3-70b-instruct"},
+    "claude-haiku": {"provider": "anthropic", "model_id": "claude-haiku-4-5-20251001"},
+    # --- Google ---
+    "gemini-3.1-pro": {"provider": "google", "model_id": "gemini-3.1-pro-preview"},
+    "gemini-2.5-pro": {"provider": "google", "model_id": "gemini-2.5-pro"},
+    "gemini-2.5-flash": {"provider": "google", "model_id": "gemini-2.5-flash"},
+    # --- xAI ---
+    "grok-3": {"provider": "xai", "model_id": "grok-3-latest"},
+    "grok-3-mini": {"provider": "xai", "model_id": "grok-3-mini-beta"},
+    # --- Mistral ---
     "mistral-large": {"provider": "mistral", "model_id": "mistral-large-latest"},
-    "gemini-pro": {"provider": "google", "model_id": "gemini-1.5-pro"},
+    "mistral-medium": {"provider": "mistral", "model_id": "mistral-medium-2505"},
+    # --- DeepSeek (via OpenRouter) ---
+    "deepseek-r1": {"provider": "openrouter", "model_id": "deepseek/deepseek-r1"},
+    "deepseek-v3": {"provider": "openrouter", "model_id": "deepseek/deepseek-chat-v3-0324"},
+    # --- Qwen (via OpenRouter) ---
+    "qwen3-235b-thinking": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-thinking-2507"},
+    "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
 }
 
 # ---------------------------------------------------------------------------
@@ -70,16 +89,26 @@ OUTPUT_DIR = Path("experiments/results")
 
 DOMAIN_PROMPTS = {
     "finance": (
-        "Answer the following financial question concisely and accurately. "
-        "Provide only the answer, no explanation.\n\nQuestion: {question}\nAnswer:"
+        "Answer the following financial question based on the provided document excerpt. "
+        "Provide only the answer, no explanation.\n\n"
+        "{context}"
+        "Question: {question}\nAnswer:"
     ),
     "medical": (
         "Answer the following medical question. "
         "Provide only the answer (numerical with units if applicable).\n\nQuestion: {question}\nAnswer:"
     ),
     "legal": (
-        "Answer the following legal contract question. "
-        "Provide only the relevant text or 'N/A' if not found.\n\nQuestion: {question}\nAnswer:"
+        "Answer the following legal contract question based on the provided document excerpt. "
+        "Provide only the relevant text or 'N/A' if not found.\n\n"
+        "{context}"
+        "Question: {question}\nAnswer:"
+    ),
+    "legal_nli": (
+        "Given the following contract excerpt and hypothesis, determine the relationship. "
+        "Answer with exactly one word: Entailment, Contradiction, or Neutral.\n\n"
+        "{context}"
+        "Hypothesis: {question}\nAnswer:"
     ),
     "insurance": (
         "Répondez à la question suivante sur l'assurance automobile au Québec. "
@@ -92,10 +121,15 @@ DOMAIN_PROMPTS = {
 }
 
 
-def get_prompt(question: str, domain: str) -> str:
-    """Generate evaluation prompt."""
+def get_prompt(question: str, domain: str, evidence: str = "", options: dict | None = None) -> str:
+    """Generate evaluation prompt, optionally with evidence context and MCQ options."""
     template = DOMAIN_PROMPTS.get(domain, "Question: {question}\nAnswer:")
-    return template.format(question=question)
+    context = f"Document excerpt:\n{evidence}\n\n" if evidence else ""
+    prompt = template.format(question=question, context=context)
+    if options and isinstance(options, dict):
+        opts_str = "\n".join(f"  {k}. {v}" for k, v in sorted(options.items()))
+        prompt = prompt.rstrip("Answer:").rstrip("\n") + f"\nOptions:\n{opts_str}\nAnswer:"
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -129,22 +163,36 @@ def _get_client(provider: str):
         from mistralai import Mistral
 
         _clients[provider] = Mistral(api_key=os.environ.get("MISTRAL_API_KEY", ""))
+    elif provider == "xai":
+        from openai import OpenAI
+
+        _clients[provider] = OpenAI(
+            base_url="https://api.x.ai/v1",
+            api_key=os.environ.get("XAI_API_KEY", ""),
+        )
     elif provider == "google":
         import google.generativeai as genai
 
         genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-        _clients[provider] = genai.GenerativeModel("gemini-1.5-pro")
+        _clients[provider] = True  # sentinel — model created per model_id in call_google
     return _clients[provider]
 
 
 def call_openai(prompt: str, model_id: str) -> str:
     client = _get_client("openai")
-    response = client.chat.completions.create(
-        model=model_id,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=256,
-        temperature=0.0,
-    )
+    # Reasoning models (o3, o4-mini, etc.) don't support temperature
+    # and need more tokens (reasoning chain consumes most of the budget)
+    is_reasoning = model_id.startswith(("o3", "o4"))
+    kwargs = {
+        "model": model_id,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if is_reasoning:
+        kwargs["max_completion_tokens"] = 8192
+    else:
+        kwargs["max_tokens"] = 512
+        kwargs["temperature"] = 0.0
+    response = client.chat.completions.create(**kwargs)
     return (response.choices[0].message.content or "").strip()
 
 
@@ -152,7 +200,7 @@ def call_anthropic(prompt: str, model_id: str) -> str:
     client = _get_client("anthropic")
     response = client.messages.create(
         model=model_id,
-        max_tokens=256,
+        max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
     return (response.content[0].text if response.content else "").strip()
@@ -163,7 +211,7 @@ def call_openrouter(prompt: str, model_id: str) -> str:
     response = client.chat.completions.create(
         model=model_id,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=256,
+        max_tokens=512,
         temperature=0.0,
     )
     return (response.choices[0].message.content or "").strip()
@@ -174,7 +222,18 @@ def call_mistral(prompt: str, model_id: str) -> str:
     response = client.chat.complete(
         model=model_id,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=256,
+        max_tokens=512,
+        temperature=0.0,
+    )
+    return (response.choices[0].message.content or "").strip()
+
+
+def call_xai(prompt: str, model_id: str) -> str:
+    client = _get_client("xai")
+    response = client.chat.completions.create(
+        model=model_id,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=512,
         temperature=0.0,
     )
     return (response.choices[0].message.content or "").strip()
@@ -200,6 +259,7 @@ PROVIDERS = {
     "anthropic": call_anthropic,
     "openrouter": call_openrouter,
     "mistral": call_mistral,
+    "xai": call_xai,
     "google": call_google,
 }
 
@@ -446,7 +506,10 @@ def evaluate_model(
     n_errors_api = 0
 
     for idx, (_, row) in enumerate(df.iterrows()):
-        prompt = get_prompt(row["question"], row["domain"])
+        evidence = row.get("evidence", "") if "evidence" in row.index else ""
+        raw_opts = row.get("options") if "options" in row.index else None
+        options = raw_opts if isinstance(raw_opts, dict) else None
+        prompt = get_prompt(row["question"], row["domain"], evidence=str(evidence) if evidence else "", options=options)
 
         prediction = ""
         for attempt in range(max_retries):
@@ -461,8 +524,6 @@ def evaluate_model(
             log.error("All retries exhausted for %s", row["id"])
 
         # Score the prediction
-        raw_opts = row.get("options") if "options" in row.index else None
-        options = raw_opts if isinstance(raw_opts, dict) else None
         scoring = score_prediction(
             prediction,
             str(row["answer"]),
@@ -524,11 +585,11 @@ def main():
     )
     parser.add_argument(
         "--model",
-        default="gpt-4o",
+        default="o3",
         choices=list(MODELS.keys()) + ["all"],
     )
     parser.add_argument("--limit", type=int, default=None, help="Max instances per dataset")
-    parser.add_argument("--delay", type=float, default=1.0, help="Delay between API calls (s)")
+    parser.add_argument("--delay", type=float, default=2.0, help="Delay between API calls (s)")
     parser.add_argument("--wandb", action="store_true", help="Log results to wandb")
     parser.add_argument("--force", action="store_true", help="Overwrite existing results")
     args = parser.parse_args()
@@ -542,6 +603,7 @@ def main():
         "anthropic": "ANTHROPIC_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
         "mistral": "MISTRAL_API_KEY",
+        "xai": "XAI_API_KEY",
         "google": "GEMINI_API_KEY",
     }
     needed_providers = {MODELS[m]["provider"] for m in models_to_eval}

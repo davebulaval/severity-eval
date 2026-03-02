@@ -130,10 +130,11 @@ def load_contractnli(limit: int | None = None) -> pd.DataFrame:
                 "id": f"contractnli_{i:05d}",
                 "question": hypothesis,
                 "answer": label,
+                "evidence": premise,
                 "severity": severity,
                 "document_id": doc_snippet,
                 "subset": subset,
-                "domain": "legal",
+                "domain": "legal_nli",
             }
         )
 

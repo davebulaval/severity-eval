@@ -120,6 +120,29 @@ def _classify_severity(category: str, question: str) -> str:
     return CATEGORY_SEVERITY.get(category, "minor")
 
 
+def _build_answer_options(ds) -> dict[str, dict[str, str]]:
+    """Pre-compute valid answer choices per question from the full dataset.
+
+    Returns a dict mapping question text to {letter: answer_text}.
+    """
+    from collections import defaultdict
+
+    answers_per_q: dict[str, set[str]] = defaultdict(set)
+    for split_name in ds:
+        for row in ds[split_name]:
+            q = row.get("question", "")
+            a = row.get("answer", "")
+            if q and a:
+                answers_per_q[q].add(a)
+
+    options_map = {}
+    for q, answers in answers_per_q.items():
+        sorted_answers = sorted(answers)
+        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        options_map[q] = {letters[i]: a for i, a in enumerate(sorted_answers) if i < len(letters)}
+    return options_map
+
+
 def load_maud(limit: int | None = None) -> pd.DataFrame:
     """Load MAUD and annotate with severity.
 
@@ -133,12 +156,14 @@ def load_maud(limit: int | None = None) -> pd.DataFrame:
     Returns
     -------
     DataFrame with columns:
-        id, question, answer, severity, category, contract_name, domain
+        id, question, answer, evidence, severity, category, options,
+        contract_name, domain
     """
     if load_dataset is None:
         raise ImportError("Install datasets: pip install datasets")
 
     ds = load_dataset("theatticusproject/maud")
+    answer_options = _build_answer_options(ds)
 
     records: list[dict] = []
     global_idx = 0
@@ -155,6 +180,7 @@ def load_maud(limit: int | None = None) -> pd.DataFrame:
             category = row.get("category", "")
             answer = row.get("answer", "")
             contract_name = row.get("contract_name", "")
+            text = row.get("text", "")
             row_id = row.get("id", str(global_idx))
 
             # Combine question + subquestion for richer context when classifying.
@@ -164,11 +190,16 @@ def load_maud(limit: int | None = None) -> pd.DataFrame:
 
             severity = _classify_severity(category, full_question)
 
+            # Get MCQ options for this question type
+            options = answer_options.get(question, {})
+
             records.append(
                 {
                     "id": f"maud_{row_id}",
                     "question": full_question,
                     "answer": answer,
+                    "evidence": text,
+                    "options": options,
                     "severity": severity,
                     "category": category,
                     "contract_name": contract_name,
