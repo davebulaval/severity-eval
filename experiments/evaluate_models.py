@@ -125,9 +125,9 @@ def _get_local_batch_size(model_id: str, max_length: int) -> int:
     if max_length >= 4096:
         return {"large": 4, "medium": 8, "small": 16}[size_tier]
     elif max_length >= 2048:
-        return {"large": 8, "medium": 16, "small": 32}[size_tier]
-    else:
         return {"large": 16, "medium": 32, "small": 64}[size_tier]
+    else:
+        return {"large": 32, "medium": 64, "small": 128}[size_tier]
 
 # ---------------------------------------------------------------------------
 # Prompts — two styles: "original" (from published papers) and "standard"
