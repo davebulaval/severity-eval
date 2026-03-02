@@ -51,19 +51,21 @@ WANDB_FLAG=""
 DRY_RUN=false
 SKIP_PRIVATE=false
 FORCE_FLAG=""
+PROMPT_STYLE="original"
 
 # --- Parse arguments ---------------------------------------------------------
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --wandb)       WANDB_FLAG="--wandb"; shift ;;
-        --limit)       LIMIT="$2"; shift 2 ;;
-        --delay)       DELAY="$2"; shift 2 ;;
-        --dry-run)     DRY_RUN=true; shift ;;
+        --wandb)        WANDB_FLAG="--wandb"; shift ;;
+        --limit)        LIMIT="$2"; shift 2 ;;
+        --delay)        DELAY="$2"; shift 2 ;;
+        --prompt-style) PROMPT_STYLE="$2"; shift 2 ;;
+        --dry-run)      DRY_RUN=true; shift ;;
         --skip-private) SKIP_PRIVATE=true; shift ;;
-        --force)       FORCE_FLAG="--force"; shift ;;
+        --force)        FORCE_FLAG="--force"; shift ;;
         -h|--help)
-            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--dry-run] [--skip-private] [--force]"
+            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--force]"
             exit 0
             ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
@@ -142,6 +144,7 @@ echo "  Total    : $((${#DATASETS_TO_RUN[@]} * ${#MODELS[@]})) runs"
 echo "  Delay    : ${DELAY}s between API calls"
 echo "  Limit    : ${LIMIT:-none (full dataset)}"
 echo "  wandb    : ${WANDB_FLAG:-off}"
+echo "  Prompts  : ${PROMPT_STYLE}"
 echo "  Force    : ${FORCE_FLAG:-off (skip existing)}"
 echo "=========================================="
 echo ""
@@ -150,7 +153,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "[DRY RUN] Would execute:"
     for ds in "${DATASETS_TO_RUN[@]}"; do
         for model in "${MODELS[@]}"; do
-            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY ${LIMIT:+--limit $LIMIT} $WANDB_FLAG $FORCE_FLAG"
+            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} $WANDB_FLAG $FORCE_FLAG"
         done
     done
     exit 0
@@ -189,7 +192,8 @@ for ds in "${DATASETS_TO_RUN[@]}"; do
         CMD=(python -m experiments.evaluate_models
              --dataset "$ds"
              --model "$model"
-             --delay "$DELAY")
+             --delay "$DELAY"
+             --prompt-style "$PROMPT_STYLE")
 
         [[ -n "$LIMIT" ]] && CMD+=(--limit "$LIMIT")
         [[ -n "$WANDB_FLAG" ]] && CMD+=("$WANDB_FLAG")
