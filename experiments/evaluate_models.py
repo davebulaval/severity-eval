@@ -43,8 +43,6 @@ MODELS = {
     "claude-haiku": {"provider": "anthropic", "model_id": "claude-haiku-4-5-20251001"},
     # --- Google ---
     "gemini-3.1-pro": {"provider": "google", "model_id": "gemini-3.1-pro-preview"},
-    "gemini-2.5-pro": {"provider": "google", "model_id": "gemini-2.5-pro"},
-    "gemini-2.5-flash": {"provider": "google", "model_id": "gemini-2.5-flash"},
     # --- xAI ---
     "grok-3": {"provider": "xai", "model_id": "grok-3-latest"},
     "grok-3-mini": {"provider": "xai", "model_id": "grok-3-mini-beta"},
@@ -57,6 +55,14 @@ MODELS = {
     # --- Qwen (via OpenRouter) ---
     "qwen3-235b-thinking": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-thinking-2507"},
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
+    # --- Local (vLLM) ---
+    "qwq-32b": {"provider": "vllm", "model_id": "Qwen/QwQ-32B"},
+    "qwen3-30b-a3b": {"provider": "vllm", "model_id": "Qwen/Qwen3-30B-A3B"},
+    "deepseek-r1-distill-14b": {"provider": "vllm", "model_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"},
+    "qwen2.5-14b": {"provider": "vllm", "model_id": "Qwen/Qwen2.5-14B-Instruct"},
+    "phi-4": {"provider": "vllm", "model_id": "microsoft/phi-4"},
+    "prometheus-7b": {"provider": "vllm", "model_id": "prometheus-eval/prometheus-7b-v2.0"},
+    "skywork-critic-8b": {"provider": "vllm", "model_id": "Skywork/Skywork-Critic-Llama-3.1-8B"},
 }
 
 # ---------------------------------------------------------------------------
@@ -370,6 +376,26 @@ def call_google(prompt: str, model_id: str) -> str:
     return (response.text or "").strip()
 
 
+def call_vllm(prompt: str, model_id: str) -> str:
+    """Call a local model via vLLM. Model is loaded once and cached."""
+    from vllm import LLM, SamplingParams
+
+    cache_key = f"vllm_{model_id}"
+    if cache_key not in _clients:
+        log.info("Loading vLLM model %s (first call, may take a few minutes)...", model_id)
+        _clients[cache_key] = LLM(
+            model=model_id,
+            quantization="bitsandbytes",
+            load_format="bitsandbytes",
+            max_model_len=8192,
+            gpu_memory_utilization=0.90,
+        )
+    llm = _clients[cache_key]
+    params = SamplingParams(temperature=0.0, max_tokens=512)
+    outputs = llm.generate([prompt], params)
+    return outputs[0].outputs[0].text.strip()
+
+
 PROVIDERS = {
     "openai": call_openai,
     "anthropic": call_anthropic,
@@ -377,6 +403,7 @@ PROVIDERS = {
     "mistral": call_mistral,
     "xai": call_xai,
     "google": call_google,
+    "vllm": call_vllm,
 }
 
 
@@ -765,7 +792,7 @@ def main():
     datasets_to_eval = list(DATASETS.keys()) if args.dataset == "all" else [args.dataset]
     models_to_eval = list(MODELS.keys()) if args.model == "all" else [args.model]
 
-    # Validate API keys for selected models
+    # Validate API keys for selected models (vllm is local, no key needed)
     _PROVIDER_KEYS = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -776,6 +803,8 @@ def main():
     }
     needed_providers = {MODELS[m]["provider"] for m in models_to_eval}
     for provider in needed_providers:
+        if provider == "vllm":
+            continue
         env_var = _PROVIDER_KEYS[provider]
         if not os.environ.get(env_var):
             log.error("Missing API key: %s (needed for %s)", env_var, provider)

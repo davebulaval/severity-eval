@@ -16,14 +16,20 @@ cd "$PROJECT_DIR"
 
 # --- Configuration -----------------------------------------------------------
 
-MODELS=(
+MODELS_API=(
     o3 o3-mini o4-mini
     claude-opus claude-sonnet claude-haiku
-    gemini-3.1-pro gemini-2.5-pro gemini-2.5-flash
+    gemini-3.1-pro
     grok-3 grok-3-mini
     mistral-large mistral-medium
     deepseek-r1 deepseek-v3
     qwen3-235b-thinking qwen3-235b
+)
+
+MODELS_LOCAL=(
+    qwq-32b qwen3-30b-a3b
+    deepseek-r1-distill-14b qwen2.5-14b
+    phi-4 prometheus-7b skywork-critic-8b
 )
 
 # Tier 1: public datasets that auto-download (server-ready)
@@ -50,6 +56,8 @@ LIMIT=""
 WANDB_FLAG=""
 DRY_RUN=false
 SKIP_PRIVATE=false
+SKIP_LOCAL=false
+SKIP_API=false
 FORCE_FLAG=""
 PROMPT_STYLE="original"
 
@@ -63,9 +71,11 @@ while [[ $# -gt 0 ]]; do
         --prompt-style) PROMPT_STYLE="$2"; shift 2 ;;
         --dry-run)      DRY_RUN=true; shift ;;
         --skip-private) SKIP_PRIVATE=true; shift ;;
+        --skip-local)   SKIP_LOCAL=true; shift ;;
+        --skip-api)     SKIP_API=true; shift ;;
         --force)        FORCE_FLAG="--force"; shift ;;
         -h|--help)
-            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--force]"
+            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force]"
             exit 0
             ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
@@ -84,22 +94,41 @@ else
     echo "[WARN] No .env file found at $PROJECT_DIR/.env"
 fi
 
-# --- Validate API keys -------------------------------------------------------
+# --- Select models based on --skip-local / --skip-api -----------------------
 
-MISSING_KEYS=0
-for var in OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY MISTRAL_API_KEY GEMINI_API_KEY; do
-    if [[ -z "${!var:-}" ]]; then
-        echo "[ERROR] Missing $var"
-        MISSING_KEYS=1
-    else
-        echo "[OK] $var is set"
-    fi
-done
+MODELS=()
+if [[ "$SKIP_API" == "false" ]]; then
+    MODELS+=("${MODELS_API[@]}")
+fi
+if [[ "$SKIP_LOCAL" == "false" ]]; then
+    MODELS+=("${MODELS_LOCAL[@]}")
+fi
 
-if [[ $MISSING_KEYS -eq 1 ]]; then
-    echo ""
-    echo "Set missing keys in $PROJECT_DIR/.env and retry."
+if [[ ${#MODELS[@]} -eq 0 ]]; then
+    echo "[ERROR] No models selected (both --skip-api and --skip-local?)"
     exit 1
+fi
+
+# --- Validate API keys (only if running API models) -------------------------
+
+if [[ "$SKIP_API" == "false" ]]; then
+    MISSING_KEYS=0
+    for var in OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY MISTRAL_API_KEY GEMINI_API_KEY; do
+        if [[ -z "${!var:-}" ]]; then
+            echo "[ERROR] Missing $var"
+            MISSING_KEYS=1
+        else
+            echo "[OK] $var is set"
+        fi
+    done
+
+    if [[ $MISSING_KEYS -eq 1 ]]; then
+        echo ""
+        echo "Set missing keys in $PROJECT_DIR/.env and retry."
+        exit 1
+    fi
+else
+    echo "[INFO] Skipping API key validation (--skip-api)"
 fi
 
 # --- Check private datasets --------------------------------------------------
