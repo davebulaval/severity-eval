@@ -347,6 +347,8 @@ def _get_client(provider: str):
 
         genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
         _clients[provider] = True  # sentinel — model created per model_id in call_google
+    else:
+        raise ValueError(f"Unknown provider: {provider!r}")
     return _clients[provider]
 
 
@@ -512,7 +514,7 @@ def _extract_yes_no(text: str) -> str | None:
     return None
 
 
-def _is_mcq_match(prediction: str, reference: str, options: dict | None) -> bool:
+def _is_mcq_match(prediction: str, reference: str) -> bool:
     """Check if MCQ answer matches (by option letter or text)."""
     pred_norm = _normalize_text(prediction)
     ref_norm = _normalize_text(reference)
@@ -533,7 +535,6 @@ def _is_mcq_match(prediction: str, reference: str, options: dict | None) -> bool
 def score_prediction(
     prediction: str,
     reference: str,
-    domain: str,
     options: dict | None = None,
     tolerance: float = 0.05,
 ) -> dict:
@@ -550,7 +551,7 @@ def score_prediction(
     #    reliable signal: the dataset explicitly provides answer choices.
     if options and isinstance(options, dict):
         return {
-            "correct": _is_mcq_match(prediction, reference, options),
+            "correct": _is_mcq_match(prediction, reference),
             "score_method": "mcq",
         }
 
@@ -588,7 +589,7 @@ def score_prediction(
     ref_words = set(ref_norm.split())
     pred_words = set(pred_norm.split())
     if len(ref_words) >= 3 and ref_words.issubset(pred_words):
-        return {"correct": True, "score_method": "fuzzy_contains"}
+        return {"correct": True, "score_method": "fuzzy_words"}
 
     return {"correct": False, "score_method": "no_match"}
 
@@ -655,8 +656,6 @@ def _log_wandb_results(
     for method, count in score_methods.items():
         metrics[f"{ds_name}/{model_name}/score_methods/{method}"] = count
 
-    wandb.log(metrics)
-
     # Log results table
     table = wandb.Table(
         columns=["id", "severity", "question", "reference", "prediction", "correct", "score_method"],
@@ -673,7 +672,8 @@ def _log_wandb_results(
             for _, row in results_df.iterrows()
         ],
     )
-    wandb.log({f"{ds_name}/{model_name}/results": table})
+    metrics[f"{ds_name}/{model_name}/results"] = table
+    wandb.log(metrics)
 
 
 def _upload_wandb_artifact(
@@ -856,7 +856,7 @@ def _evaluate_local(
         for (row, _prompt, options), output in zip(batch_rows, outputs, strict=True):
             prediction = output[0]["generated_text"].strip() if output else ""
             scoring = score_prediction(
-                prediction, str(row["answer"]), row["domain"], options=options,
+                prediction, str(row["answer"]), options=options,
             )
             results.append({
                 **row.to_dict(),
@@ -930,8 +930,11 @@ def _evaluate_batch_openai(
     )
     log.info("  Batch created: %s", batch.id)
 
-    # Poll until done
+    # Poll until done (timeout after 72h)
+    poll_deadline = time.monotonic() + 72 * 3600
     while batch.status not in ("completed", "failed", "expired", "cancelled"):
+        if time.monotonic() > poll_deadline:
+            raise TimeoutError(f"OpenAI batch {batch.id} still {batch.status} after 72h")
         time.sleep(poll_interval)
         batch = client.batches.retrieve(batch.id)
         counts = batch.request_counts
@@ -965,7 +968,7 @@ def _evaluate_batch_openai(
     for idx, row, options in rows_data:
         prediction = predictions.get(idx, "")
         scoring = score_prediction(
-            prediction, str(row["answer"]), row["domain"], options=options,
+            prediction, str(row["answer"]), options=options,
         )
         results.append({
             **row.to_dict(),
@@ -1007,8 +1010,11 @@ def _evaluate_batch_anthropic(
     message_batch = client.messages.batches.create(requests=batch_requests)
     log.info("  Batch created: %s", message_batch.id)
 
-    # Poll until done
+    # Poll until done (timeout after 72h)
+    poll_deadline = time.monotonic() + 72 * 3600
     while message_batch.processing_status != "ended":
+        if time.monotonic() > poll_deadline:
+            raise TimeoutError(f"Anthropic batch {message_batch.id} still {message_batch.processing_status} after 72h")
         time.sleep(poll_interval)
         message_batch = client.messages.batches.retrieve(message_batch.id)
         counts = message_batch.request_counts
@@ -1031,7 +1037,7 @@ def _evaluate_batch_anthropic(
     for idx, row, options in rows_data:
         prediction = predictions.get(idx, "")
         scoring = score_prediction(
-            prediction, str(row["answer"]), row["domain"], options=options,
+            prediction, str(row["answer"]), options=options,
         )
         results.append({
             **row.to_dict(),
@@ -1098,7 +1104,10 @@ def _evaluate_batch_google(
         "JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED",
         "JOB_STATE_CANCELLED", "JOB_STATE_EXPIRED",
     }
+    poll_deadline = time.monotonic() + 72 * 3600
     while batch_job.state.name not in completed_states:
+        if time.monotonic() > poll_deadline:
+            raise TimeoutError(f"Google batch {batch_job.name} still {batch_job.state.name} after 72h")
         time.sleep(poll_interval)
         batch_job = client.batches.get(name=batch_job.name)
         log.info("  Batch %s: %s", batch_job.name, batch_job.state.name)
@@ -1130,7 +1139,7 @@ def _evaluate_batch_google(
     for idx, row, options in rows_data:
         prediction = predictions.get(idx, "")
         scoring = score_prediction(
-            prediction, str(row["answer"]), row["domain"], options=options,
+            prediction, str(row["answer"]), options=options,
         )
         results.append({
             **row.to_dict(),
@@ -1200,12 +1209,15 @@ def _evaluate_batch_xai(
             if i + chunk_size < len(batch_requests):
                 time.sleep(0.5)
 
-        # Poll
+        # Poll (timeout after 72h)
+        poll_deadline = time.monotonic() + 72 * 3600
         while True:
+            if time.monotonic() > poll_deadline:
+                raise TimeoutError(f"xAI batch {batch_id} still pending after 72h")
             time.sleep(poll_interval)
-            resp = http.get(f"{base_url}/batches/{batch_id}", headers=headers)
-            resp.raise_for_status()
-            state = resp.json().get("state", {})
+            poll_resp = http.get(f"{base_url}/batches/{batch_id}", headers=headers)
+            poll_resp.raise_for_status()
+            state = poll_resp.json().get("state", {})
             pending = state.get("num_pending", 0)
             success = state.get("num_success", 0)
             total = state.get("num_requests", len(rows_data))
@@ -1228,13 +1240,13 @@ def _evaluate_batch_xai(
             data = resp.json()
             for result in data.get("succeeded", []):
                 req_idx = int(result["batch_request_id"].split("-")[1])
-                resp = result.get("response", {})
+                result_body = result.get("response", {})
                 # xAI batch returns chat completions structure
-                choices = resp.get("choices", [])
+                choices = result_body.get("choices", [])
                 if choices:
                     content = choices[0].get("message", {}).get("content", "")
                 else:
-                    content = resp.get("content", "")  # fallback flat format
+                    content = result_body.get("content", "")  # fallback flat format
                 predictions[req_idx] = content.strip()
             for result in data.get("failed", []):
                 req_idx = int(result["batch_request_id"].split("-")[1])
@@ -1248,7 +1260,7 @@ def _evaluate_batch_xai(
     for idx, row, options in rows_data:
         prediction = predictions.get(idx, "")
         scoring = score_prediction(
-            prediction, str(row["answer"]), row["domain"], options=options,
+            prediction, str(row["answer"]), options=options,
         )
         results.append({
             **row.to_dict(),
@@ -1310,7 +1322,10 @@ def _evaluate_batch_mistral(
 
     # Poll
     terminal_states = {"SUCCESS", "FAILED", "TIMEOUT_EXCEEDED", "CANCELLED"}
+    poll_deadline = time.monotonic() + 72 * 3600
     while created_job.status not in terminal_states:
+        if time.monotonic() > poll_deadline:
+            raise TimeoutError(f"Mistral batch {created_job.id} still {created_job.status} after 72h")
         time.sleep(poll_interval)
         created_job = client.batch.jobs.get(job_id=created_job.id)
         log.info("  Batch %s: %s", created_job.id, created_job.status)
@@ -1341,7 +1356,7 @@ def _evaluate_batch_mistral(
     for idx, row, options in rows_data:
         prediction = predictions.get(idx, "")
         scoring = score_prediction(
-            prediction, str(row["answer"]), row["domain"], options=options,
+            prediction, str(row["answer"]), options=options,
         )
         results.append({
             **row.to_dict(),
@@ -1441,7 +1456,15 @@ def evaluate_model(
     }
 
     if provider in _BATCH_DISPATCHERS:
-        results = _BATCH_DISPATCHERS[provider]()
+        try:
+            results = _BATCH_DISPATCHERS[provider]()
+        except (TimeoutError, Exception) as e:
+            log.error("Batch evaluation failed for %s/%s: %s", model_name, dataset_name, e)
+            results = [
+                {**row.to_dict(), "model": model_name, "prediction": "",
+                 "correct": False, "score_method": "batch_error"}
+                for _, row in df.iterrows()
+            ]
         return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
 
     # Fallback: parallel requests with ThreadPoolExecutor (OpenRouter)
@@ -1461,7 +1484,7 @@ def evaluate_model(
         else:
             log.error("All %d retries exhausted for %s", max_retries, row["id"])
         scoring = score_prediction(
-            prediction, str(row["answer"]), row["domain"], options=options,
+            prediction, str(row["answer"]), options=options,
         )
         return idx, {
             **row.to_dict(),
@@ -1543,7 +1566,11 @@ def evaluate_model(
     # Fill any remaining None entries (shouldn't happen, but defensive)
     for i, r in enumerate(results_indexed):
         if r is None:
-            results_indexed[i] = {"model": model_name, "prediction": "", "correct": False, "score_method": "missing"}
+            results_indexed[i] = {
+                **df.iloc[i].to_dict(),
+                "model": model_name, "prediction": "",
+                "correct": False, "score_method": "missing",
+            }
 
     return _score_and_log_results(results_indexed, model_name, dataset_name, output_path, n_total)
 
