@@ -9,6 +9,7 @@
 #   ./experiments/run_local_large.sh                    # GPU 0 (wandb on)
 #   ./experiments/run_local_large.sh --gpu 1            # GPU 1
 #   ./experiments/run_local_large.sh --limit 50
+#   ./experiments/run_local_large.sh --force            # Overwrite all existing results
 # =============================================================================
 set -euo pipefail
 

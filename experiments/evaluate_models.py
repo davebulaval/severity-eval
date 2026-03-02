@@ -739,6 +739,10 @@ def _load_local_model(model_id: str):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+    # Use max_memory to keep everything on GPU — avoid CPU offload which breaks bnb 4-bit
+    gpu_id = int(os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
+    max_mem = {gpu_id: "45GiB"}
+
     if model_id.startswith("unsloth/"):
         from unsloth import FastLanguageModel
 
@@ -746,7 +750,8 @@ def _load_local_model(model_id: str):
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_id,
             max_seq_length=4096,
-            device_map="sequential",
+            device_map="auto",
+            max_memory=max_mem,
             dtype=None,
             load_in_4bit=True,
             trust_remote_code=True,
@@ -767,7 +772,8 @@ def _load_local_model(model_id: str):
             model_id,
             quantization_config=bnb_config,
             load_in_8bit=False,
-            device_map="sequential",
+            device_map="auto",
+            max_memory=max_mem,
             trust_remote_code=True,
             attn_implementation="sdpa",
         )
@@ -1457,11 +1463,8 @@ def evaluate_model(
             results = _BATCH_DISPATCHERS[provider]()
         except (TimeoutError, Exception) as e:
             log.error("Batch evaluation failed for %s/%s: %s", model_name, dataset_name, e)
-            results = [
-                {**row.to_dict(), "model": model_name, "prediction": "",
-                 "correct": False, "score_method": "batch_error"}
-                for _, row in df.iterrows()
-            ]
+            log.error("  Skipping result save — re-run to retry (no stale file created)")
+            return pd.DataFrame()
         return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
 
     # Fallback: parallel requests with ThreadPoolExecutor (OpenRouter)
