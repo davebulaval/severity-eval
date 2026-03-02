@@ -17,7 +17,7 @@ cd "$PROJECT_DIR"
 # --- Configuration -----------------------------------------------------------
 
 MODELS_API=(
-    o3 o3-mini o4-mini
+    o3 o3-mini gpt-5.2
     claude-opus claude-sonnet claude-haiku
     gemini-3.1-pro
     grok-3 grok-3-mini
@@ -28,8 +28,8 @@ MODELS_API=(
 
 MODELS_LOCAL=(
     qwq-32b qwen3-30b-a3b gemma-2-27b
-    qwen3-14b deepseek-r1-distill-14b phi-4
-    gemma-2-9b granite-3.2-8b llama-3.1-8b
+    qwen3-14b deepseek-r1-distill-14b
+    gemma-2-9b granite-3.2-8b
 )
 
 # Tier 1: public datasets that auto-download (server-ready)

@@ -352,9 +352,9 @@ def _get_client(provider: str):
 
 def call_openai(prompt: str, model_id: str) -> str:
     client = _get_client("openai")
-    # Reasoning models (o3, o4-mini, etc.) don't support temperature
+    # Reasoning models (o3, etc.) don't support temperature
     # and need more tokens (reasoning chain consumes most of the budget)
-    is_reasoning = model_id.startswith(("o3", "o4"))
+    is_reasoning = model_id.startswith("o3")
     kwargs = {
         "model": model_id,
         "messages": [{"role": "user", "content": prompt}],
@@ -896,7 +896,7 @@ def _evaluate_batch_openai(
                 prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
                 rows_data.append((idx, row, options))
 
-                is_reasoning = model_id.startswith(("o3", "o4"))
+                is_reasoning = model_id.startswith("o3")
                 body: dict = {
                     "model": model_id,
                     "messages": [{"role": "user", "content": prompt}],
