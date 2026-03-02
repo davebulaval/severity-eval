@@ -2,8 +2,7 @@
 # =============================================================================
 # run_local.sh — Run local models only via unsloth bnb-4bit (no API keys needed)
 #
-# Models: QwQ-32B, Qwen3-30B-A3B, DeepSeek-R1-Distill-14B, Qwen2.5-14B,
-#         Phi-4, Prometheus-7B, Skywork-Critic-8B
+# Models: QwQ-32B, Qwen3-30B-A3B, DeepSeek-R1-Distill-14B, Phi-4
 #
 # Usage:
 #   ./experiments/run_local.sh                        # All local models

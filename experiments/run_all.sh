@@ -27,9 +27,9 @@ MODELS_API=(
 )
 
 MODELS_LOCAL=(
-    qwq-32b qwen3-30b-a3b
-    deepseek-r1-distill-14b qwen2.5-14b
-    phi-4 prometheus-7b skywork-critic-8b
+    qwq-32b qwen3-30b-a3b gemma-2-27b
+    qwen3-14b deepseek-r1-distill-14b phi-4
+    gemma-2-9b granite-3.2-8b llama-3.1-8b
 )
 
 # Tier 1: public datasets that auto-download (server-ready)

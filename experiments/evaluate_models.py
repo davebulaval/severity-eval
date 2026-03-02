@@ -39,7 +39,7 @@ MODELS = {
     # --- OpenAI ---
     "o3": {"provider": "openai", "model_id": "o3-2025-04-16"},
     "o3-mini": {"provider": "openai", "model_id": "o3-mini-2025-01-31"},
-    "o4-mini": {"provider": "openai", "model_id": "o4-mini-2025-04-16"},
+    "gpt-5.2": {"provider": "openai", "model_id": "gpt-5.2-2025-05-14"},
     # --- Anthropic ---
     "claude-opus": {"provider": "anthropic", "model_id": "claude-opus-4-6"},
     "claude-sonnet": {"provider": "anthropic", "model_id": "claude-sonnet-4-6"},
@@ -61,11 +61,11 @@ MODELS = {
     # --- Local (unsloth bnb-4bit) ---
     "qwq-32b": {"provider": "local", "model_id": "unsloth/QwQ-32B-unsloth-bnb-4bit"},
     "qwen3-30b-a3b": {"provider": "local", "model_id": "Qwen/Qwen3-30B-A3B"},
+    "gemma-2-27b": {"provider": "local", "model_id": "unsloth/gemma-2-27b-it-bnb-4bit"},
+    "qwen3-14b": {"provider": "local", "model_id": "unsloth/Qwen3-14B-unsloth-bnb-4bit"},
     "deepseek-r1-distill-14b": {"provider": "local", "model_id": "unsloth/DeepSeek-R1-Distill-Qwen-14B-unsloth-bnb-4bit"},
-    "qwen2.5-14b": {"provider": "local", "model_id": "unsloth/Qwen2.5-14B-Instruct-bnb-4bit"},
-    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-unsloth-bnb-4bit"},
-    "prometheus-7b": {"provider": "local", "model_id": "prometheus-eval/prometheus-7b-v2.0"},
-    "skywork-critic-8b": {"provider": "local", "model_id": "Skywork/Skywork-Critic-Llama-3.1-8B"},
+    "gemma-2-9b": {"provider": "local", "model_id": "unsloth/gemma-2-9b-it-bnb-4bit"},
+    "granite-3.2-8b": {"provider": "local", "model_id": "unsloth/granite-3.2-8b-instruct-bnb-4bit"},
 }
 
 # ---------------------------------------------------------------------------
@@ -91,6 +91,44 @@ DATASETS = {
 }
 
 OUTPUT_DIR = Path("experiments/results")
+
+# ---------------------------------------------------------------------------
+# Adaptive inference config per dataset: (max_new_tokens, max_length)
+# ---------------------------------------------------------------------------
+
+DATASET_INFERENCE_CONFIG: dict[str, tuple[int, int]] = {
+    # dataset_name:     (max_new_tokens, max_length)
+    "financebench":     (128, 4096),
+    "finqa":            (128, 4096),
+    "tatqa":            (128, 4096),
+    "medcalc":          (64,  1024),
+    "medqa":            (32,  1024),
+    "headqa":           (32,  1024),
+    "cuad":             (256, 4096),
+    "maud":             (32,  4096),
+    "contractnli":      (16,  2048),
+    "rag_insurance":    (128, 2048),
+    "judgebert":        (256, 2048),
+}
+_DEFAULT_INFERENCE_CONFIG = (128, 4096)
+
+
+def _get_local_batch_size(model_id: str, max_length: int) -> int:
+    """Compute optimal batch size based on model size tier and context length."""
+    name = model_id.lower()
+    if any(s in name for s in ["32b", "30b", "27b"]):
+        size_tier = "large"    # ~15-18 GB VRAM
+    elif any(s in name for s in ["14b"]):
+        size_tier = "medium"   # ~8 GB VRAM
+    else:
+        size_tier = "small"    # ~5 GB VRAM (8B, 9B)
+
+    if max_length >= 4096:
+        return {"large": 2, "medium": 4, "small": 8}[size_tier]
+    elif max_length >= 2048:
+        return {"large": 4, "medium": 8, "small": 16}[size_tier]
+    else:
+        return {"large": 8, "medium": 16, "small": 32}[size_tier]
 
 # ---------------------------------------------------------------------------
 # Prompts — two styles: "original" (from published papers) and "standard"
@@ -748,11 +786,22 @@ def _evaluate_local(
     model_id: str,
     dataset_name: str,
     prompt_style: str,
-    batch_size: int = 8,
+    batch_size: int | None = None,
 ) -> list[dict]:
     """Batch inference for local models via unsloth/transformers."""
     import torch
     from transformers import pipeline
+
+    # Adaptive inference config
+    max_new_tokens, max_length = DATASET_INFERENCE_CONFIG.get(
+        dataset_name, _DEFAULT_INFERENCE_CONFIG,
+    )
+    if batch_size is None:
+        batch_size = _get_local_batch_size(model_id, max_length)
+    log.info(
+        "Local config: max_new_tokens=%d, max_length=%d, batch_size=%d",
+        max_new_tokens, max_length, batch_size,
+    )
 
     model, tokenizer = _load_local_model(model_id)
 
@@ -779,10 +828,10 @@ def _evaluate_local(
         batch_size=batch_size,
         dtype="float16",
         return_full_text=False,
-        max_new_tokens=512,
+        max_new_tokens=max_new_tokens,
         padding=True,
         truncation=True,
-        max_length=4096,
+        max_length=max_length,
     )
 
     # Batch inference
@@ -1333,7 +1382,7 @@ def evaluate_model(
     max_retries: int = 3,
     delay: float = 1.0,
     prompt_style: str = "original",
-    batch_size: int = 32,
+    batch_size: int | None = None,
 ) -> pd.DataFrame:
     """Evaluate a model on a dataset with scoring.
 
@@ -1353,8 +1402,9 @@ def evaluate_model(
         Delay between API calls (seconds).
     prompt_style : {'original', 'standard'}
         Prompt template variant. 'original' uses published paper prompts.
-    batch_size : int
-        Batch size for local inference / max parallel API workers (default 32).
+    batch_size : int | None
+        Batch size for local inference / max parallel API workers.
+        None = auto (adaptive for local, 32 for API).
 
     Returns
     -------
@@ -1423,7 +1473,7 @@ def evaluate_model(
 
     results_indexed: list[dict | None] = [None] * n_total
     n_done = 0
-    workers = min(batch_size, n_total)
+    workers = min(batch_size or 32, n_total)
     checkpoint_interval = 50  # Save partial results every N completions
     checkpoint_path = output_path.with_suffix(".partial.json")
 
@@ -1529,8 +1579,8 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=32,
-        help="Batch size for local inference / max parallel API workers (default 32)",
+        default=None,
+        help="Override batch size for local inference / max parallel API workers (auto if omitted)",
     )
     args = parser.parse_args()
 
