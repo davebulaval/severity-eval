@@ -254,7 +254,16 @@ def get_prompt(
     if options and isinstance(options, dict):
         options_str = "\n".join(f"{k}. {v}" for k, v in sorted(options.items())) + "\n"
 
-    return template.format(question=question, context=context, options_str=options_str)
+    # Use safe substitution to avoid crashes on curly braces in evidence/questions
+    # (common in legal texts like CUAD/MAUD)
+    try:
+        return template.format(question=question, context=context, options_str=options_str)
+    except (KeyError, ValueError, IndexError):
+        # Fallback: manual replacement (handles stray { } in text)
+        result = template.replace("{question}", question)
+        result = result.replace("{context}", context)
+        result = result.replace("{options_str}", options_str)
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +385,11 @@ def call_google(prompt: str, model_id: str) -> str:
         _clients[cache_key] = genai.GenerativeModel(model_id)
     model = _clients[cache_key]
     response = model.generate_content(prompt)
-    return (response.text or "").strip()
+    try:
+        return (response.text or "").strip()
+    except ValueError:
+        # Response was blocked by safety filters
+        return ""
 
 
 PROVIDERS = {
@@ -470,9 +483,9 @@ def _is_mcq_match(prediction: str, reference: str, options: dict | None) -> bool
     if ref_norm and ref_norm in pred_norm:
         return True
 
-    # Single letter match (A, B, C, D)
-    pred_letter = re.match(r"^([a-d])\b", pred_norm)
-    ref_letter = re.match(r"^([a-d])\b", ref_norm)
+    # Single letter match (A-Z — MAUD can have 5+ options)
+    pred_letter = re.match(r"^([a-z])\b", pred_norm)
+    ref_letter = re.match(r"^([a-z])\b", ref_norm)
     if pred_letter and ref_letter:
         return pred_letter.group(1) == ref_letter.group(1)
 
@@ -625,6 +638,26 @@ def _log_wandb_results(
     wandb.log({f"{ds_name}/{model_name}/results": table})
 
 
+def _upload_wandb_artifact(
+    run,
+    ds_name: str,
+    model_name: str,
+    output_path: Path,
+) -> None:
+    """Upload result JSON as a wandb Artifact for reproducibility."""
+    if run is None or not output_path.exists():
+        return
+    import wandb
+
+    artifact = wandb.Artifact(
+        name=f"{ds_name}_{model_name}_results",
+        type="evaluation_results",
+        metadata={"dataset": ds_name, "model": model_name},
+    )
+    artifact.add_file(str(output_path))
+    run.log_artifact(artifact)
+
+
 # ---------------------------------------------------------------------------
 # Main evaluation loop
 # ---------------------------------------------------------------------------
@@ -662,6 +695,17 @@ def _evaluate_vllm(
 
     cache_key = f"vllm_{model_id}"
     if cache_key not in _clients:
+        # Evict any previously loaded vLLM model to free GPU memory
+        for key in list(_clients):
+            if key.startswith("vllm_") and key != cache_key:
+                log.info("Unloading previous vLLM model: %s", key)
+                del _clients[key]
+                import gc
+
+                import torch
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
         log.info("Loading vLLM model %s (first call, may take a few minutes)...", model_id)
         _clients[cache_key] = LLM(
             model=model_id,
@@ -1082,7 +1126,13 @@ def _evaluate_batch_xai(
             data = resp.json()
             for result in data.get("succeeded", []):
                 req_idx = int(result["batch_request_id"].split("-")[1])
-                content = result.get("response", {}).get("content", "")
+                resp = result.get("response", {})
+                # xAI batch returns chat completions structure
+                choices = resp.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+                else:
+                    content = resp.get("content", "")  # fallback flat format
                 predictions[req_idx] = content.strip()
             for result in data.get("failed", []):
                 req_idx = int(result["batch_request_id"].split("-")[1])
@@ -1321,13 +1371,40 @@ def evaluate_model(
     results_indexed: list[dict | None] = [None] * n_total
     n_done = 0
     workers = min(batch_size, n_total)
+    checkpoint_interval = 50  # Save partial results every N completions
+    checkpoint_path = output_path.with_suffix(".partial.json")
+
+    # Resume from partial results if they exist
+    if checkpoint_path.exists():
+        try:
+            partial_df = pd.read_json(checkpoint_path)
+            for _, row_data in partial_df.iterrows():
+                row_dict = row_data.to_dict()
+                # Find the index by matching id
+                for i, (_, orig_row) in enumerate(df.iterrows()):
+                    if str(orig_row["id"]) == str(row_dict.get("id")):
+                        results_indexed[i] = row_dict
+                        n_done += 1
+                        break
+            log.info("  Resumed %d/%d results from %s", n_done, n_total, checkpoint_path)
+        except Exception as e:
+            log.warning("  Could not resume from checkpoint: %s", e)
+            n_done = 0
+            results_indexed = [None] * n_total
 
     log.info("  API parallel inference: %d prompts with %d workers", n_total, workers)
+
+    # Only submit tasks for indices not yet completed
+    pending_items = [
+        (idx, row)
+        for idx, (_, row) in enumerate(df.iterrows())
+        if results_indexed[idx] is None
+    ]
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
             executor.submit(_call_single, (idx, row)): idx
-            for idx, (_, row) in enumerate(df.iterrows())
+            for idx, row in pending_items
         }
         for future in as_completed(futures):
             try:
@@ -1335,18 +1412,30 @@ def evaluate_model(
             except Exception as e:
                 idx = futures[future]
                 log.error("Unhandled error for index %d: %s", idx, e)
+                # Retrieve the row to preserve all columns in the DataFrame
+                row = df.iloc[idx]
                 result = {
+                    **row.to_dict(),
                     "model": model_name, "prediction": "",
                     "correct": False, "score_method": "error",
                 }
             results_indexed[idx] = result
             n_done += 1
-            if n_done % 50 == 0:
+            if n_done % checkpoint_interval == 0:
                 n_correct = sum(1 for r in results_indexed if r and r.get("correct"))
                 log.info(
                     "  [%d/%d] accuracy so far: %.1f%%",
                     n_done, n_total, n_correct / n_done * 100,
                 )
+                # Incremental checkpoint save
+                completed = [r for r in results_indexed if r is not None]
+                pd.DataFrame(completed).to_json(
+                    checkpoint_path, orient="records", indent=2, force_ascii=False,
+                )
+
+    # Clean up checkpoint after successful completion
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
 
     # Fill any remaining None entries (shouldn't happen, but defensive)
     for i, r in enumerate(results_indexed):
@@ -1444,6 +1533,7 @@ def main():
                 if wandb_run is not None:
                     existing_df = pd.read_json(output_path)
                     _log_wandb_results(wandb_run, ds_name, model_name, existing_df)
+                    _upload_wandb_artifact(wandb_run, ds_name, model_name, output_path)
                 continue
 
             log.info("Evaluating %s on %s (prompt=%s)...", model_name, ds_name, args.prompt_style)
@@ -1453,6 +1543,7 @@ def main():
                 batch_size=args.batch_size,
             )
             _log_wandb_results(wandb_run, ds_name, model_name, results_df)
+            _upload_wandb_artifact(wandb_run, ds_name, model_name, output_path)
 
     if wandb_run is not None:
         wandb_run.finish()

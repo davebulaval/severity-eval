@@ -7,8 +7,8 @@
 #
 # Usage:
 #   ./experiments/run_local.sh                        # All local models
+#   ./experiments/run_local.sh --wandb                # With wandb logging + artifacts
 #   ./experiments/run_local.sh --limit 100            # Cap instances per dataset
-#   ./experiments/run_local.sh --config original      # Primary prompts only
 #   ./experiments/run_local.sh --dry-run              # Show what would run
 # =============================================================================
 set -euo pipefail
