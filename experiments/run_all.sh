@@ -60,6 +60,7 @@ SKIP_LOCAL=false
 SKIP_API=false
 FORCE_FLAG=""
 PROMPT_STYLE="original"
+GPU=""
 
 # --- Parse arguments ---------------------------------------------------------
 
@@ -74,8 +75,9 @@ while [[ $# -gt 0 ]]; do
         --skip-local)   SKIP_LOCAL=true; shift ;;
         --skip-api)     SKIP_API=true; shift ;;
         --force)        FORCE_FLAG="--force"; shift ;;
+        --gpu)          GPU="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force]"
+            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--gpu ID]"
             exit 0
             ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
@@ -175,6 +177,7 @@ echo "  Limit    : ${LIMIT:-none (full dataset)}"
 echo "  wandb    : ${WANDB_FLAG:-off}"
 echo "  Prompts  : ${PROMPT_STYLE}"
 echo "  Force    : ${FORCE_FLAG:-off (skip existing)}"
+echo "  GPU      : ${GPU:-auto}"
 echo "=========================================="
 echo ""
 
@@ -182,7 +185,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "[DRY RUN] Would execute:"
     for ds in "${DATASETS_TO_RUN[@]}"; do
         for model in "${MODELS[@]}"; do
-            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} $WANDB_FLAG $FORCE_FLAG"
+            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} ${GPU:+--gpu $GPU} $WANDB_FLAG $FORCE_FLAG"
         done
     done
     exit 0
@@ -225,6 +228,7 @@ for ds in "${DATASETS_TO_RUN[@]}"; do
              --prompt-style "$PROMPT_STYLE")
 
         [[ -n "$LIMIT" ]] && CMD+=(--limit "$LIMIT")
+        [[ -n "$GPU" ]] && CMD+=(--gpu "$GPU")
         [[ -n "$WANDB_FLAG" ]] && CMD+=("$WANDB_FLAG")
         [[ -n "$FORCE_FLAG" ]] && CMD+=("$FORCE_FLAG")
 

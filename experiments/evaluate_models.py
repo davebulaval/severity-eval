@@ -787,7 +787,18 @@ def main():
     )
     parser.add_argument("--wandb", action="store_true", help="Log results to wandb")
     parser.add_argument("--force", action="store_true", help="Overwrite existing results")
+    parser.add_argument(
+        "--gpu",
+        type=str,
+        default=None,
+        help="CUDA device ID(s) for local vLLM models (e.g. '0', '1', '0,1')",
+    )
     args = parser.parse_args()
+
+    # Set CUDA_VISIBLE_DEVICES before any GPU library import
+    if args.gpu is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+        log.info("CUDA_VISIBLE_DEVICES=%s", args.gpu)
 
     datasets_to_eval = list(DATASETS.keys()) if args.dataset == "all" else [args.dataset]
     models_to_eval = list(MODELS.keys()) if args.model == "all" else [args.model]

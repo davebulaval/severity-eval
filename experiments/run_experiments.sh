@@ -29,6 +29,7 @@ SKIP_LOCAL=false
 SKIP_API=false
 FORCE_FLAG=""
 WANDB_FLAG=""
+GPU=""
 
 # --- Parse arguments ---------------------------------------------------------
 
@@ -43,14 +44,16 @@ while [[ $# -gt 0 ]]; do
         --skip-api)     SKIP_API=true; shift ;;
         --force)        FORCE_FLAG="--force"; shift ;;
         --wandb)        WANDB_FLAG="--wandb"; shift ;;
+        --gpu)          GPU="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--config original|standard|both] [--limit N] [--delay S] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--wandb]"
+            echo "Usage: $0 [--config original|standard|both] [--limit N] [--delay S] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--wandb] [--gpu ID]"
             echo ""
             echo "  --config original   Run primary results (paper prompts) only"
             echo "  --config standard   Run ablation (HELM-style) only"
             echo "  --config both       Run both configurations (default)"
             echo "  --skip-local        Skip local vLLM models"
             echo "  --skip-api          Skip API models (run local only)"
+            echo "  --gpu ID            CUDA device ID for local models (e.g. 0, 1, 0,1)"
             exit 0
             ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
@@ -108,6 +111,7 @@ for style in "${PROMPT_STYLES[@]}"; do
     [[ "$SKIP_PRIVATE" == "true" ]] && CMD+=(--skip-private)
     [[ "$SKIP_LOCAL" == "true" ]]   && CMD+=(--skip-local)
     [[ "$SKIP_API" == "true" ]]     && CMD+=(--skip-api)
+    [[ -n "$GPU" ]]                 && CMD+=(--gpu "$GPU")
 
     if [[ "$DRY_RUN" == "true" ]]; then
         CMD+=(--dry-run)
