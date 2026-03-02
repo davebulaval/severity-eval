@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "severity-eval"
+version = "0.1.0"
+description = "Actuarial compound-loss metrics for AI evaluation: frequency × severity framework"
+readme = {text = "", content-type = "text/plain"}
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "David Beauchemin" },
+]
+keywords = ["evaluation", "metrics", "severity", "actuarial", "ai-safety"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+hf = ["evaluate>=0.4", "datasets>=2.14"]
+experiments = [
+    "severity-eval[hf]",
+    "openai>=1.0",
+    "anthropic>=0.20",
+    "google-generativeai>=0.3",
+    "mistralai>=0.1",
+    "python-dotenv>=1.0",
+    "wandb>=0.16",
+    "tqdm>=4.60",
+    "huggingface_hub>=0.20",
+]
+dev = [
+    "severity-eval[hf]",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "RUF",   # ruff-specific
+    "ANN",   # flake8-annotations
+]
+ignore = [
+    "ANN401",  # Dynamically typed expressions (typing.Any)
+    "E501",    # line too long (handled by formatter)
+    "RUF001",  # ambiguous unicode in strings (math symbols ρ, α, etc.)
+    "RUF002",  # ambiguous unicode in docstrings
+    "RUF003",  # ambiguous unicode in comments (× etc.)
+    "RUF005",  # collection concatenation style (preference)
+    "SIM108",  # ternary — sometimes if/else is more readable
+    "SIM110",  # use any() — sometimes explicit loop is clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+"experiments/*" = ["ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

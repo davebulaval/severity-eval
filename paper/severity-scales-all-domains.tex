@@ -1,0 +1,286 @@
+% ============================================================
+% Multi-Domain Severity Scales — Empirical Calibration
+% For EMNLP 2026 main text or appendix
+% ============================================================
+
+\section{Multi-Domain Severity Scales}
+\label{sec:multi-domain-scales}
+
+We define domain-specific cost vectors $\mathbf{c} = (c_1, c_2, c_3, c_4)$
+calibrated against publicly available regulatory, litigation, and
+market data. Each domain uses the same four severity labels
+(\textit{negligible}, \textit{minor}, \textit{major}, \textit{critical})
+but with domain-appropriate dollar amounts.
+
+% ============================================================
+\subsection{Finance (\$100, \$1k, \$10k, \$100k)}
+
+See Section~\ref{sec:severity-scale} for full calibration.
+
+\textbf{Key sources:} SEC SAB~99 materiality framework; FINRA median
+fine \$125k (2024); SOX~\S906 individual penalty \$10k; ``Big~R''
+restatement average net income impact --\$16M; IBM/Ponemon cost per
+record \$173.
+
+% ============================================================
+\subsection{Medical (\$500, \$5k, \$50k, \$500k)}
+
+Medical errors carry higher unit costs than financial errors due to
+direct patient safety implications and the regulatory environment
+(FDA, malpractice liability).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrl}
+\toprule
+Level & $c_k$ & Calibration \\
+\midrule
+Negligible & \$500 & BMI/BSA miscalculation; unit conversion \\
+Minor & \$5\,000 & Framingham risk score error; non-critical lab \\
+Major & \$50\,000 & Surgical risk miscalculation; delayed diagnosis \\
+Critical & \$500\,000 & Dosage error; sepsis triage failure \\
+\bottomrule
+\end{tabular}
+\caption{Medical severity scale.}
+\label{tab:medical-scale}
+\end{table}
+
+\paragraph{Empirical evidence.}
+\begin{itemize}
+\item \textbf{AHRQ/HCUP 2023:} Average cost of a preventable adverse
+    drug event (ADE): \$5\,857 per hospital admission
+    \citep{ahrq2023ade}. Calibrates \textit{minor}.
+\item \textbf{Johns Hopkins/BMJ 2016:} Medical errors are the third
+    leading cause of death in the U.S., with estimated annual cost of
+    \$17--29B \citep{makary2016}. Calibrates systemic exposure.
+\item \textbf{Malpractice settlements:} Median jury verdict in medical
+    malpractice: \$1.1M; median settlement: \$425k
+    \citep{diederich2023}. Calibrates \textit{critical}.
+\item \textbf{FDA medication error reports:} 100\,000+ reports/year;
+    7\,000--9\,000 deaths attributed to medication errors annually
+    \citep{fda2023mederrors}. Per-death economic cost estimate:
+    \$1--10M (value of a statistical life, EPA/DOT).
+\item \textbf{Diagnostic error cost:} Estimated \$100B/year in the U.S.
+    from diagnostic errors; average per-patient cost of a missed
+    diagnosis: \$36\,000--\$85\,000 \citep{newman2023diagnostic}.
+    Calibrates \textit{major}.
+\item \textbf{Sepsis misdiagnosis:} Delayed sepsis treatment increases
+    mortality by 7.6\% per hour of delay; hospital cost per sepsis
+    case: \$32\,000--\$48\,000; mortality-adjusted cost exceeds \$500k
+    \citep{seymour2017sepsis}. Calibrates \textit{critical}.
+\end{itemize}
+
+\paragraph{Annotation rule for MedCalc-Bench.}
+The dataset categorizes medical calculators into clinical domains
+(dosage, triage, risk assessment, body metrics). The mapping is:
+\begin{itemize}
+\item Dosage/Sepsis/Triage calculators $\to$ \textit{critical}
+\item Surgical risk / APACHE / ICU scores $\to$ \textit{major}
+\item Framingham / cardiovascular risk scores $\to$ \textit{minor}
+\item BMI / BSA / unit conversions $\to$ \textit{negligible}
+\end{itemize}
+
+% ============================================================
+\subsection{Legal (\$200, \$2k, \$20k, \$200k)}
+
+Legal errors in contract analysis expose organizations to missed
+obligations, unintended liability, and unfavorable terms.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrl}
+\toprule
+Level & $c_k$ & Calibration \\
+\midrule
+Negligible & \$200 & Definitions, boilerplate identification \\
+Minor & \$2\,000 & Effective date, term, renewal errors \\
+Major & \$20\,000 & Non-compete, IP assignment, exclusivity \\
+Critical & \$200\,000 & Indemnification, liability cap, termination \\
+\bottomrule
+\end{tabular}
+\caption{Legal severity scale.}
+\label{tab:legal-scale}
+\end{table}
+
+\paragraph{Empirical evidence.}
+\begin{itemize}
+\item \textbf{IACCM/WCC 2022:} Average cost of poor contract management:
+    9.2\% of annual revenue \citep{iaccm2022}. For a \$100M company,
+    this is \$9.2M/year across all contracts.
+\item \textbf{Legal billing rates:} Average partner billing rate
+    \$600--1\,200/hour (Am Law 200). A missed clause requiring
+    2--20 hours of remediation: \$1\,200--\$24\,000.
+    Calibrates \textit{minor} to \textit{major}.
+\item \textbf{Indemnification disputes:} Median cost of contractual
+    indemnification litigation: \$200k--\$500k including legal fees
+    \citep{aba2021indemnification}. Calibrates \textit{critical}.
+\item \textbf{Non-compete violations:} Average damages awarded in
+    non-compete cases: \$18\,000--\$75\,000 for injunctive relief;
+    \$100k--\$500k for lost profits claims. Calibrates
+    \textit{major} to \textit{critical}.
+\item \textbf{M\&A due diligence errors:} A single missed material
+    contract clause can affect deal valuation by 1--5\% of
+    transaction value. For a \$50M deal: \$500k--\$2.5M.
+\end{itemize}
+
+\paragraph{Annotation rule for CUAD.}
+CUAD annotates 41 contract clause types. The mapping is based on the
+legal risk category:
+\begin{itemize}
+\item Indemnification, limitation of liability, uncapped liability,
+    termination for convenience $\to$ \textit{critical}
+\item Non-compete, IP ownership, exclusivity, most favored nation,
+    change of control $\to$ \textit{major}
+\item Effective date, expiration date, renewal term, notice period,
+    governing law $\to$ \textit{minor}
+\item Document name, parties, definitions, recitals $\to$
+    \textit{negligible}
+\end{itemize}
+
+% ============================================================
+\subsection{Code/Security (\$1k, \$10k, \$100k, \$1M)}
+
+Vulnerability-related errors in code carry costs that scale with
+the CVSS severity score and the attack surface affected.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrl}
+\toprule
+Level & $c_k$ & Calibration \\
+\midrule
+Negligible & \$1\,000 & Low CVSS (0.1--3.9); informational finding \\
+Minor & \$10\,000 & Medium CVSS (4.0--6.9); limited exploit \\
+Major & \$100\,000 & High CVSS (7.0--8.9); network-exploitable \\
+Critical & \$1\,000\,000 & Critical CVSS (9.0--10.0); RCE/zero-day \\
+\bottomrule
+\end{tabular}
+\caption{Code/Security severity scale.}
+\label{tab:code-security-scale}
+\end{table}
+
+\paragraph{Empirical evidence.}
+\begin{itemize}
+\item \textbf{IBM/Ponemon 2024:} Average cost of a data breach:
+    \$4.88M globally; \$9.48M in the U.S. \citep{ponemon2024}.
+    Average cost per stolen record: \$173. A critical vulnerability
+    leading to a breach of 5\,000--50\,000 records: \$865k--\$8.65M.
+    Calibrates \textit{critical}.
+\item \textbf{Bugcrowd 2024:} Median bug bounty payout for critical
+    vulnerabilities: \$8\,000--\$30\,000; for high: \$2\,000--\$5\,000
+    \citep{bugcrowd2024}. Note: bounties reflect the \emph{research}
+    cost, not the \emph{impact} cost, providing a lower bound.
+\item \textbf{NIST NVD statistics:} 28\,902 CVEs published in 2023;
+    17.8\% rated Critical (CVSS $\geq$ 9.0); 42.3\% rated High
+    \citep{nist2024nvd}.
+\item \textbf{Equifax breach (2017):} Unpatched Apache Struts
+    vulnerability (CVSS~10.0); total cost: \$1.4B including \$700M
+    settlement \citep{ftc2019equifax}. Single CVE, \$1.4B impact.
+\item \textbf{Log4Shell (2021):} CVSS~10.0; estimated global
+    remediation cost: \$10B+ \citep{cybereason2022log4shell}.
+\item \textbf{SolarWinds (2020):} Estimated cleanup cost across
+    affected organizations: \$100M+ per large enterprise
+    \citep{solarwinds2021}.
+\item \textbf{Veracode State of Software Security 2024:} 74\% of
+    applications have at least one security flaw; 19.5\% have
+    high-severity flaws \citep{veracode2024}.
+\end{itemize}
+
+\paragraph{Annotation rule for CVE-Bench.}
+CVE-Bench provides native CVSS scores. The mapping is direct:
+\begin{itemize}
+\item CVSS $\geq$ 9.0 $\to$ \textit{critical}
+\item CVSS 7.0--8.9 $\to$ \textit{major}
+\item CVSS 4.0--6.9 $\to$ \textit{minor}
+\item CVSS $<$ 4.0 $\to$ \textit{negligible}
+\end{itemize}
+
+% ============================================================
+\subsection{Content Moderation (\$50, \$500, \$5k, \$50k)}
+
+Content moderation errors expose platforms to regulatory fines
+(DSA, Online Safety Act), advertiser withdrawal, and user harm.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrl}
+\toprule
+Level & $c_k$ & Calibration \\
+\midrule
+Negligible & \$50 & Borderline content; minor policy edge case \\
+Minor & \$500 & Hate speech / harassment missed \\
+Major & \$5\,000 & CSAM-adjacent; terrorist content missed \\
+Critical & \$50\,000 & CSAM; imminent violence threat missed \\
+\bottomrule
+\end{tabular}
+\caption{Content moderation severity scale.}
+\label{tab:moderation-scale}
+\end{table}
+
+\paragraph{Empirical evidence.}
+\begin{itemize}
+\item \textbf{EU Digital Services Act (2024):} Fines up to 6\% of
+    global annual turnover for systemic failures in content moderation.
+    For a platform with \$10B revenue: up to \$600M.
+\item \textbf{UK Online Safety Act (2023):} Fines up to 10\% of
+    qualifying worldwide revenue, or \pounds18M (whichever is higher).
+\item \textbf{Australia eSafety Commissioner:} AUD~555k per day per
+    contravention for failure to remove class~1 material (CSAM,
+    terrorism).
+\item \textbf{Meta Oversight Board:} Reports that incorrect content
+    removal affects an estimated 1 in 10\,000 pieces of content;
+    incorrect non-removal of violating content estimated at 3--5\%
+    of reports \citep{meta2023transparency}.
+\item \textbf{Advertiser boycotts:} The 2020 ``Stop Hate for Profit''
+    campaign cost Facebook an estimated \$7.2B in market value in
+    one week \citep{reuters2020stophate}.
+\item \textbf{Trust \& Safety teams:} Average cost per manual content
+    review: \$1--5 per item (including human reviewer time, QA,
+    appeals). At scale (millions of reviews/day), this represents
+    the \textit{negligible} operational baseline.
+\end{itemize}
+
+\paragraph{Annotation rule for Jigsaw Severity.}
+Jigsaw provides pairwise severity comparisons. We convert the
+ranking-derived severity score to quartiles:
+\begin{itemize}
+\item Top 5\% severity $\to$ \textit{critical}
+\item 75th--95th percentile $\to$ \textit{major}
+\item 25th--75th percentile $\to$ \textit{minor}
+\item Bottom 25\% $\to$ \textit{negligible}
+\end{itemize}
+
+% ============================================================
+\subsection{Summary of Cost Vectors}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Domain & $c_1$ & $c_2$ & $c_3$ & $c_4$ \\
+\midrule
+Finance         & \$100   & \$1\,000   & \$10\,000   & \$100\,000 \\
+Medical         & \$500   & \$5\,000   & \$50\,000   & \$500\,000 \\
+Legal           & \$200   & \$2\,000   & \$20\,000   & \$200\,000 \\
+Code/Security   & \$1\,000 & \$10\,000 & \$100\,000  & \$1\,000\,000 \\
+Moderation      & \$50    & \$500      & \$5\,000    & \$50\,000 \\
+\bottomrule
+\end{tabular}
+\caption{Cost vectors by domain. Each vector spans three orders of
+magnitude, reflecting the empirical observation that financial exposure
+from errors follows a heavy-tailed distribution within each domain.}
+\label{tab:cost-vectors}
+\end{table}
+
+\paragraph{Cross-domain ordering.}
+The relative ordering $c_k^{\text{moderation}} < c_k^{\text{finance}}
+< c_k^{\text{legal}} < c_k^{\text{medical}} < c_k^{\text{security}}$
+reflects the regulatory and liability gradient: content moderation
+errors rarely trigger direct financial liability at the per-instance
+level, while a single critical vulnerability (RCE/zero-day) can lead
+to breaches costing hundreds of millions.
