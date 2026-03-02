@@ -786,11 +786,13 @@ def _evaluate_local(
     )
 
     # Batch inference
+    from tqdm import tqdm
+
     all_prompts = [item[1] for item in rows_data]
     n_batches = (len(all_prompts) + batch_size - 1) // batch_size
-    log.info("  Local batch inference: %d prompts in %d batches of %d", len(all_prompts), n_batches, batch_size)
 
     results = []
+    pbar = tqdm(total=len(rows_data), desc=f"{model_name}", unit="sample")
     for batch_idx in range(n_batches):
         batch_start = batch_idx * batch_size
         batch_end = min(batch_start + batch_size, len(rows_data))
@@ -801,10 +803,6 @@ def _evaluate_local(
         with torch.no_grad():
             outputs = gen_pipeline(batch_prompts)
         elapsed = time.perf_counter() - start
-        log.info(
-            "  Batch %d/%d done (%.1fs, %.0f ms/sample)",
-            batch_idx + 1, n_batches, elapsed, elapsed / len(outputs) * 1000,
-        )
 
         for (row, _prompt, options), output in zip(batch_rows, outputs, strict=True):
             prediction = output[0]["generated_text"].strip() if output else ""
@@ -820,11 +818,11 @@ def _evaluate_local(
             })
 
         n_correct_so_far = sum(1 for r in results if r["correct"])
-        log.info(
-            "  [%d/%d] accuracy so far: %.1f%%",
-            len(results), len(rows_data), n_correct_so_far / len(results) * 100,
-        )
+        acc = n_correct_so_far / len(results) * 100
+        pbar.update(len(batch_prompts))
+        pbar.set_postfix(acc=f"{acc:.1f}%", ms=f"{elapsed / len(outputs) * 1000:.0f}")
 
+    pbar.close()
     return results
 
 
