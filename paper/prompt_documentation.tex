@@ -1,0 +1,336 @@
+% =============================================================================
+% Prompt Documentation for severity-eval — EMNLP 2026
+% This file documents all evaluation prompts with academic references.
+% Use as appendix or supplementary material.
+% =============================================================================
+
+\section{Evaluation Prompts and Methodology}
+\label{sec:prompts}
+
+We evaluate 17 LLMs across 11 datasets spanning three domains (finance, medical, legal) and two private insurance datasets.
+For each dataset, we use two prompt configurations:
+\begin{enumerate}
+    \item \textbf{Original prompts} (primary results): zero-shot prompts from published evaluation protocols, ensuring comparability with prior work.
+    \item \textbf{Standardized prompts} (ablation): uniform HELM-style templates~\cite{liang2023helm} to demonstrate that our findings are robust to prompt choice.
+\end{enumerate}
+
+All evaluations use temperature 0.0 (greedy decoding) where supported by the API, and zero-shot prompting (no in-context examples) to avoid confounding few-shot effects with severity-aware evaluation.
+
+% ---------------------------------------------------------------------------
+\subsection{Finance Domain}
+% ---------------------------------------------------------------------------
+
+\subsubsection{FinanceBench}
+
+\textbf{Source:} Islam et al.~\cite{islam2023financebench}, Table~3 --- Oracle context-first configuration.
+The original paper used human evaluation; we add a brief output constraint (``Provide only the answer'') necessary for automated scoring, following standard practice in benchmark evaluation~\cite{liang2023helm}.
+
+\begin{quote}
+\texttt{Answer this question: \{question\}} \\
+\texttt{Provide only the answer, no explanation.} \\
+\texttt{Context:} \\
+\texttt{[START OF FILING] \{evidence\} [END OF FILING]} \\
+\texttt{Answer:}
+\end{quote}
+
+Evidence is extracted from the \texttt{evidence} column of the dataset, containing SEC filing excerpts (10-K, 10-Q, 8-K) linked to each question.
+Parameters: temperature 0.01, max tokens 2048 in the original paper; we use temperature 0.0, max tokens 512.
+
+\subsubsection{FinQA}
+
+\textbf{Source:} Chen et al.~\cite{chen2022program} (Program-of-Thoughts), confirmed by the PIXIU/FinBen benchmark~\cite{xie2024finben} (Appendix~C, Table~7).
+
+\begin{quote}
+\texttt{Read the following text and table, and then answer a question:} \\
+\texttt{\{evidence\}} \\
+\texttt{Question: \{question\}} \\
+\texttt{Answer:}
+\end{quote}
+
+Context is assembled from the raw JSON: \texttt{pre\_text} paragraphs (joined), followed by the table (pipe-delimited rows), followed by \texttt{post\_text} paragraphs.
+This matches the CoT format from~\cite{chen2022program} without the Python code generation component, as we evaluate direct answer generation.
+
+\subsubsection{TAT-QA}
+
+\textbf{Source:} PIXIU/FinBen benchmark~\cite{xie2024finben}, Appendix~C, Table~7; also confirmed by TAT-LLM~\cite{zhu2024tatllm}, Appendix~D.
+
+\begin{quote}
+\texttt{Read the following text and table, and then answer a question:} \\
+\texttt{\{evidence\}} \\
+\texttt{Question: \{question\}} \\
+\texttt{Answer:}
+\end{quote}
+
+Context is assembled from the passage-level JSON: table rows (pipe-delimited) followed by paragraph texts.
+The FinBen benchmark uses the same structure with the prefix ``Please answer the given financial question based on the context''~\cite{xie2024finben}; we adopt the FinQA-consistent format for uniformity across financial datasets.
+
+% ---------------------------------------------------------------------------
+\subsection{Medical Domain}
+% ---------------------------------------------------------------------------
+
+\subsubsection{MedCalc-Bench}
+
+\textbf{Source:} NCBI evaluation code\footnote{\url{https://github.com/ncbi-nlp/MedCalc-Bench/blob/main/evaluation/run.py}} --- \texttt{direct\_answer} mode (zero-shot, no chain-of-thought).
+
+\begin{quote}
+\texttt{You are a helpful assistant for calculating a score for a given patient note.
+Please output answer only without any other text.} \\[6pt]
+\texttt{Here is the patient note:} \\
+\texttt{\{question\}} \\[6pt]
+\texttt{Please output the numerical answer:}
+\end{quote}
+
+The original code defines three modes: \texttt{direct\_answer}, \texttt{zero\_shot} (CoT), and \texttt{one\_shot}.
+We use \texttt{direct\_answer} for consistency with our zero-shot evaluation protocol.
+The system prompt instructs the model to output only the numerical value, matching the original evaluation methodology.
+
+\subsubsection{MedQA USMLE}
+
+\textbf{Source:} EleutherAI lm-evaluation-harness\footnote{\url{https://github.com/EleutherAI/lm-evaluation-harness/tree/main/lm_eval/tasks/medqa}} --- zero-shot MCQ format.
+
+\begin{quote}
+\texttt{Question: \{question\}} \\
+\texttt{A. \{option\_A\}} \\
+\texttt{B. \{option\_B\}} \\
+\texttt{C. \{option\_C\}} \\
+\texttt{D. \{option\_D\}} \\
+\texttt{Answer:}
+\end{quote}
+
+This is the canonical format used across major evaluation frameworks.
+HELM~\cite{liang2023helm} uses an identical structure with the prefix ``The following are multiple choice questions (with answers) about medicine'' and 5-shot examples; we omit few-shot examples for consistency.
+The MedPaLM evaluation~\cite{singhal2023medpalm} uses a similar structure with chain-of-thought (``Let's think step by step''), which we exclude from the primary results.
+
+\subsubsection{HEAD-QA}
+
+\textbf{Source:} MedHELM~\cite{flemingmedhelm2024}\footnote{\url{https://github.com/stanford-crfm/helm/blob/main/src/helm/benchmark/run_specs/medhelm_run_specs.py}} --- zero-shot biomedical MCQ format.
+
+\begin{quote}
+\texttt{You are a highly knowledgeable AI assistant specializing in biomedical sciences.
+Select the correct answer by outputting only the letter corresponding to your choice.} \\[6pt]
+\texttt{Question: \{question\}} \\
+\texttt{A. \{option\_A\}} \\
+\texttt{...} \\
+\texttt{Answer:}
+\end{quote}
+
+The biomedical instruction prefix follows MedHELM's domain-specific adapter configuration.
+The original HEAD-QA paper~\cite{vilares2019headqa} evaluated IR+neural systems without LLM prompts; the lm-evaluation-harness uses a simpler format without the biomedical prefix.
+
+% ---------------------------------------------------------------------------
+\subsection{Legal Domain}
+% ---------------------------------------------------------------------------
+
+All legal prompts follow LegalBench~\cite{guha2023legalbench}, the standard benchmark for LLM evaluation on legal tasks.
+
+\subsubsection{CUAD}
+
+\textbf{Source:} LegalBench~\cite{guha2023legalbench} --- zero-shot jargon format.
+The original CUAD paper~\cite{hendrycks2021cuad} defines an extractive QA task (SQuAD~2.0 format) where questions are the 41 clause category descriptions from \texttt{category\_descriptions.csv}.
+
+\begin{quote}
+\texttt{\{evidence\}} \\[6pt]
+\texttt{Question: \{question\}} \\
+\texttt{Provide only the relevant text from the clause, or `N/A' if not found.} \\
+\texttt{Answer:}
+\end{quote}
+
+Evidence is the contract paragraph context from the SQuAD-format data, downloaded directly from the GitHub repository\footnote{\url{https://github.com/TheAtticusProject/cuad}} since the HuggingFace dataset script is no longer supported.
+
+\subsubsection{MAUD}
+
+\textbf{Source:} LegalBench~\cite{guha2023legalbench} --- MCQ classification format over merger agreement text.
+MAUD~\cite{wang2023maud} defines 92 deal point questions with 2--5 answer categories per question.
+
+\begin{quote}
+\texttt{Instruction: Read the segment of a merger agreement and answer the
+multiple-choice question by choosing the option that best characterizes the agreement.} \\
+\texttt{Question: \{question\}} \\
+\texttt{A. \{option\_A\}} \\
+\texttt{B. \{option\_B\}} \\
+\texttt{...} \\[6pt]
+\texttt{Merger Agreement: \{evidence\}} \\
+\texttt{Answer:}
+\end{quote}
+
+Answer options are pre-computed per question type from the full dataset.
+The LegalBench evaluation includes both few-shot (\texttt{base\_prompt.txt}) and zero-shot (\texttt{base\_prompt\_wo\_example.txt}) variants; we use the zero-shot variant.
+
+\subsubsection{ContractNLI}
+
+\textbf{Source:} Adapted from LegalBench~\cite{guha2023legalbench} ContractNLI tasks.
+The original paper~\cite{koreeda2021contractnli} defines a document-level NLI task with 17 fixed hypotheses over NDA contracts.
+LegalBench binarizes the task (Entailment vs.\ Not Entailment); we preserve the original three-class formulation (Entailment, Contradiction, Neutral).
+
+\begin{quote}
+\texttt{Given the following NDA excerpt, determine the relationship with the hypothesis.
+Answer with exactly one word: Entailment, Contradiction, or Neutral.} \\[6pt]
+\texttt{Document excerpt:} \\
+\texttt{\{evidence\}} \\[6pt]
+\texttt{Hypothesis: \{question\}} \\
+\texttt{Answer:}
+\end{quote}
+
+% ---------------------------------------------------------------------------
+\subsection{Insurance Domain (Private Datasets)}
+% ---------------------------------------------------------------------------
+
+\subsubsection{Quebec Automobile Insurance RAG}
+
+\textbf{Source:} Beauchemin et al.~\cite{beauchemin2024quebec} --- exact prompt from the RAG evaluation pipeline.
+
+\begin{quote}
+\texttt{Répondez à la question suivante sur l'assurance automobile au Québec.
+Fournissez uniquement la réponse, sans explication.} \\[6pt]
+\texttt{Question : \{question\}} \\
+\texttt{Réponse :}
+\end{quote}
+
+The original paper uses a more detailed expert system prompt with retrieved context; we use the zero-shot variant for consistency.
+Evaluation follows the manual criterion-based scoring protocol from~\cite{beauchemin2024quebec} (scale: $-1$ for false information, 0 for no answer, 1 for incomplete, 2 for complete).
+
+\subsubsection{Legal Text Simplification (JUDGEBERT)}
+
+\textbf{Source:} JUDGEBERT~\cite{judgebert2025} --- GPT-4 simplification prompt (French).
+
+\begin{quote}
+\texttt{Simplifiez le texte juridique suivant en langage clair,
+en préservant le sens légal.} \\[6pt]
+\texttt{Texte : \{question\}} \\
+\texttt{Simplification :}
+\end{quote}
+
+Evaluation of simplification quality uses the Legal Meaning Preservation (LMP) score from~\cite{judgebert2025}, a 10-point Likert scale assessed by law students with brackets: 7--10 (Accurate), 2--6 (Seems Imprecise), 1 (Off-Track).
+
+% ---------------------------------------------------------------------------
+\subsection{Standardized Prompts (Ablation)}
+\label{sec:standard-prompts}
+% ---------------------------------------------------------------------------
+
+For the ablation study, all datasets use a uniform HELM-style template~\cite{liang2023helm}:
+
+\begin{quote}
+\texttt{Question: \{question\}} \\
+\texttt{\{context if available\}} \\
+\texttt{\{options if MCQ\}} \\
+\texttt{Answer:}
+\end{quote}
+
+This minimal template removes all dataset-specific instructions, domain prefixes, and formatting conventions.
+If the Kendall $\tau$ between model rankings under ``original'' and ``standard'' prompts is high ($\tau > 0.8$), this confirms that our severity-weighted findings are robust to prompt engineering choices.
+
+% ---------------------------------------------------------------------------
+\subsection{Severity Annotation}
+\label{sec:severity-annotation}
+% ---------------------------------------------------------------------------
+
+Each dataset instance is annotated with a severity level (critical, major, minor, negligible) using domain-specific heuristics:
+
+\paragraph{Finance (FinanceBench, FinQA, TAT-QA).}
+Two-axis classification following SEC Staff Accounting Bulletin No.~99 (SAB~99) materiality framework:
+(1)~answer type (dollar-large, dollar-small, percentage, ratio, yes/no, text) $\times$
+(2)~metric type (core financials, operational, ratio, descriptive).
+Core financial statement items (revenue, net income, total assets) in absolute dollars are classified as \emph{critical}; operational metrics as \emph{major}; ratios and percentages as \emph{minor}; descriptive text as \emph{negligible}.
+
+\paragraph{Medical (MedCalc, MedQA, HEAD-QA).}
+Based on clinical impact: dosage/triage calculations are \emph{critical}; diagnostic/surgical decisions are \emph{major}; pathophysiology and lab interpretation are \emph{minor}; anatomy and basic science are \emph{negligible}.
+
+\paragraph{Legal (CUAD, MAUD, ContractNLI).}
+Based on clause type and legal exposure: indemnification, liability limitation, and termination clauses are \emph{critical}; IP ownership, non-compete, and deal protection are \emph{major}; governing law and closing conditions are \emph{minor}; definitions and boilerplate are \emph{negligible}.
+
+% ---------------------------------------------------------------------------
+\subsection{Scoring Methodology}
+% ---------------------------------------------------------------------------
+
+Predictions are scored using an automated cascade:
+\begin{enumerate}
+    \item \textbf{MCQ matching}: if options are provided, compare by option letter or exact text match.
+    \item \textbf{Yes/No extraction}: word-boundary match at response start.
+    \item \textbf{Numeric comparison}: extract dollar amounts (priority), percentages, or first non-year number; compare with 5\% relative tolerance.
+    \item \textbf{Exact text match}: normalized (lowercase, strip punctuation, collapse whitespace).
+    \item \textbf{Fuzzy containment}: reference substring in prediction (min 4 characters) or all reference words present (min 3 words).
+\end{enumerate}
+
+Number extraction prioritizes dollar amounts (\$X, \$X million/billion) over standalone numbers, and skips year-like values (1900--2099) to avoid false matches in financial documents.
+
+% ---------------------------------------------------------------------------
+% References
+% ---------------------------------------------------------------------------
+
+\begin{thebibliography}{99}
+
+\bibitem{islam2023financebench}
+P.~Islam, A.~Kannappan, D.~Kiela, R.~Qian, N.~Scherrer, and B.~Vidgen.
+\newblock {FinanceBench}: A New Benchmark for Financial Question Answering.
+\newblock \emph{arXiv:2311.11944}, 2023.
+
+\bibitem{chen2022program}
+W.~Chen, X.~Ma, X.~Wang, and W.~Cohen.
+\newblock Program of Thoughts Prompting: Disentangling Computation from Reasoning for Numerical Reasoning Tasks.
+\newblock \emph{TMLR}, 2023. arXiv:2211.12588.
+
+\bibitem{xie2024finben}
+Q.~Xie, W.~Han, Y.~Lai, M.~Peng, and J.~Huang.
+\newblock {FinBen}: A Holistic Financial Benchmark for Large Language Models.
+\newblock \emph{NeurIPS Datasets \& Benchmarks}, 2024. arXiv:2402.12659.
+
+\bibitem{zhu2024tatllm}
+F.~Zhu, W.~Lei, Y.~Feng, C.~Wang, B.~Zhang, and T.-S.~Chua.
+\newblock {TAT-LLM}: A Specialized Language Model for Discrete Reasoning over Tabular and Textual Data.
+\newblock \emph{ICAIF}, 2024. arXiv:2401.13223.
+
+\bibitem{zhu2021tatqa}
+F.~Zhu, W.~Lei, Y.~Huang, C.~Wang, S.~Zhang, J.~Lv, F.~Feng, and T.-S.~Chua.
+\newblock {TAT-QA}: A Question Answering Benchmark on a Hybrid of Tabular and Textual Content in Finance.
+\newblock In \emph{ACL}, pages 3277--3287, 2021.
+
+\bibitem{liang2023helm}
+P.~Liang, R.~Bommasani, T.~Lee, et~al.
+\newblock Holistic Evaluation of Language Models.
+\newblock \emph{TMLR}, 2023.
+
+\bibitem{singhal2023medpalm}
+K.~Singhal, S.~Azizi, T.~Tu, et~al.
+\newblock Large Language Models Encode Clinical Knowledge.
+\newblock \emph{Nature}, 620:172--180, 2023.
+
+\bibitem{flemingmedhelm2024}
+S.~Fleming, A.~Lozano, W.~Haberkorn, et~al.
+\newblock {MedHELM}: A Medical Health Evaluation of Large Language Models.
+\newblock 2024.
+
+\bibitem{vilares2019headqa}
+D.~Vilares and C.~G{\'o}mez-Rodr{\'\i}guez.
+\newblock {HEAD-QA}: A Healthcare Dataset for Complex Reasoning.
+\newblock In \emph{ACL}, 2019.
+
+\bibitem{guha2023legalbench}
+N.~Guha, J.~Nyarko, D.~Ho, et~al.
+\newblock {LegalBench}: A Collaboratively Built Benchmark for Measuring Legal Reasoning in Large Language Models.
+\newblock \emph{NeurIPS Datasets \& Benchmarks}, 2023. arXiv:2308.11462.
+
+\bibitem{hendrycks2021cuad}
+D.~Hendrycks, C.~Burns, A.~Chen, and S.~Ball.
+\newblock {CUAD}: An Expert-Annotated {NLP} Dataset for Legal Contract Review.
+\newblock \emph{arXiv:2103.06268}, 2021.
+
+\bibitem{wang2023maud}
+S.~Wang, A.~Holzenberger, et~al.
+\newblock {MAUD}: An Expert-Annotated Legal {NLP} Dataset for Merger Agreement Understanding.
+\newblock \emph{arXiv:2301.00876}, 2023.
+
+\bibitem{koreeda2021contractnli}
+Y.~Koreeda and C.~Manning.
+\newblock {ContractNLI}: A Dataset for Document-level Natural Language Inference for Contracts.
+\newblock In \emph{Findings of EMNLP}, pages 1907--1919, 2021.
+
+\bibitem{beauchemin2024quebec}
+D.~Beauchemin, R.~Khoury, and N.~Garneau.
+\newblock Quebec Automobile Insurance Question-Answering With Retrieval-Augmented Generation.
+\newblock In \emph{NLLP Workshop, ACL}, 2024.
+
+\bibitem{judgebert2025}
+JUDGEBERT: Assessing Legal Meaning Preservation Between Sentences.
+\newblock In \emph{EMNLP}, 2025. arXiv:2508.16870.
+
+\end{thebibliography}
