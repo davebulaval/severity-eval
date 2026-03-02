@@ -740,8 +740,8 @@ def _load_local_model(model_id: str):
                 torch.cuda.empty_cache()
 
     # Use max_memory to keep everything on GPU — avoid CPU offload which breaks bnb 4-bit
-    gpu_id = int(os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
-    max_mem = {gpu_id: "45GiB"}
+    # CUDA_VISIBLE_DEVICES remaps devices to start at 0, so always use 0 here
+    max_mem = {0: "45GiB"}
 
     if model_id.startswith("unsloth/"):
         from unsloth import FastLanguageModel
@@ -1671,6 +1671,8 @@ def main():
                 delay=args.delay, prompt_style=args.prompt_style,
                 batch_size=args.batch_size,
             )
+            if results_df.empty:
+                continue
             _log_wandb_results(wandb_run, ds_name, model_name, results_df)
             _upload_wandb_artifact(wandb_run, ds_name, model_name, output_path)
 
