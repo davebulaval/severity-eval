@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json as json_mod
 import logging
 import os
 import re
+import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -376,26 +379,6 @@ def call_google(prompt: str, model_id: str) -> str:
     return (response.text or "").strip()
 
 
-def call_vllm(prompt: str, model_id: str) -> str:
-    """Call a local model via vLLM. Model is loaded once and cached."""
-    from vllm import LLM, SamplingParams
-
-    cache_key = f"vllm_{model_id}"
-    if cache_key not in _clients:
-        log.info("Loading vLLM model %s (first call, may take a few minutes)...", model_id)
-        _clients[cache_key] = LLM(
-            model=model_id,
-            quantization="bitsandbytes",
-            load_format="bitsandbytes",
-            max_model_len=8192,
-            gpu_memory_utilization=0.90,
-        )
-    llm = _clients[cache_key]
-    params = SamplingParams(temperature=0.0, max_tokens=512)
-    outputs = llm.generate([prompt], params)
-    return outputs[0].outputs[0].text.strip()
-
-
 PROVIDERS = {
     "openai": call_openai,
     "anthropic": call_anthropic,
@@ -403,7 +386,6 @@ PROVIDERS = {
     "mistral": call_mistral,
     "xai": call_xai,
     "google": call_google,
-    "vllm": call_vllm,
 }
 
 
@@ -648,6 +630,294 @@ def _log_wandb_results(
 # ---------------------------------------------------------------------------
 
 
+def _build_prompt_for_row(
+    row: pd.Series,
+    dataset_name: str,
+    prompt_style: str,
+) -> tuple[str, dict | None]:
+    """Build prompt and extract options for a single row."""
+    evidence = row.get("evidence", "") if "evidence" in row.index else ""
+    raw_opts = row.get("options") if "options" in row.index else None
+    options = raw_opts if isinstance(raw_opts, dict) else None
+    prompt = get_prompt(
+        row["question"],
+        dataset_name,
+        evidence=str(evidence) if evidence else "",
+        options=options,
+        prompt_style=prompt_style,
+    )
+    return prompt, options
+
+
+def _evaluate_vllm(
+    df: pd.DataFrame,
+    model_name: str,
+    model_id: str,
+    dataset_name: str,
+    prompt_style: str,
+    batch_size: int = 32,
+) -> list[dict]:
+    """Batch inference for local vLLM models."""
+    from vllm import LLM, SamplingParams
+
+    cache_key = f"vllm_{model_id}"
+    if cache_key not in _clients:
+        log.info("Loading vLLM model %s (first call, may take a few minutes)...", model_id)
+        _clients[cache_key] = LLM(
+            model=model_id,
+            quantization="bitsandbytes",
+            load_format="bitsandbytes",
+            max_model_len=8192,
+            gpu_memory_utilization=0.90,
+            trust_remote_code=True,
+        )
+    llm = _clients[cache_key]
+    tokenizer = llm.get_tokenizer()
+    params = SamplingParams(temperature=0.0, max_tokens=512)
+
+    # Build all prompts
+    rows_data = []
+    for _, row in df.iterrows():
+        prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+        # Apply chat template if tokenizer supports it
+        try:
+            formatted = tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+        except Exception:
+            formatted = prompt
+        rows_data.append((row, formatted, options))
+
+    # Batch inference
+    n_batches = (len(rows_data) + batch_size - 1) // batch_size
+    log.info("  vLLM batch inference: %d prompts in %d batches of %d", len(rows_data), n_batches, batch_size)
+
+    results = []
+    for batch_idx in range(n_batches):
+        batch = rows_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
+        prompts = [item[1] for item in batch]
+
+        start = time.perf_counter()
+        outputs = llm.generate(prompts, params)
+        elapsed = time.perf_counter() - start
+        log.info(
+            "  Batch %d/%d done (%.1fs, %.0f ms/sample)",
+            batch_idx + 1, n_batches, elapsed, elapsed / len(outputs) * 1000,
+        )
+
+        for (row, _prompt, options), output in zip(batch, outputs, strict=True):
+            prediction = output.outputs[0].text.strip() if output.outputs else ""
+            scoring = score_prediction(
+                prediction, str(row["answer"]), row["domain"], options=options,
+            )
+            results.append({
+                **row.to_dict(),
+                "model": model_name,
+                "prediction": prediction,
+                "correct": scoring["correct"],
+                "score_method": scoring["score_method"],
+            })
+
+        n_correct_so_far = sum(1 for r in results if r["correct"])
+        log.info(
+            "  [%d/%d] accuracy so far: %.1f%%",
+            len(results), len(rows_data), n_correct_so_far / len(results) * 100,
+        )
+
+    return results
+
+
+def _evaluate_batch_openai(
+    df: pd.DataFrame,
+    model_name: str,
+    model_id: str,
+    dataset_name: str,
+    prompt_style: str,
+    poll_interval: float = 30.0,
+) -> list[dict]:
+    """Batch inference via OpenAI Batch API (50% cost reduction)."""
+    client = _get_client("openai")
+
+    # Build JSONL requests
+    rows_data: list[tuple[int, pd.Series, dict | None]] = []
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
+            tmp_path = tmp.name
+            for idx, (_, row) in enumerate(df.iterrows()):
+                prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+                rows_data.append((idx, row, options))
+
+                is_reasoning = model_id.startswith(("o3", "o4"))
+                body: dict = {
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+                if is_reasoning:
+                    body["max_completion_tokens"] = 8192
+                else:
+                    body["max_tokens"] = 512
+                    body["temperature"] = 0.0
+
+                tmp.write(json_mod.dumps({
+                    "custom_id": f"req-{idx}",
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": body,
+                }) + "\n")
+
+        # Upload file (tmp is closed by 'with' block)
+        log.info("  OpenAI Batch API: uploading %d requests...", len(rows_data))
+        with open(tmp_path, "rb") as f:
+            file_obj = client.files.create(file=f, purpose="batch")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    # Create batch
+    batch = client.batches.create(
+        input_file_id=file_obj.id,
+        endpoint="/v1/chat/completions",
+        completion_window="24h",
+    )
+    log.info("  Batch created: %s", batch.id)
+
+    # Poll until done
+    while batch.status not in ("completed", "failed", "expired", "cancelled"):
+        time.sleep(poll_interval)
+        batch = client.batches.retrieve(batch.id)
+        counts = batch.request_counts
+        completed = counts.completed if counts else 0
+        total = counts.total if counts else len(rows_data)
+        log.info("  Batch %s: %s (%d/%d completed)", batch.id, batch.status, completed, total)
+
+    if batch.status != "completed":
+        log.error("  Batch %s ended with status: %s", batch.id, batch.status)
+        return [
+            {**row.to_dict(), "model": model_name, "prediction": "",
+             "correct": False, "score_method": "batch_error"}
+            for _, row, _ in rows_data
+        ]
+
+    # Download and parse results
+    result_content = client.files.content(batch.output_file_id)
+    predictions: dict[int, str] = {}
+    for line in result_content.text.strip().split("\n"):
+        entry = json_mod.loads(line)
+        req_idx = int(entry["custom_id"].split("-")[1])
+        resp = entry.get("response", {})
+        if resp.get("status_code") == 200:
+            content = resp["body"]["choices"][0]["message"]["content"] or ""
+            predictions[req_idx] = content.strip()
+        else:
+            predictions[req_idx] = ""
+
+    # Score results
+    results = []
+    for idx, row, options in rows_data:
+        prediction = predictions.get(idx, "")
+        scoring = score_prediction(
+            prediction, str(row["answer"]), row["domain"], options=options,
+        )
+        results.append({
+            **row.to_dict(),
+            "model": model_name,
+            "prediction": prediction,
+            "correct": scoring["correct"],
+            "score_method": scoring["score_method"],
+        })
+    return results
+
+
+def _evaluate_batch_anthropic(
+    df: pd.DataFrame,
+    model_name: str,
+    model_id: str,
+    dataset_name: str,
+    prompt_style: str,
+    poll_interval: float = 30.0,
+) -> list[dict]:
+    """Batch inference via Anthropic Message Batches API (50% cost reduction)."""
+    client = _get_client("anthropic")
+
+    # Build batch requests
+    rows_data: list[tuple[int, pd.Series, dict | None]] = []
+    batch_requests = []
+    for idx, (_, row) in enumerate(df.iterrows()):
+        prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+        rows_data.append((idx, row, options))
+        batch_requests.append({
+            "custom_id": f"req-{idx}",
+            "params": {
+                "model": model_id,
+                "max_tokens": 512,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        })
+
+    log.info("  Anthropic Batch API: submitting %d requests...", len(batch_requests))
+    message_batch = client.messages.batches.create(requests=batch_requests)
+    log.info("  Batch created: %s", message_batch.id)
+
+    # Poll until done
+    while message_batch.processing_status != "ended":
+        time.sleep(poll_interval)
+        message_batch = client.messages.batches.retrieve(message_batch.id)
+        counts = message_batch.request_counts
+        done = (counts.succeeded + counts.errored) if counts else 0
+        log.info("  Batch %s: %s (%d/%d done)", message_batch.id, message_batch.processing_status, done, len(rows_data))
+
+    # Retrieve results
+    predictions: dict[int, str] = {}
+    for result in client.messages.batches.results(message_batch.id):
+        req_idx = int(result.custom_id.split("-")[1])
+        if result.result.type == "succeeded":
+            msg = result.result.message
+            content = msg.content[0].text if msg.content else ""
+            predictions[req_idx] = content.strip()
+        else:
+            predictions[req_idx] = ""
+
+    # Score results
+    results = []
+    for idx, row, options in rows_data:
+        prediction = predictions.get(idx, "")
+        scoring = score_prediction(
+            prediction, str(row["answer"]), row["domain"], options=options,
+        )
+        results.append({
+            **row.to_dict(),
+            "model": model_name,
+            "prediction": prediction,
+            "correct": scoring["correct"],
+            "score_method": scoring["score_method"],
+        })
+    return results
+
+
+def _score_and_log_results(
+    results: list[dict],
+    model_name: str,
+    dataset_name: str,
+    output_path: Path,
+    n_total: int,
+) -> pd.DataFrame:
+    """Score, log, and save evaluation results."""
+    results_df = pd.DataFrame(results)
+    n_correct = results_df["correct"].sum()
+    accuracy = n_correct / n_total if n_total > 0 else 0
+    log.info(
+        "  %s on %s: accuracy=%.1f%% (%d/%d)",
+        model_name, dataset_name, accuracy * 100, n_correct, n_total,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    results_df.to_json(output_path, orient="records", indent=2, force_ascii=False)
+    log.info("  Saved %d results to %s", len(results_df), output_path)
+    return results_df
+
+
 def evaluate_model(
     df: pd.DataFrame,
     model_name: str,
@@ -656,6 +926,7 @@ def evaluate_model(
     max_retries: int = 3,
     delay: float = 1.0,
     prompt_style: str = "original",
+    batch_size: int = 32,
 ) -> pd.DataFrame:
     """Evaluate a model on a dataset with scoring.
 
@@ -675,31 +946,47 @@ def evaluate_model(
         Delay between API calls (seconds).
     prompt_style : {'original', 'standard'}
         Prompt template variant. 'original' uses published paper prompts.
+    batch_size : int
+        Batch size for vLLM / max parallel API workers (default 32).
 
     Returns
     -------
     DataFrame with added 'prediction', 'correct', 'score_method' columns.
     """
     config = MODELS[model_name]
-    call_fn = PROVIDERS[config["provider"]]
+    provider = config["provider"]
     model_id = config["model_id"]
-
     n_total = len(df)
-    results = []
-    n_errors_api = 0
 
-    for idx, (_, row) in enumerate(df.iterrows()):
-        evidence = row.get("evidence", "") if "evidence" in row.index else ""
-        raw_opts = row.get("options") if "options" in row.index else None
-        options = raw_opts if isinstance(raw_opts, dict) else None
-        prompt = get_prompt(
-            row["question"],
-            dataset_name,
-            evidence=str(evidence) if evidence else "",
-            options=options,
-            prompt_style=prompt_style,
+    # --- Dispatch by provider ---
+
+    # Local vLLM: GPU batch inference
+    if provider == "vllm":
+        results = _evaluate_vllm(
+            df, model_name, model_id, dataset_name, prompt_style, batch_size,
         )
+        return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
 
+    # OpenAI Batch API (50% cost reduction, async)
+    if provider == "openai":
+        results = _evaluate_batch_openai(
+            df, model_name, model_id, dataset_name, prompt_style,
+        )
+        return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
+
+    # Anthropic Message Batches API (50% cost reduction, async)
+    if provider == "anthropic":
+        results = _evaluate_batch_anthropic(
+            df, model_name, model_id, dataset_name, prompt_style,
+        )
+        return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
+
+    # Other providers: parallel requests with ThreadPoolExecutor
+    call_fn = PROVIDERS[provider]
+
+    def _call_single(idx_row):
+        idx, row = idx_row
+        prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
         prediction = ""
         for attempt in range(max_retries):
             try:
@@ -709,60 +996,54 @@ def evaluate_model(
                 log.warning("Retry %d/%d for %s: %s", attempt + 1, max_retries, row["id"], e)
                 time.sleep(delay * (attempt + 1))
         else:
-            n_errors_api += 1
-            log.error("All retries exhausted for %s", row["id"])
-
-        # Score the prediction
+            log.error("All %d retries exhausted for %s", max_retries, row["id"])
         scoring = score_prediction(
-            prediction,
-            str(row["answer"]),
-            row["domain"],
-            options=options,
+            prediction, str(row["answer"]), row["domain"], options=options,
         )
+        return idx, {
+            **row.to_dict(),
+            "model": model_name,
+            "prediction": prediction,
+            "correct": scoring["correct"],
+            "score_method": scoring["score_method"],
+        }
 
-        results.append(
-            {
-                **row.to_dict(),
-                "model": model_name,
-                "prediction": prediction,
-                "correct": scoring["correct"],
-                "score_method": scoring["score_method"],
-            }
-        )
+    results_indexed: list[dict | None] = [None] * n_total
+    n_done = 0
+    workers = min(batch_size, n_total)
 
-        if delay > 0:
-            time.sleep(delay)
+    log.info("  API parallel inference: %d prompts with %d workers", n_total, workers)
 
-        if (idx + 1) % 50 == 0:
-            n_correct_so_far = sum(1 for r in results if r["correct"])
-            log.info(
-                "  [%d/%d] accuracy so far: %.1f%% (%d correct)",
-                idx + 1,
-                n_total,
-                n_correct_so_far / len(results) * 100,
-                n_correct_so_far,
-            )
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_call_single, (idx, row)): idx
+            for idx, (_, row) in enumerate(df.iterrows())
+        }
+        for future in as_completed(futures):
+            try:
+                idx, result = future.result()
+            except Exception as e:
+                idx = futures[future]
+                log.error("Unhandled error for index %d: %s", idx, e)
+                result = {
+                    "model": model_name, "prediction": "",
+                    "correct": False, "score_method": "error",
+                }
+            results_indexed[idx] = result
+            n_done += 1
+            if n_done % 50 == 0:
+                n_correct = sum(1 for r in results_indexed if r and r.get("correct"))
+                log.info(
+                    "  [%d/%d] accuracy so far: %.1f%%",
+                    n_done, n_total, n_correct / n_done * 100,
+                )
 
-    results_df = pd.DataFrame(results)
+    # Fill any remaining None entries (shouldn't happen, but defensive)
+    for i, r in enumerate(results_indexed):
+        if r is None:
+            results_indexed[i] = {"model": model_name, "prediction": "", "correct": False, "score_method": "missing"}
 
-    # Summary
-    n_correct = results_df["correct"].sum()
-    accuracy = n_correct / n_total if n_total > 0 else 0
-    log.info(
-        "  %s on %s: accuracy=%.1f%% (%d/%d), api_errors=%d",
-        model_name,
-        output_path.stem.split("_")[0],
-        accuracy * 100,
-        n_correct,
-        n_total,
-        n_errors_api,
-    )
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    results_df.to_json(output_path, orient="records", indent=2, force_ascii=False)
-    log.info("  Saved %d results to %s", len(results_df), output_path)
-
-    return results_df
+    return _score_and_log_results(results_indexed, model_name, dataset_name, output_path, n_total)
 
 
 def main():
@@ -792,6 +1073,12 @@ def main():
         type=str,
         default=None,
         help="CUDA device ID(s) for local vLLM models (e.g. '0', '1', '0,1')",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="Batch size for vLLM inference / max parallel API workers (default 32)",
     )
     args = parser.parse_args()
 
@@ -853,6 +1140,7 @@ def main():
             results_df = evaluate_model(
                 df, model_name, ds_name, output_path,
                 delay=args.delay, prompt_style=args.prompt_style,
+                batch_size=args.batch_size,
             )
             _log_wandb_results(wandb_run, ds_name, model_name, results_df)
 

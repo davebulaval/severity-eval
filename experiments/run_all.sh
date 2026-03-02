@@ -61,6 +61,7 @@ SKIP_API=false
 FORCE_FLAG=""
 PROMPT_STYLE="original"
 GPU=""
+BATCH_SIZE=""
 
 # --- Parse arguments ---------------------------------------------------------
 
@@ -76,8 +77,9 @@ while [[ $# -gt 0 ]]; do
         --skip-api)     SKIP_API=true; shift ;;
         --force)        FORCE_FLAG="--force"; shift ;;
         --gpu)          GPU="$2"; shift 2 ;;
+        --batch-size)   BATCH_SIZE="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--gpu ID]"
+            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--gpu ID] [--batch-size N]"
             exit 0
             ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
@@ -115,7 +117,7 @@ fi
 
 if [[ "$SKIP_API" == "false" ]]; then
     MISSING_KEYS=0
-    for var in OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY MISTRAL_API_KEY GEMINI_API_KEY; do
+    for var in OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY MISTRAL_API_KEY GEMINI_API_KEY XAI_API_KEY; do
         if [[ -z "${!var:-}" ]]; then
             echo "[ERROR] Missing $var"
             MISSING_KEYS=1
@@ -185,7 +187,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "[DRY RUN] Would execute:"
     for ds in "${DATASETS_TO_RUN[@]}"; do
         for model in "${MODELS[@]}"; do
-            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} ${GPU:+--gpu $GPU} $WANDB_FLAG $FORCE_FLAG"
+            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} ${GPU:+--gpu $GPU} ${BATCH_SIZE:+--batch-size $BATCH_SIZE} $WANDB_FLAG $FORCE_FLAG"
         done
     done
     exit 0
@@ -229,6 +231,7 @@ for ds in "${DATASETS_TO_RUN[@]}"; do
 
         [[ -n "$LIMIT" ]] && CMD+=(--limit "$LIMIT")
         [[ -n "$GPU" ]] && CMD+=(--gpu "$GPU")
+        [[ -n "$BATCH_SIZE" ]] && CMD+=(--batch-size "$BATCH_SIZE")
         [[ -n "$WANDB_FLAG" ]] && CMD+=("$WANDB_FLAG")
         [[ -n "$FORCE_FLAG" ]] && CMD+=("$FORCE_FLAG")
 
