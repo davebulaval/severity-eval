@@ -23,6 +23,7 @@ tqdm>=4.60
 huggingface_hub>=0.20
 
 # Local models (unsloth) — optional, only needed for --skip-api runs
+# torch>=2.1
 # unsloth
 # bitsandbytes>=0.43
 # accelerate>=1.0
