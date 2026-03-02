@@ -12,13 +12,20 @@ datasets>=2.14
 openai>=1.0
 anthropic>=0.20
 google-generativeai>=0.3
+google-genai>=1.0
 mistralai>=0.1
+httpx>=0.27
 
 # Experiment pipeline
 python-dotenv>=1.0
 wandb>=0.16
 tqdm>=4.60
 huggingface_hub>=0.20
+
+# Local models (vLLM) — optional, only needed for --skip-api runs
+# vllm>=0.6
+# torch>=2.1
+# bitsandbytes>=0.43
 
 # Dev / testing / styling
 pytest>=7.0
