@@ -58,14 +58,14 @@ MODELS = {
     # --- Qwen (via OpenRouter) ---
     "qwen3-235b-thinking": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-thinking-2507"},
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
-    # --- Local (vLLM) ---
-    "qwq-32b": {"provider": "vllm", "model_id": "Qwen/QwQ-32B"},
-    "qwen3-30b-a3b": {"provider": "vllm", "model_id": "Qwen/Qwen3-30B-A3B"},
-    "deepseek-r1-distill-14b": {"provider": "vllm", "model_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"},
-    "qwen2.5-14b": {"provider": "vllm", "model_id": "Qwen/Qwen2.5-14B-Instruct"},
-    "phi-4": {"provider": "vllm", "model_id": "microsoft/phi-4"},
-    "prometheus-7b": {"provider": "vllm", "model_id": "prometheus-eval/prometheus-7b-v2.0"},
-    "skywork-critic-8b": {"provider": "vllm", "model_id": "Skywork/Skywork-Critic-Llama-3.1-8B"},
+    # --- Local (unsloth bnb-4bit) ---
+    "qwq-32b": {"provider": "local", "model_id": "unsloth/QwQ-32B-unsloth-bnb-4bit"},
+    "qwen3-30b-a3b": {"provider": "local", "model_id": "Qwen/Qwen3-30B-A3B"},
+    "deepseek-r1-distill-14b": {"provider": "local", "model_id": "unsloth/DeepSeek-R1-Distill-Qwen-14B-unsloth-bnb-4bit"},
+    "qwen2.5-14b": {"provider": "local", "model_id": "unsloth/Qwen2.5-14B-Instruct-bnb-4bit"},
+    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-unsloth-bnb-4bit"},
+    "prometheus-7b": {"provider": "local", "model_id": "prometheus-eval/prometheus-7b-v2.0"},
+    "skywork-critic-8b": {"provider": "local", "model_id": "Skywork/Skywork-Critic-Llama-3.1-8B"},
 }
 
 # ---------------------------------------------------------------------------
@@ -682,42 +682,79 @@ def _build_prompt_for_row(
     return prompt, options
 
 
-def _evaluate_vllm(
+def _load_local_model(model_id: str):
+    """Load a local model with unsloth (bnb-4bit) or HF AutoModel fallback.
+
+    Unsloth models (prefixed 'unsloth/') use FastLanguageModel.
+    Other models use AutoModelForCausalLM with BitsAndBytesConfig.
+    """
+    import torch
+
+    cache_key = f"local_{model_id}"
+    if cache_key in _clients:
+        return _clients[cache_key]
+
+    # Evict any previously loaded local model to free GPU memory
+    for key in list(_clients):
+        if key.startswith("local_") and key != cache_key:
+            log.info("Unloading previous local model: %s", key)
+            del _clients[key]
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+    if model_id.startswith("unsloth/"):
+        from unsloth import FastLanguageModel
+
+        log.info("Loading unsloth model %s ...", model_id)
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_id,
+            max_seq_length=4096,
+            device_map="sequential",
+            dtype=None,
+            load_in_4bit=True,
+            trust_remote_code=True,
+        )
+        model.eval()
+    else:
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+        log.info("Loading HF model %s with bnb 4-bit ...", model_id)
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            quantization_config=bnb_config,
+            load_in_8bit=False,
+            device_map="sequential",
+            trust_remote_code=True,
+            attn_implementation="sdpa",
+        )
+        model.eval()
+
+    _clients[cache_key] = (model, tokenizer)
+    return model, tokenizer
+
+
+def _evaluate_local(
     df: pd.DataFrame,
     model_name: str,
     model_id: str,
     dataset_name: str,
     prompt_style: str,
-    batch_size: int = 32,
+    batch_size: int = 8,
 ) -> list[dict]:
-    """Batch inference for local vLLM models."""
-    from vllm import LLM, SamplingParams
+    """Batch inference for local models via unsloth/transformers."""
+    import torch
+    from transformers import pipeline
 
-    cache_key = f"vllm_{model_id}"
-    if cache_key not in _clients:
-        # Evict any previously loaded vLLM model to free GPU memory
-        for key in list(_clients):
-            if key.startswith("vllm_") and key != cache_key:
-                log.info("Unloading previous vLLM model: %s", key)
-                del _clients[key]
-                import gc
-
-                import torch
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-        log.info("Loading vLLM model %s (first call, may take a few minutes)...", model_id)
-        _clients[cache_key] = LLM(
-            model=model_id,
-            quantization="bitsandbytes",
-            load_format="bitsandbytes",
-            max_model_len=8192,
-            gpu_memory_utilization=0.90,
-            trust_remote_code=True,
-        )
-    llm = _clients[cache_key]
-    tokenizer = llm.get_tokenizer()
-    params = SamplingParams(temperature=0.0, max_tokens=512)
+    model, tokenizer = _load_local_model(model_id)
 
     # Build all prompts
     rows_data = []
@@ -734,25 +771,43 @@ def _evaluate_vllm(
             formatted = prompt
         rows_data.append((row, formatted, options))
 
+    # Create text-generation pipeline
+    gen_pipeline = pipeline(
+        task="text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+        dtype="float16",
+        return_full_text=False,
+        max_new_tokens=512,
+        padding=True,
+        truncation=True,
+        max_length=4096,
+    )
+
     # Batch inference
-    n_batches = (len(rows_data) + batch_size - 1) // batch_size
-    log.info("  vLLM batch inference: %d prompts in %d batches of %d", len(rows_data), n_batches, batch_size)
+    all_prompts = [item[1] for item in rows_data]
+    n_batches = (len(all_prompts) + batch_size - 1) // batch_size
+    log.info("  Local batch inference: %d prompts in %d batches of %d", len(all_prompts), n_batches, batch_size)
 
     results = []
     for batch_idx in range(n_batches):
-        batch = rows_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
-        prompts = [item[1] for item in batch]
+        batch_start = batch_idx * batch_size
+        batch_end = min(batch_start + batch_size, len(rows_data))
+        batch_prompts = all_prompts[batch_start:batch_end]
+        batch_rows = rows_data[batch_start:batch_end]
 
         start = time.perf_counter()
-        outputs = llm.generate(prompts, params)
+        with torch.no_grad():
+            outputs = gen_pipeline(batch_prompts)
         elapsed = time.perf_counter() - start
         log.info(
             "  Batch %d/%d done (%.1fs, %.0f ms/sample)",
             batch_idx + 1, n_batches, elapsed, elapsed / len(outputs) * 1000,
         )
 
-        for (row, _prompt, options), output in zip(batch, outputs, strict=True):
-            prediction = output.outputs[0].text.strip() if output.outputs else ""
+        for (row, _prompt, options), output in zip(batch_rows, outputs, strict=True):
+            prediction = output[0]["generated_text"].strip() if output else ""
             scoring = score_prediction(
                 prediction, str(row["answer"]), row["domain"], options=options,
             )
@@ -1301,7 +1356,7 @@ def evaluate_model(
     prompt_style : {'original', 'standard'}
         Prompt template variant. 'original' uses published paper prompts.
     batch_size : int
-        Batch size for vLLM / max parallel API workers (default 32).
+        Batch size for local inference / max parallel API workers (default 32).
 
     Returns
     -------
@@ -1317,7 +1372,7 @@ def evaluate_model(
     # ThreadPoolExecutor fallback: OpenRouter (no batch API)
 
     _BATCH_DISPATCHERS = {
-        "vllm": lambda: _evaluate_vllm(
+        "local": lambda: _evaluate_local(
             df, model_name, model_id, dataset_name, prompt_style, batch_size,
         ),
         "openai": lambda: _evaluate_batch_openai(
@@ -1471,13 +1526,13 @@ def main():
         "--gpu",
         type=str,
         default=None,
-        help="CUDA device ID(s) for local vLLM models (e.g. '0', '1', '0,1')",
+        help="CUDA device ID(s) for local models (e.g. '0', '1', '0,1')",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
         default=32,
-        help="Batch size for vLLM inference / max parallel API workers (default 32)",
+        help="Batch size for local inference / max parallel API workers (default 32)",
     )
     args = parser.parse_args()
 
@@ -1489,7 +1544,7 @@ def main():
     datasets_to_eval = list(DATASETS.keys()) if args.dataset == "all" else [args.dataset]
     models_to_eval = list(MODELS.keys()) if args.model == "all" else [args.model]
 
-    # Validate API keys for selected models (vllm is local, no key needed)
+    # Validate API keys for selected models (local is GPU, no key needed)
     _PROVIDER_KEYS = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -1500,7 +1555,7 @@ def main():
     }
     needed_providers = {MODELS[m]["provider"] for m in models_to_eval}
     for provider in needed_providers:
-        if provider == "vllm":
+        if provider == "local":
             continue
         env_var = _PROVIDER_KEYS[provider]
         if not os.environ.get(env_var):

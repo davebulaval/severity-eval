@@ -22,10 +22,11 @@ wandb>=0.16
 tqdm>=4.60
 huggingface_hub>=0.20
 
-# Local models (vLLM) — optional, only needed for --skip-api runs
-# vllm>=0.6
-# torch>=2.1
+# Local models (unsloth) — optional, only needed for --skip-api runs
+# unsloth
 # bitsandbytes>=0.43
+# accelerate>=1.0
+# transformers>=4.45
 
 # Dev / testing / styling
 pytest>=7.0
