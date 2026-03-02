@@ -6,9 +6,9 @@
 # Default GPU: 0
 #
 # Usage:
-#   ./experiments/run_local_large.sh                    # GPU 0
+#   ./experiments/run_local_large.sh                    # GPU 0 (wandb on)
 #   ./experiments/run_local_large.sh --gpu 1            # GPU 1
-#   ./experiments/run_local_large.sh --wandb --limit 50
+#   ./experiments/run_local_large.sh --limit 50
 # =============================================================================
 set -euo pipefail
 

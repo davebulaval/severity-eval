@@ -6,8 +6,7 @@
 # For ablation study (HELM-style uniform prompts), see run_ablation.sh.
 #
 # Usage:
-#   ./experiments/run_experiments.sh                    # Full matrix
-#   ./experiments/run_experiments.sh --wandb            # With wandb logging + artifacts
+#   ./experiments/run_experiments.sh                    # Full matrix (wandb on)
 #   ./experiments/run_experiments.sh --limit 100        # Cap instances per dataset
 #   ./experiments/run_experiments.sh --dry-run           # Show what would run
 # =============================================================================

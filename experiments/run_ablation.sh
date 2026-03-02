@@ -9,8 +9,7 @@
 #   experiments/results/{dataset}_{model}_standard.json
 #
 # Usage:
-#   ./experiments/run_ablation.sh                    # Full matrix
-#   ./experiments/run_ablation.sh --wandb            # With wandb logging + artifacts
+#   ./experiments/run_ablation.sh                    # Full matrix (wandb on)
 #   ./experiments/run_ablation.sh --limit 100        # Cap instances per dataset
 #   ./experiments/run_ablation.sh --dry-run           # Show what would run
 # =============================================================================

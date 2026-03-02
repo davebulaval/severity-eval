@@ -3,8 +3,7 @@
 # run_all.sh — Run the full severity-eval experiment matrix
 #
 # Usage:
-#   ./experiments/run_all.sh                 # All datasets × all models
-#   ./experiments/run_all.sh --wandb         # With wandb logging
+#   ./experiments/run_all.sh                 # All datasets × all models (wandb on)
 #   ./experiments/run_all.sh --limit 100     # Cap instances per dataset
 #   ./experiments/run_all.sh --dry-run       # Show what would run
 # =============================================================================
@@ -53,7 +52,6 @@ DATASETS_PRIVATE=(
 
 DELAY=1.0
 LIMIT=""
-WANDB_FLAG=""
 DRY_RUN=false
 SKIP_PRIVATE=false
 SKIP_LOCAL=false
@@ -67,7 +65,6 @@ BATCH_SIZE=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --wandb)        WANDB_FLAG="--wandb"; shift ;;
         --limit)        LIMIT="$2"; shift 2 ;;
         --delay)        DELAY="$2"; shift 2 ;;
         --prompt-style) PROMPT_STYLE="$2"; shift 2 ;;
@@ -79,7 +76,7 @@ while [[ $# -gt 0 ]]; do
         --gpu)          GPU="$2"; shift 2 ;;
         --batch-size)   BATCH_SIZE="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--wandb] [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--gpu ID] [--batch-size N]"
+            echo "Usage: $0 [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--gpu ID] [--batch-size N]"
             exit 0
             ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
@@ -176,7 +173,7 @@ echo "  Models   : ${#MODELS[@]} (${MODELS[*]})"
 echo "  Total    : $((${#DATASETS_TO_RUN[@]} * ${#MODELS[@]})) runs"
 echo "  Delay    : ${DELAY}s between API calls"
 echo "  Limit    : ${LIMIT:-none (full dataset)}"
-echo "  wandb    : ${WANDB_FLAG:-off}"
+echo "  wandb    : on"
 echo "  Prompts  : ${PROMPT_STYLE}"
 echo "  Force    : ${FORCE_FLAG:-off (skip existing)}"
 echo "  GPU      : ${GPU:-auto}"
@@ -187,7 +184,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "[DRY RUN] Would execute:"
     for ds in "${DATASETS_TO_RUN[@]}"; do
         for model in "${MODELS[@]}"; do
-            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} ${GPU:+--gpu $GPU} ${BATCH_SIZE:+--batch-size $BATCH_SIZE} $WANDB_FLAG $FORCE_FLAG"
+            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} ${GPU:+--gpu $GPU} ${BATCH_SIZE:+--batch-size $BATCH_SIZE} $FORCE_FLAG"
         done
     done
     exit 0
@@ -232,7 +229,6 @@ for ds in "${DATASETS_TO_RUN[@]}"; do
         [[ -n "$LIMIT" ]] && CMD+=(--limit "$LIMIT")
         [[ -n "$GPU" ]] && CMD+=(--gpu "$GPU")
         [[ -n "$BATCH_SIZE" ]] && CMD+=(--batch-size "$BATCH_SIZE")
-        [[ -n "$WANDB_FLAG" ]] && CMD+=("$WANDB_FLAG")
         [[ -n "$FORCE_FLAG" ]] && CMD+=("$FORCE_FLAG")
 
         if "${CMD[@]}" 2>&1 | tee -a "$LOG_FILE"; then

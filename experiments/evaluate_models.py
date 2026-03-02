@@ -3,7 +3,6 @@
 Usage:
     python -m experiments.evaluate_models --dataset financebench --model gpt-4o --limit 100
     python -m experiments.evaluate_models --dataset all --model all
-    python -m experiments.evaluate_models --dataset financebench --model all --wandb
 """
 
 from __future__ import annotations
@@ -600,9 +599,7 @@ def score_prediction(
 
 
 def _init_wandb(args: argparse.Namespace) -> object | None:
-    """Initialize wandb run if --wandb flag is set. Returns run or None."""
-    if not args.wandb:
-        return None
+    """Initialize wandb run. Returns run or None if wandb is not installed."""
     try:
         import wandb
     except ImportError:
@@ -1595,7 +1592,6 @@ def main():
         choices=["original", "standard"],
         help="Prompt style: 'original' (from papers) or 'standard' (uniform HELM-style)",
     )
-    parser.add_argument("--wandb", action="store_true", help="Log results to wandb")
     parser.add_argument("--force", action="store_true", help="Overwrite existing results")
     parser.add_argument(
         "--gpu",

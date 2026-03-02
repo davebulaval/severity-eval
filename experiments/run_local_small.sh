@@ -6,9 +6,9 @@
 # Default GPU: 1
 #
 # Usage:
-#   ./experiments/run_local_small.sh                    # GPU 1
+#   ./experiments/run_local_small.sh                    # GPU 1 (wandb on)
 #   ./experiments/run_local_small.sh --gpu 0            # GPU 0
-#   ./experiments/run_local_small.sh --wandb --limit 50
+#   ./experiments/run_local_small.sh --limit 50
 # =============================================================================
 set -euo pipefail
 

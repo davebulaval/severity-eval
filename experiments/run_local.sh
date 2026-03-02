@@ -6,9 +6,9 @@
 # Override GPUs with --gpu-large and --gpu-small.
 #
 # Usage:
-#   ./experiments/run_local.sh                          # GPU 0 + GPU 1
+#   ./experiments/run_local.sh                          # GPU 0 + GPU 1 (wandb on)
 #   ./experiments/run_local.sh --gpu-large 2 --gpu-small 3
-#   ./experiments/run_local.sh --wandb --limit 50
+#   ./experiments/run_local.sh --limit 50
 # =============================================================================
 set -euo pipefail
 
