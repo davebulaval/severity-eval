@@ -20,8 +20,11 @@ venv/
 *.swp
 
 # Experiment outputs
-experiments/results/*.json
-experiments/results/*.log
+experiments/results/
+
+# Coverage
+.coverage
+htmlcov/
 
 # OS
 .DS_Store
