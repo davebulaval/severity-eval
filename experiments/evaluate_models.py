@@ -897,6 +897,310 @@ def _evaluate_batch_anthropic(
     return results
 
 
+def _evaluate_batch_google(
+    df: pd.DataFrame,
+    model_name: str,
+    model_id: str,
+    dataset_name: str,
+    prompt_style: str,
+    poll_interval: float = 30.0,
+) -> list[dict]:
+    """Batch inference via Google Gemini Batch API (50% cost reduction)."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
+
+    # Build JSONL
+    rows_data: list[tuple[int, pd.Series, dict | None]] = []
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
+            tmp_path = tmp.name
+            for idx, (_, row) in enumerate(df.iterrows()):
+                prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+                rows_data.append((idx, row, options))
+                tmp.write(json_mod.dumps({
+                    "key": f"req-{idx}",
+                    "request": {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                    },
+                }) + "\n")
+
+        log.info("  Google Batch API: uploading %d requests...", len(rows_data))
+        uploaded_file = client.files.upload(
+            file=tmp_path,
+            config=types.UploadFileConfig(
+                display_name=f"severity-eval-{dataset_name}-{model_name}",
+                mime_type="jsonl",
+            ),
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    # Create batch job
+    batch_job = client.batches.create(
+        model=model_id,
+        src=uploaded_file.name,
+        config={"display_name": f"severity-eval-{dataset_name}-{model_name}"},
+    )
+    log.info("  Batch created: %s", batch_job.name)
+
+    # Poll
+    completed_states = {
+        "JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED",
+        "JOB_STATE_CANCELLED", "JOB_STATE_EXPIRED",
+    }
+    while batch_job.state.name not in completed_states:
+        time.sleep(poll_interval)
+        batch_job = client.batches.get(name=batch_job.name)
+        log.info("  Batch %s: %s", batch_job.name, batch_job.state.name)
+
+    if batch_job.state.name != "JOB_STATE_SUCCEEDED":
+        log.error("  Batch failed: %s", batch_job.state.name)
+        return [
+            {**row.to_dict(), "model": model_name, "prediction": "",
+             "correct": False, "score_method": "batch_error"}
+            for _, row, _ in rows_data
+        ]
+
+    # Download and parse results
+    result_content = client.files.download(file=batch_job.dest.file_name)
+    predictions: dict[int, str] = {}
+    for line in result_content.decode("utf-8").strip().split("\n"):
+        entry = json_mod.loads(line)
+        req_idx = int(entry.get("key", "req-0").split("-")[1])
+        resp = entry.get("response", {})
+        candidates = resp.get("candidates", [])
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            predictions[req_idx] = parts[0].get("text", "").strip() if parts else ""
+        else:
+            predictions[req_idx] = ""
+
+    # Score results
+    results = []
+    for idx, row, options in rows_data:
+        prediction = predictions.get(idx, "")
+        scoring = score_prediction(
+            prediction, str(row["answer"]), row["domain"], options=options,
+        )
+        results.append({
+            **row.to_dict(),
+            "model": model_name,
+            "prediction": prediction,
+            "correct": scoring["correct"],
+            "score_method": scoring["score_method"],
+        })
+    return results
+
+
+def _evaluate_batch_xai(
+    df: pd.DataFrame,
+    model_name: str,
+    model_id: str,
+    dataset_name: str,
+    prompt_style: str,
+    poll_interval: float = 30.0,
+) -> list[dict]:
+    """Batch inference via xAI Batch API (50% cost reduction)."""
+    import httpx
+
+    api_key = os.environ.get("XAI_API_KEY", "")
+    base_url = "https://api.x.ai/v1"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    # Build requests
+    rows_data: list[tuple[int, pd.Series, dict | None]] = []
+    batch_requests = []
+    for idx, (_, row) in enumerate(df.iterrows()):
+        prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+        rows_data.append((idx, row, options))
+        batch_requests.append({
+            "batch_request_id": f"req-{idx}",
+            "batch_request": {
+                "chat_get_completion": {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "model": model_id,
+                    "max_tokens": 512,
+                    "temperature": 0.0,
+                },
+            },
+        })
+
+    log.info("  xAI Batch API: submitting %d requests...", len(rows_data))
+
+    with httpx.Client(timeout=120) as http:
+        # Create batch
+        resp = http.post(
+            f"{base_url}/batches", headers=headers,
+            json={"name": f"severity-eval-{dataset_name}-{model_name}"},
+        )
+        resp.raise_for_status()
+        batch_id = resp.json()["batch_id"]
+        log.info("  Batch created: %s", batch_id)
+
+        # Add requests in chunks (rate limit: 100 calls / 30s)
+        chunk_size = 100
+        for i in range(0, len(batch_requests), chunk_size):
+            chunk = batch_requests[i : i + chunk_size]
+            resp = http.post(
+                f"{base_url}/batches/{batch_id}/requests",
+                headers=headers,
+                json={"batch_requests": chunk},
+            )
+            resp.raise_for_status()
+            if i + chunk_size < len(batch_requests):
+                time.sleep(0.5)
+
+        # Poll
+        while True:
+            time.sleep(poll_interval)
+            resp = http.get(f"{base_url}/batches/{batch_id}", headers=headers)
+            resp.raise_for_status()
+            state = resp.json().get("state", {})
+            pending = state.get("num_pending", 0)
+            success = state.get("num_success", 0)
+            total = state.get("num_requests", len(rows_data))
+            log.info("  Batch %s: %d/%d done, %d pending", batch_id, success, total, pending)
+            if pending == 0:
+                break
+
+        # Retrieve results (paginated)
+        predictions: dict[int, str] = {}
+        page_token = None
+        while True:
+            params: dict = {"page_size": 100}
+            if page_token:
+                params["pagination_token"] = page_token
+            resp = http.get(
+                f"{base_url}/batches/{batch_id}/results",
+                headers=headers, params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            for result in data.get("succeeded", []):
+                req_idx = int(result["batch_request_id"].split("-")[1])
+                content = result.get("response", {}).get("content", "")
+                predictions[req_idx] = content.strip()
+            for result in data.get("failed", []):
+                req_idx = int(result["batch_request_id"].split("-")[1])
+                predictions[req_idx] = ""
+            page_token = data.get("pagination_token")
+            if not page_token:
+                break
+
+    # Score results
+    results = []
+    for idx, row, options in rows_data:
+        prediction = predictions.get(idx, "")
+        scoring = score_prediction(
+            prediction, str(row["answer"]), row["domain"], options=options,
+        )
+        results.append({
+            **row.to_dict(),
+            "model": model_name,
+            "prediction": prediction,
+            "correct": scoring["correct"],
+            "score_method": scoring["score_method"],
+        })
+    return results
+
+
+def _evaluate_batch_mistral(
+    df: pd.DataFrame,
+    model_name: str,
+    model_id: str,
+    dataset_name: str,
+    prompt_style: str,
+    poll_interval: float = 30.0,
+) -> list[dict]:
+    """Batch inference via Mistral Batch API (50% cost reduction)."""
+    client = _get_client("mistral")
+
+    # Build JSONL
+    rows_data: list[tuple[int, pd.Series, dict | None]] = []
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
+            tmp_path = tmp.name
+            for idx, (_, row) in enumerate(df.iterrows()):
+                prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+                rows_data.append((idx, row, options))
+                tmp.write(json_mod.dumps({
+                    "custom_id": f"req-{idx}",
+                    "body": {
+                        "max_tokens": 512,
+                        "temperature": 0.0,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                }) + "\n")
+
+        log.info("  Mistral Batch API: uploading %d requests...", len(rows_data))
+        with open(tmp_path, "rb") as f:
+            batch_data = client.files.upload(
+                file={"file_name": "severity-eval-batch.jsonl", "content": f},
+                purpose="batch",
+            )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    # Create batch job
+    created_job = client.batch.jobs.create(
+        input_files=[batch_data.id],
+        model=model_id,
+        endpoint="/v1/chat/completions",
+        metadata={"dataset": dataset_name, "model": model_name},
+    )
+    log.info("  Batch created: %s", created_job.id)
+
+    # Poll
+    terminal_states = {"SUCCESS", "FAILED", "TIMEOUT_EXCEEDED", "CANCELLED"}
+    while created_job.status not in terminal_states:
+        time.sleep(poll_interval)
+        created_job = client.batch.jobs.get(job_id=created_job.id)
+        log.info("  Batch %s: %s", created_job.id, created_job.status)
+
+    if created_job.status != "SUCCESS":
+        log.error("  Batch failed: %s", created_job.status)
+        return [
+            {**row.to_dict(), "model": model_name, "prediction": "",
+             "correct": False, "score_method": "batch_error"}
+            for _, row, _ in rows_data
+        ]
+
+    # Download and parse results
+    output_stream = client.files.download(file_id=created_job.output_file)
+    predictions: dict[int, str] = {}
+    for line in output_stream.read().decode("utf-8").strip().split("\n"):
+        entry = json_mod.loads(line)
+        req_idx = int(entry["custom_id"].split("-")[1])
+        resp = entry.get("response", {})
+        if resp.get("status_code") == 200:
+            content = resp["body"]["choices"][0]["message"]["content"] or ""
+            predictions[req_idx] = content.strip()
+        else:
+            predictions[req_idx] = ""
+
+    # Score results
+    results = []
+    for idx, row, options in rows_data:
+        prediction = predictions.get(idx, "")
+        scoring = score_prediction(
+            prediction, str(row["answer"]), row["domain"], options=options,
+        )
+        results.append({
+            **row.to_dict(),
+            "model": model_name,
+            "prediction": prediction,
+            "correct": scoring["correct"],
+            "score_method": scoring["score_method"],
+        })
+    return results
+
+
 def _score_and_log_results(
     results: list[dict],
     model_name: str,
@@ -959,29 +1263,35 @@ def evaluate_model(
     n_total = len(df)
 
     # --- Dispatch by provider ---
+    # Batch APIs (50% cost reduction): OpenAI, Anthropic, Google, xAI, Mistral
+    # ThreadPoolExecutor fallback: OpenRouter (no batch API)
 
-    # Local vLLM: GPU batch inference
-    if provider == "vllm":
-        results = _evaluate_vllm(
+    _BATCH_DISPATCHERS = {
+        "vllm": lambda: _evaluate_vllm(
             df, model_name, model_id, dataset_name, prompt_style, batch_size,
-        )
-        return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
-
-    # OpenAI Batch API (50% cost reduction, async)
-    if provider == "openai":
-        results = _evaluate_batch_openai(
+        ),
+        "openai": lambda: _evaluate_batch_openai(
             df, model_name, model_id, dataset_name, prompt_style,
-        )
-        return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
-
-    # Anthropic Message Batches API (50% cost reduction, async)
-    if provider == "anthropic":
-        results = _evaluate_batch_anthropic(
+        ),
+        "anthropic": lambda: _evaluate_batch_anthropic(
             df, model_name, model_id, dataset_name, prompt_style,
-        )
+        ),
+        "google": lambda: _evaluate_batch_google(
+            df, model_name, model_id, dataset_name, prompt_style,
+        ),
+        "xai": lambda: _evaluate_batch_xai(
+            df, model_name, model_id, dataset_name, prompt_style,
+        ),
+        "mistral": lambda: _evaluate_batch_mistral(
+            df, model_name, model_id, dataset_name, prompt_style,
+        ),
+    }
+
+    if provider in _BATCH_DISPATCHERS:
+        results = _BATCH_DISPATCHERS[provider]()
         return _score_and_log_results(results, model_name, dataset_name, output_path, n_total)
 
-    # Other providers: parallel requests with ThreadPoolExecutor
+    # Fallback: parallel requests with ThreadPoolExecutor (OpenRouter)
     call_fn = PROVIDERS[provider]
 
     def _call_single(idx_row):
