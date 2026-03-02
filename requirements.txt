@@ -7,6 +7,7 @@ pandas>=2.0
 # HuggingFace
 evaluate>=0.4
 datasets>=2.14
+transformers>=4.45
 
 # API clients
 openai>=1.0
