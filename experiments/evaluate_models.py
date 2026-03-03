@@ -100,20 +100,36 @@ DATASET_INFERENCE_CONFIG: dict[str, tuple[int, int]] = {
     "financebench":     (128, 4096),
     "finqa":            (128, 4096),
     "tatqa":            (128, 4096),
-    "medcalc":          (64,  1024),
-    "medqa":            (32,  1024),
-    "headqa":           (32,  1024),
-    "cuad":             (256, 4096),
-    "maud":             (32,  4096),
-    "contractnli":      (16,  2048),
-    "rag_insurance":    (128, 2048),
-    "judgebert":        (256, 2048),
+    "medcalc":          (64,  4096),
+    "medqa":            (32,  4096),
+    "headqa":           (32,  4096),
+    "cuad":             (256, 32768),   # legal contracts up to 38k tokens
+    "maud":             (32,  4096),    # inputs are short (<1k tokens)
+    "contractnli":      (32,  4096),    # bumped from 16 for thinking headroom
+    "rag_insurance":    (128, 4096),
+    "judgebert":        (256, 4096),
 }
 _DEFAULT_INFERENCE_CONFIG = (128, 4096)
 
+# Thinking models emit <think>...</think> chains that consume most of the
+# token budget.  We multiply max_new_tokens so the actual answer fits after
+# the reasoning.  Detection is by model_id substring.
+_THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1")
+_THINKING_TOKEN_MULTIPLIER = 16  # e.g. 128 → 2048
 
-def _get_local_batch_size(model_id: str, max_length: int) -> int:
-    """Compute optimal batch size based on model size tier and context length."""
+
+def _is_thinking_model(model_id: str) -> bool:
+    """Return True if the model emits <think>...</think> reasoning chains."""
+    name = model_id.lower()
+    return any(p in name for p in _THINKING_MODEL_PATTERNS)
+
+
+def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -> int:
+    """Compute optimal batch size based on model size tier and total token budget.
+
+    The effective context is max_length + max_new_tokens.  Thinking models have
+    much higher max_new_tokens, so the batch size must drop accordingly.
+    """
     name = model_id.lower()
     if any(s in name for s in ["32b", "30b", "27b"]):
         size_tier = "large"    # ~15-18 GB VRAM
@@ -122,12 +138,15 @@ def _get_local_batch_size(model_id: str, max_length: int) -> int:
     else:
         size_tier = "small"    # ~5 GB VRAM (8B, 9B)
 
-    if max_length >= 4096:
+    total_ctx = max_length + max_new_tokens
+    if total_ctx >= 8192:
+        return {"large": 1, "medium": 2, "small": 4}[size_tier]
+    elif total_ctx >= 4096:
+        return {"large": 2, "medium": 4, "small": 8}[size_tier]
+    elif total_ctx >= 2048:
         return {"large": 4, "medium": 8, "small": 16}[size_tier]
-    elif max_length >= 2048:
-        return {"large": 16, "medium": 32, "small": 64}[size_tier]
     else:
-        return {"large": 32, "medium": 64, "small": 128}[size_tier]
+        return {"large": 8, "medium": 16, "small": 32}[size_tier]
 
 # ---------------------------------------------------------------------------
 # Prompts — two styles: "original" (from published papers) and "standard"
@@ -747,9 +766,15 @@ def _load_local_model(model_id: str):
         from unsloth import FastLanguageModel
 
         log.info("Loading unsloth model %s ...", model_id)
+        # Cap at model's native context length to avoid RoPE issues
+        # gemma-2 maxes at 8K; qwen3/qwq/deepseek-r1/granite support 32K+
+        if "gemma-2" in model_id.lower():
+            seq_len = 8192
+        else:
+            seq_len = 32768
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_id,
-            max_seq_length=4096,
+            max_seq_length=seq_len,
             device_map="auto",
             max_memory=max_mem,
             dtype=None,
@@ -783,6 +808,19 @@ def _load_local_model(model_id: str):
     return model, tokenizer
 
 
+def _strip_think_tags(text: str) -> str:
+    """Extract the answer after </think> tags, if present.
+
+    Thinking models (Qwen3, QwQ, DeepSeek-R1) wrap reasoning in
+    ``<think>...</think>`` before emitting the answer.  If the closing
+    tag is missing (output truncated), fall back to the raw text.
+    """
+    if "</think>" in text:
+        return text.split("</think>", 1)[1].strip()
+    # No closing tag — reasoning was likely truncated, return as-is
+    return text
+
+
 def _evaluate_local(
     df: pd.DataFrame,
     model_name: str,
@@ -799,17 +837,51 @@ def _evaluate_local(
     max_new_tokens, max_length = DATASET_INFERENCE_CONFIG.get(
         dataset_name, _DEFAULT_INFERENCE_CONFIG,
     )
+
+    # Cap max_length at model's native context window to avoid position
+    # embedding overflows (gemma-2 only supports 8K)
+    model_max_ctx = 8192 if "gemma-2" in model_id.lower() else 32768
+    if max_length > model_max_ctx:
+        log.info(
+            "Capping max_length %d → %d for model %s",
+            max_length, model_max_ctx, model_id,
+        )
+        max_length = model_max_ctx
+
+    # Thinking models need much more generation budget for their reasoning chain
+    thinking = _is_thinking_model(model_id)
+    if thinking:
+        max_new_tokens = max_new_tokens * _THINKING_TOKEN_MULTIPLIER
+        log.info(
+            "Thinking model detected — max_new_tokens scaled to %d (×%d)",
+            max_new_tokens, _THINKING_TOKEN_MULTIPLIER,
+        )
+
+    # Ensure input + generation fits within model's context window
+    if max_length + max_new_tokens > model_max_ctx:
+        old_max_length = max_length
+        max_length = model_max_ctx - max_new_tokens
+        if max_length < 256:
+            max_length = 256
+            max_new_tokens = model_max_ctx - max_length
+        log.info(
+            "Adjusted max_length %d → %d to fit generation budget (%d) "
+            "within model context (%d)",
+            old_max_length, max_length, max_new_tokens, model_max_ctx,
+        )
+
     if batch_size is None:
-        batch_size = _get_local_batch_size(model_id, max_length)
+        batch_size = _get_local_batch_size(model_id, max_length, max_new_tokens)
     log.info(
-        "Local config: max_new_tokens=%d, max_length=%d, batch_size=%d",
-        max_new_tokens, max_length, batch_size,
+        "Local config: max_new_tokens=%d, max_length=%d, batch_size=%d, thinking=%s",
+        max_new_tokens, max_length, batch_size, thinking,
     )
 
     model, tokenizer = _load_local_model(model_id)
 
-    # Build all prompts
+    # Build all prompts and pre-truncate to avoid unsloth crash on oversized inputs
     rows_data = []
+    n_truncated = 0
     for _, row in df.iterrows():
         prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
         # Apply chat template if tokenizer supports it
@@ -821,7 +893,22 @@ def _evaluate_local(
             )
         except Exception:
             formatted = prompt
+
+        # Pre-truncate: tokenize, check length, decode back if too long.
+        # This prevents unsloth from crashing on inputs > max_length.
+        input_ids = tokenizer.encode(formatted, add_special_tokens=False)
+        if len(input_ids) > max_length:
+            input_ids = input_ids[:max_length]
+            formatted = tokenizer.decode(input_ids, skip_special_tokens=False)
+            n_truncated += 1
+
         rows_data.append((row, formatted, options))
+
+    if n_truncated:
+        log.warning(
+            "%d/%d prompts truncated to max_length=%d tokens",
+            n_truncated, len(rows_data), max_length,
+        )
 
     # Create text-generation pipeline
     gen_pipeline = pipeline(
@@ -851,13 +938,31 @@ def _evaluate_local(
         batch_prompts = all_prompts[batch_start:batch_end]
         batch_rows = rows_data[batch_start:batch_end]
 
-        start = time.perf_counter()
-        with torch.no_grad():
-            outputs = gen_pipeline(batch_prompts)
-        elapsed = time.perf_counter() - start
+        try:
+            start = time.perf_counter()
+            with torch.no_grad():
+                outputs = gen_pipeline(batch_prompts)
+            elapsed = time.perf_counter() - start
+        except (RuntimeError, torch.OutOfMemoryError) as e:
+            log.error("Batch %d/%d failed: %s — filling with empty predictions", batch_idx + 1, n_batches, e)
+            # Clear GPU memory and continue with empty predictions for this batch
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            for row, _prompt, options in batch_rows:
+                results.append({
+                    **row.to_dict(),
+                    "model": model_name,
+                    "prediction": "",
+                    "correct": False,
+                    "score_method": "batch_error",
+                })
+            pbar.update(len(batch_prompts))
+            continue
 
         for (row, _prompt, options), output in zip(batch_rows, outputs, strict=True):
-            prediction = output[0]["generated_text"].strip() if output else ""
+            raw_prediction = output[0]["generated_text"].strip() if output else ""
+            prediction = _strip_think_tags(raw_prediction) if thinking else raw_prediction
             scoring = score_prediction(
                 prediction, str(row["answer"]), options=options,
             )

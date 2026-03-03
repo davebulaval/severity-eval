@@ -66,13 +66,13 @@ def compute_model_metrics(
     records = []
     for model, group in domain_df.groupby("model"):
         n = len(group)
-        # Simple exact match for correctness
-        correct = (group["prediction"].str.strip() == group["answer"].str.strip()).sum()
+        # Use pre-computed 'correct' column from the scoring pipeline
+        correct = group["correct"].sum()
         accuracy = correct / n
         error_rate = 1 - accuracy
 
         # Severity profile from errors
-        errors = group[group["prediction"].str.strip() != group["answer"].str.strip()]
+        errors = group[~group["correct"]]
         if len(errors) == 0:
             records.append(
                 {
