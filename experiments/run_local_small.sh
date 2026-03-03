@@ -2,7 +2,7 @@
 # =============================================================================
 # run_local_small.sh — Small/medium local models (<27B) on a single GPU
 #
-# Models: Qwen3-14B, DeepSeek-R1-Distill-14B, Gemma-2-9B, Granite-3.2-8B
+# Models: Qwen3-14B, Gemma-2-9B, Granite-3.2-8B
 # Default GPU: 1
 #
 # Usage:
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
-MODELS=(qwen3-14b deepseek-r1-distill-14b gemma-2-9b granite-3.2-8b)
+MODELS=(qwen3-14b gemma-2-9b granite-3.2-8b)
 GPU="1"
 EXTRA_ARGS=()
 

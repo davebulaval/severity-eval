@@ -42,7 +42,6 @@ MODELS = {
     # --- Anthropic ---
     "claude-opus": {"provider": "anthropic", "model_id": "claude-opus-4-6"},
     "claude-sonnet": {"provider": "anthropic", "model_id": "claude-sonnet-4-6"},
-    "claude-haiku": {"provider": "anthropic", "model_id": "claude-haiku-4-5-20251001"},
     # --- Google ---
     "gemini-3.1-pro": {"provider": "google", "model_id": "gemini-3.1-pro-preview"},
     # --- xAI ---
@@ -51,9 +50,6 @@ MODELS = {
     # --- Mistral ---
     "mistral-large": {"provider": "mistral", "model_id": "mistral-large-latest"},
     "mistral-medium": {"provider": "mistral", "model_id": "mistral-medium-2505"},
-    # --- DeepSeek (via OpenRouter) ---
-    "deepseek-r1": {"provider": "openrouter", "model_id": "deepseek/deepseek-r1"},
-    "deepseek-v3": {"provider": "openrouter", "model_id": "deepseek/deepseek-chat-v3-0324"},
     # --- Qwen (via OpenRouter) ---
     "qwen3-235b-thinking": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-thinking-2507"},
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
@@ -62,7 +58,6 @@ MODELS = {
     "qwen3-30b-a3b": {"provider": "local", "model_id": "Qwen/Qwen3-30B-A3B"},
     "gemma-2-27b": {"provider": "local", "model_id": "unsloth/gemma-2-27b-it-bnb-4bit"},
     "qwen3-14b": {"provider": "local", "model_id": "unsloth/Qwen3-14B-unsloth-bnb-4bit"},
-    "deepseek-r1-distill-14b": {"provider": "local", "model_id": "unsloth/DeepSeek-R1-Distill-Qwen-14B-unsloth-bnb-4bit"},
     "gemma-2-9b": {"provider": "local", "model_id": "unsloth/gemma-2-9b-it-bnb-4bit"},
     "granite-3.2-8b": {"provider": "local", "model_id": "unsloth/granite-3.2-8b-instruct-bnb-4bit"},
 }
@@ -114,7 +109,7 @@ _DEFAULT_INFERENCE_CONFIG = (128, 4096)
 # Thinking models emit <think>...</think> chains that consume most of the
 # token budget.  We multiply max_new_tokens so the actual answer fits after
 # the reasoning.  Detection is by model_id substring.
-_THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1")
+_THINKING_MODEL_PATTERNS = ("qwen3", "qwq")
 _THINKING_TOKEN_MULTIPLIER = 16  # e.g. 128 → 2048
 
 
@@ -767,7 +762,7 @@ def _load_local_model(model_id: str):
 
         log.info("Loading unsloth model %s ...", model_id)
         # Cap at model's native context length to avoid RoPE issues
-        # gemma-2 maxes at 8K; qwen3/qwq/deepseek-r1/granite support 32K+
+        # gemma-2 maxes at 8K; qwen3/qwq/granite support 32K+
         if "gemma-2" in model_id.lower():
             seq_len = 8192
         else:

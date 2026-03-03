@@ -17,17 +17,16 @@ cd "$PROJECT_DIR"
 
 MODELS_API=(
     o3 o3-mini gpt-5.2
-    claude-opus claude-sonnet claude-haiku
+    claude-opus claude-sonnet
     gemini-3.1-pro
     grok-3 grok-3-mini
     mistral-large mistral-medium
-    deepseek-r1 deepseek-v3
     qwen3-235b-thinking qwen3-235b
 )
 
 MODELS_LOCAL=(
     qwq-32b qwen3-30b-a3b gemma-2-27b
-    qwen3-14b deepseek-r1-distill-14b
+    qwen3-14b
     gemma-2-9b granite-3.2-8b
 )
 
