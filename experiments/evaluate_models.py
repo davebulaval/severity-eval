@@ -121,19 +121,31 @@ OUTPUT_DIR = Path("experiments/results")
 
 DATASET_INFERENCE_CONFIG: dict[str, tuple[int, int]] = {
     # dataset_name:     (max_new_tokens, max_length)
-    "financebench": (128, 4096),
-    "finqa": (128, 4096),
-    "tatqa": (128, 4096),
-    "medcalc": (64, 4096),
-    "medqa": (32, 4096),
-    "headqa": (32, 4096),
-    "cuad": (256, 32768),  # legal contracts up to 38k tokens
-    "maud": (32, 4096),  # inputs are short (<1k tokens)
-    "contractnli": (32, 4096),  # bumped from 16 for thinking headroom
-    "rag_insurance": (128, 4096),
-    "judgebert": (256, 4096),
+    # Numeric / extractive QA: bumped to 256 to let the model verbalize
+    # the answer (e.g. "The CapEx for FY2018 was $1,577 million.") instead
+    # of being truncated mid-sentence on small models.
+    "financebench": (256, 4096),
+    "finqa": (256, 4096),
+    "tatqa": (256, 4096),
+    # Medical calculators: keep room for the model to show the formula
+    # before the numeric answer, which improves small-model accuracy.
+    "medcalc": (256, 4096),
+    # MCQ: 96 tokens accommodate "The answer is C because ..." before
+    # the option letter, which some models default to when no system
+    # prompt forces letter-only output.
+    "medqa": (96, 4096),
+    "headqa": (96, 4096),
+    # Legal clause extraction: clauses can be long, especially with
+    # surrounding context the model copies verbatim.
+    "cuad": (512, 32768),
+    # MAUD / ContractNLI: 64 tokens — letter-then-justification.
+    "maud": (64, 4096),
+    "contractnli": (64, 4096),
+    # Open-ended QA / simplification: generous budget.
+    "rag_insurance": (256, 4096),
+    "judgebert": (512, 4096),
 }
-_DEFAULT_INFERENCE_CONFIG = (128, 4096)
+_DEFAULT_INFERENCE_CONFIG = (256, 4096)
 
 # Thinking models emit <think>...</think> chains that consume most of the
 # token budget.  We multiply max_new_tokens so the actual answer fits after
@@ -440,7 +452,7 @@ def call_anthropic(prompt: str, model_id: str) -> str:
     client = _get_client("anthropic")
     response = client.messages.create(
         model=model_id,
-        max_tokens=512,
+        max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
     return (response.content[0].text if response.content else "").strip()
@@ -467,7 +479,7 @@ def call_mistral(prompt: str, model_id: str) -> str:
     response = client.chat.complete(
         model=model_id,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=512,
+        max_tokens=1024,
         temperature=0.0,
     )
     return (response.choices[0].message.content or "").strip()
@@ -478,7 +490,7 @@ def call_xai(prompt: str, model_id: str) -> str:
     response = client.chat.completions.create(
         model=model_id,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=512,
+        max_tokens=1024,
         temperature=0.0,
     )
     return (response.choices[0].message.content or "").strip()
@@ -508,7 +520,7 @@ def call_cohere(prompt: str, model_id: str) -> str:
     response = client.chat(
         model=model_id,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=512,
+        max_tokens=1024,
         temperature=0.0,
     )
     # Cohere V2 chat: content is a list of content blocks
@@ -1258,7 +1270,7 @@ def _evaluate_batch_anthropic(
                 "custom_id": f"req-{idx}",
                 "params": {
                     "model": model_id,
-                    "max_tokens": 512,
+                    "max_tokens": 1024,
                     "messages": [{"role": "user", "content": prompt}],
                 },
             }
@@ -1469,7 +1481,7 @@ def _evaluate_batch_xai(
                     "chat_get_completion": {
                         "messages": [{"role": "user", "content": prompt}],
                         "model": model_id,
-                        "max_tokens": 512,
+                        "max_tokens": 1024,
                         "temperature": 0.0,
                     },
                 },
@@ -1599,7 +1611,7 @@ def _evaluate_batch_mistral(
                         {
                             "custom_id": f"req-{idx}",
                             "body": {
-                                "max_tokens": 512,
+                                "max_tokens": 1024,
                                 "temperature": 0.0,
                                 "messages": [{"role": "user", "content": prompt}],
                             },
