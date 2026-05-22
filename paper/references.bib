@@ -1,0 +1,659 @@
+% =============================================================================
+% References for severity-eval EMNLP paper
+% =============================================================================
+
+% --- Position paper (ours) ---
+
+@inproceedings{beauchemin2026position,
+  title     = {Machine Learning Evaluation Should Adopt Actuarial Frequency-Severity Model},
+  author    = {Beauchemin, David and Khoury, Richard and Goulet, Vincent},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS), Position Paper Track},
+  year      = {2026},
+  address   = {San Diego, USA},
+}
+
+% --- Our prior work ---
+
+@phdthesis{beauchemin2025thesis,
+  title     = {Severity-Aware Evaluation of {AI} Systems in Insurance},
+  author    = {Beauchemin, David},
+  school    = {Universit\'{e} Laval},
+  year      = {2025},
+  note      = {In preparation},
+}
+
+% --- Datasets ---
+
+@misc{islam2023financebench,
+  title         = {{FinanceBench}: A New Benchmark for Financial Question Answering},
+  author        = {Islam, Pranab and Kannappan, Anand and Kiela, Douwe and Qian, Rebecca and Scherrer, Nino and Vidgen, Bertie},
+  year          = {2023},
+  eprint        = {2311.11944},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL},
+}
+
+@inproceedings{chen2021finqa,
+  title     = {{FinQA}: A Dataset of Numerical Reasoning over Financial Data},
+  author    = {Chen, Zhiyu and Chen, Wenhu and Smiley, Charese and Shah, Sameena and Borova, Iana and Langdon, Dylan and Moussa, Reema and Beane, Matt and Huang, Ting-Hao and Routledge, Bryan and Wang, William Yang},
+  booktitle = {Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing},
+  pages     = {3697--3711},
+  year      = {2021},
+}
+
+@inproceedings{zhu2021tatqa,
+  title     = {{TAT-QA}: A Question Answering Benchmark on a Hybrid of Tabular and Textual Content in Finance},
+  author    = {Zhu, Fengbin and Lei, Wenqiang and Huang, Youcheng and Wang, Chao and Zhang, Shuo and Lv, Jiancheng and Feng, Fuli and Chua, Tat-Seng},
+  booktitle = {Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers)},
+  pages     = {3277--3287},
+  year      = {2021},
+}
+
+@inproceedings{kazi2024medcalc,
+  title     = {{MedCalc-Bench}: Evaluating Large Language Models for Medical Calculations},
+  author    = {Khandekar, Nikhil and Jin, Qiao and Xiong, Guangzhi and Dunn, Soren and Applebaum, Serina Studer and Anwar, Zain and Sarfo-Annin, Maame and Pollard, Sheba and Bhuiya, Annisa Mahbub and Soni, Aidan and Zhang, Bailey and Yang, Yi-Fan and Soni, Sarvesh and Lu, Zhiyong},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2024},
+}
+
+@article{jin2021medqa,
+  title     = {What Disease Does This Patient Have? A Large-scale Open Domain Question Answering Dataset from Medical Exams},
+  author    = {Jin, Di and Pan, Eileen and Oufattole, Nassim and Weng, Wei-Hung and Fang, Hanyi and Szolovits, Peter},
+  journal   = {Applied Sciences},
+  volume    = {11},
+  number    = {14},
+  pages     = {6421},
+  year      = {2021},
+}
+
+@inproceedings{vilares2019headqa,
+  title     = {{HEAD-QA}: A Healthcare Dataset for Complex Reasoning},
+  author    = {Vilares, David and G\'{o}mez-Rodr\'{i}guez, Carlos},
+  booktitle = {Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics},
+  pages     = {960--966},
+  year      = {2019},
+}
+
+@inproceedings{hendrycks2021cuad,
+  title     = {{CUAD}: An Expert-Annotated {NLP} Dataset for Legal Contract Review},
+  author    = {Hendrycks, Dan and Burns, Collin and Chen, Anya and Ball, Spencer},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2021},
+}
+
+@inproceedings{wang2023maud,
+  title     = {{MAUD}: An Expert-Annotated Legal {NLP} Dataset for Merger Agreement Understanding},
+  author    = {Wang, Steven H. and Scardigli, Antoine and Tang, Leonard and Chen, Wei and Levkin, Dmitry and Chen, Anya and Ball, Spencer and Woodside, Thomas and Zhang, Oliver and Hendrycks, Dan},
+  booktitle = {Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing},
+  year      = {2023},
+}
+
+@inproceedings{koreeda2021contractnli,
+  title     = {{ContractNLI}: A Dataset for Document-level Natural Language Inference for Contracts},
+  author    = {Koreeda, Yuta and Manning, Christopher D.},
+  booktitle = {Findings of the Association for Computational Linguistics: EMNLP 2021},
+  pages     = {1907--1919},
+  year      = {2021},
+}
+
+% --- Evaluation frameworks ---
+
+@article{liang2023helm,
+  title     = {Holistic Evaluation of Language Models},
+  author    = {Liang, Percy and Bommasani, Rishi and Lee, Tony and Tsipras, Dimitris and Soylu, Dilara and Yasunaga, Michihiro and Zhang, Yian and Narayanan, Deepak and Wu, Yuhuai and Kumar, Ananya and others},
+  journal   = {Transactions on Machine Learning Research},
+  year      = {2023},
+}
+
+@article{beeching2023openllm,
+  title     = {Open {LLM} Leaderboard},
+  author    = {Beeching, Edward and Fourrier, Cl\'{e}mentine and Habib, Nathan and Han, Sheon and Lambert, Nathan and Rajani, Nazneen and Sanseviero, Omar and Tunstall, Lewis and Wolf, Thomas},
+  journal   = {Hugging Face},
+  year      = {2023},
+}
+
+@article{chiang2024chatbot,
+  title     = {Chatbot Arena: An Open Platform for Evaluating {LLMs} by Human Preference},
+  author    = {Chiang, Wei-Lin and Zheng, Lianmin and Sheng, Ying and Angelopoulos, Anastasios N. and Li, Tianle and Li, Dacheng and Zhang, Hao and Zhu, Banghua and Jordan, Michael I. and Gonzalez, Joseph E. and Stoica, Ion},
+  journal   = {arXiv preprint arXiv:2403.04132},
+  year      = {2024},
+}
+
+% --- NLP metrics ---
+
+@book{manning2008ir,
+  title     = {Introduction to Information Retrieval},
+  author    = {Manning, Christopher D. and Raghavan, Prabhakar and Sch\"{u}tze, Hinrich},
+  publisher = {Cambridge University Press},
+  year      = {2008},
+}
+
+@book{vanrijsbergen1979,
+  title     = {Information Retrieval},
+  author    = {van Rijsbergen, C. J.},
+  publisher = {Butterworth-Heinemann},
+  edition   = {2nd},
+  year      = {1979},
+}
+
+@inproceedings{papineni2002bleu,
+  title     = {{BLEU}: A Method for Automatic Evaluation of Machine Translation},
+  author    = {Papineni, Kishore and Roukos, Salim and Ward, Todd and Zhu, Wei-Jing},
+  booktitle = {Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics},
+  pages     = {311--318},
+  year      = {2002},
+}
+
+@inproceedings{lin2004rouge,
+  title     = {{ROUGE}: A Package for Automatic Evaluation of Summaries},
+  author    = {Lin, Chin-Yew},
+  booktitle = {Text Summarization Branches Out},
+  year      = {2004},
+}
+
+@inproceedings{banerjee2005meteor,
+  title     = {{METEOR}: An Automatic Metric for {MT} Evaluation with Improved Correlation with Human Judgments},
+  author    = {Banerjee, Satanjeev and Lavie, Alon},
+  booktitle = {Proceedings of the ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization},
+  pages     = {65--72},
+  year      = {2005},
+}
+
+@inproceedings{zhang2020bertscore,
+  title     = {{BERTScore}: Evaluating Text Generation with {BERT}},
+  author    = {Zhang, Tianyi and Kishore, Varsha and Wu, Felix and Weinberger, Kilian Q. and Artzi, Yoav},
+  booktitle = {International Conference on Learning Representations},
+  year      = {2020},
+}
+
+@inproceedings{sellam2020bleurt,
+  title     = {{BLEURT}: Learning Robust Metrics for Text Generation},
+  author    = {Sellam, Thibault and Das, Dipanjan and Parikh, Ankur},
+  booktitle = {Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics},
+  pages     = {7881--7892},
+  year      = {2020},
+}
+
+@article{lommel2014mqm,
+  title     = {Multidimensional Quality Metrics ({MQM}): A Framework for Declaring and Describing Translation Quality Metrics},
+  author    = {Lommel, Arle and Uszkoreit, Hans and Burchardt, Aljoscha},
+  journal   = {Tradumatica},
+  number    = {12},
+  pages     = {455--463},
+  year      = {2014},
+}
+
+% --- Cost-sensitive learning ---
+
+@inproceedings{elkan2001foundations,
+  title     = {The Foundations of Cost-Sensitive Learning},
+  author    = {Elkan, Charles},
+  booktitle = {Proceedings of the Seventeenth International Joint Conference on Artificial Intelligence},
+  pages     = {973--978},
+  year      = {2001},
+}
+
+@inproceedings{drummond2006cost,
+  title     = {Cost Curves: An Improved Method for Visualizing Classifier Performance},
+  author    = {Drummond, Chris and Holte, Robert C.},
+  journal   = {Machine Learning},
+  volume    = {65},
+  number    = {1},
+  pages     = {95--130},
+  year      = {2006},
+}
+
+@article{ling2008cost,
+  title     = {Cost-Sensitive Learning and the Class Imbalance Problem},
+  author    = {Ling, Charles X. and Sheng, Victor S.},
+  journal   = {Encyclopedia of Machine Learning},
+  pages     = {231--235},
+  year      = {2008},
+  publisher = {Springer},
+}
+
+% --- Risk-aware AI ---
+
+@misc{euaiact2024,
+  title     = {Regulation ({EU}) 2024/1689 of the {European} Parliament and of the {Council} Laying Down Harmonised Rules on Artificial Intelligence ({AI} Act)},
+  author    = {{European Parliament and Council}},
+  year      = {2024},
+}
+
+@techreport{nist2023rmf,
+  title     = {Artificial Intelligence Risk Management Framework ({AI RMF} 1.0)},
+  author    = {{National Institute of Standards and Technology}},
+  institution = {U.S. Department of Commerce},
+  year      = {2023},
+  number    = {NIST AI 100-1},
+}
+
+@misc{iso42001,
+  title     = {{ISO/IEC} 42001:2023 --- Artificial Intelligence --- Management System},
+  author    = {{International Organization for Standardization}},
+  year      = {2023},
+}
+
+@inproceedings{golpayegani2022airo,
+  title     = {{AIRO}: An Ontology for Representing {AI} Risks Based on the Proposed {EU} {AI} Act and {ISO} Risk Management Standards},
+  author    = {Golpayegani, Delaram and Pandit, Harshvardhan J. and Lewis, Dave},
+  booktitle = {Towards a Knowledge-Aware AI: Proceedings of SEMANTiCS 2022},
+  year      = {2022},
+  publisher = {IOS Press},
+}
+
+@article{bergman2024stela,
+  title     = {{STELA}: A Community-Centred Approach to Norm Elicitation for {AI} Alignment},
+  author    = {Bergman, A. Stevie and Marchal, Nahema and Mellor, John and Mohamed, Shakir and Gabriel, Iason and Isaac, William},
+  journal   = {Scientific Reports},
+  volume    = {14},
+  pages     = {6616},
+  year      = {2024},
+}
+
+@article{weidinger2022taxonomy,
+  title     = {Taxonomy of Risks Posed by Language Models},
+  author    = {Weidinger, Laura and Uesato, Jonathan and Rauh, Maribeth and Griffin, Conor and Huang, Po-Sen and Mellor, John and Glaese, Amelia and Cheng, Myra and Balle, Borja and Kasirzadeh, Atoosa and Biles, Courtney and Brown, Sasha and Kenton, Zac and Hawkins, Will and Stepleton, Tom and Birhane, Abeba and Hendricks, Lisa Anne and Rimell, Laura and Isaac, William and Haas, Julia and Legassick, Sean and Irving, Geoffrey and Gabriel, Iason},
+  booktitle = {Proceedings of the 2022 ACM Conference on Fairness, Accountability, and Transparency},
+  pages     = {214--229},
+  year      = {2022},
+}
+
+@article{kirk2024personalising,
+  title     = {The Benefits, Risks and Bounds of Personalising the Alignment of Large Language Models to Individuals},
+  author    = {Kirk, Hannah Rose and Vidgen, Bertie and R{\"o}ttger, Paul and Hale, Scott A.},
+  journal   = {Nature Machine Intelligence},
+  volume    = {6},
+  pages     = {383--392},
+  year      = {2024},
+}
+
+% --- Actuarial and insurance ---
+
+@book{klugman2012loss,
+  title     = {Loss Models: From Data to Decisions},
+  author    = {Klugman, Stuart A. and Panjer, Harry H. and Willmot, Gordon E.},
+  publisher = {John Wiley \& Sons},
+  edition   = {4th},
+  year      = {2012},
+}
+
+@book{dickson2016insurance,
+  title     = {Insurance Risk and Ruin},
+  author    = {Dickson, David C. M.},
+  publisher = {Cambridge University Press},
+  edition   = {2nd},
+  year      = {2016},
+}
+
+@misc{basel2006,
+  title     = {International Convergence of Capital Measurement and Capital Standards: A Revised Framework},
+  author    = {{Basel Committee on Banking Supervision}},
+  year      = {2006},
+}
+
+@article{malavasi2022cyber,
+  title     = {Cyber Risk Frequency, Severity and Insurance Viability},
+  author    = {Malavasi, Matteo and Peters, Gareth W. and Shevchenko, Pavel V. and Tr{\"u}ck, Stefan and Jang, Jiwook and Sofronov, Georgy},
+  journal   = {Insurance: Mathematics and Economics},
+  volume    = {106},
+  pages     = {90--114},
+  year      = {2022},
+}
+
+@article{eling2016cyber,
+  title     = {What Do We Know about Cyber Risk and Cyber Risk Insurance?},
+  author    = {Eling, Martin and Schnell, Werner},
+  journal   = {The Journal of Risk Finance},
+  volume    = {17},
+  number    = {5},
+  pages     = {474--491},
+  year      = {2016},
+}
+
+@techreport{bosfed2025ai,
+  title       = {{AI} and Operational Losses in Banking},
+  author      = {McLemore, Ping and Wu, Zhe},
+  institution = {Federal Reserve Bank of Boston},
+  year        = {2025},
+  note        = {Working paper; presented at the Federal Reserve Banks of Boston and Richmond AI conference},
+}
+
+% --- Human-in-the-loop and deferral ---
+
+@inproceedings{madras2018predict,
+  title     = {Predict Responsibly: Improving Fairness and Accuracy by Learning to Defer},
+  author    = {Madras, David and Pitassi, Toniann and Zemel, Richard},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2018},
+}
+
+@inproceedings{mozannar2020consistent,
+  title     = {Consistent Estimators for Learning to Defer to an Expert},
+  author    = {Mozannar, Hussein and Sontag, David},
+  booktitle = {Proceedings of the 37th International Conference on Machine Learning},
+  pages     = {7076--7087},
+  year      = {2020},
+}
+
+@inproceedings{narasimhan2022posthoc,
+  title     = {Post-Hoc Estimators for Learning to Defer to an Expert},
+  author    = {Narasimhan, Harikrishna and Jitkrittum, Wittawat and Menon, Aditya Krishna and Rawat, Ankit Singh and Kumar, Sanjiv},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2022},
+}
+
+@inproceedings{okati2021differentiable,
+  title     = {Differentiable Learning Under Triage},
+  author    = {Okati, Nastaran and De, Abir and Gomez-Rodriguez, Manuel},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2021},
+}
+
+@inproceedings{elyaniv2010selective,
+  title     = {On the Foundations of Noise-Free Selective Classification},
+  author    = {El-Yaniv, Ran and Wiener, Yair},
+  journal   = {Journal of Machine Learning Research},
+  volume    = {11},
+  pages     = {1605--1641},
+  year      = {2010},
+}
+
+@inproceedings{geifman2017selective,
+  title     = {Selective Classification for Deep Neural Networks},
+  author    = {Geifman, Yonatan and El-Yaniv, Ran},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2017},
+}
+
+% --- Legal NLP ---
+
+@inproceedings{guha2023legalbench,
+  title     = {{LegalBench}: A Collaboratively Built Benchmark for Measuring Legal Reasoning in Large Language Models},
+  author    = {Guha, Neel and Nyarko, Julian and Ho, Daniel E. and R\'{e}, Christopher and Chilton, Adam and Narayana, Aditya and others},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2023},
+}
+
+% --- Quantization ---
+
+@inproceedings{dettmers2023qlora,
+  title     = {{QLoRA}: Efficient Finetuning of Quantized {LLMs}},
+  author    = {Dettmers, Tim and Pagnoni, Artidoro and Holtzman, Ari and Zettlemoyer, Luke},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2023},
+}
+
+@misc{unsloth2024,
+  title     = {Unsloth: Efficient Fine-tuning and Inference for {LLMs}},
+  author    = {{Unsloth AI}},
+  year      = {2024},
+  howpublished = {\url{https://github.com/unslothai/unsloth}},
+}
+
+% --- Additional references from appendices ---
+
+@inproceedings{chen2022program,
+  title     = {Program of Thoughts Prompting: Disentangling Computation from Reasoning for Numerical Reasoning Tasks},
+  author    = {Chen, Wenhu and Ma, Xueguang and Wang, Xinyi and Cohen, William W.},
+  journal   = {Transactions on Machine Learning Research},
+  year      = {2023},
+}
+
+@inproceedings{xie2024finben,
+  title     = {{FinBen}: A Holistic Financial Benchmark for Large Language Models},
+  author    = {Xie, Qianqian and Han, Weiguang and Lai, Yanzhao and Peng, Min and Huang, Jimin},
+  booktitle = {Advances in Neural Information Processing Systems, Datasets and Benchmarks Track},
+  year      = {2024},
+}
+
+@inproceedings{zhu2024tatllm,
+  title     = {{TAT-LLM}: A Specialized Language Model for Discrete Reasoning over Tabular and Textual Data},
+  author    = {Zhu, Fengbin and Lei, Wenqiang and Feng, Yining and Wang, Chao and Zhang, Bing and Chua, Tat-Seng},
+  booktitle = {ICAIF},
+  year      = {2024},
+}
+
+@article{singhal2023medpalm,
+  title     = {Large Language Models Encode Clinical Knowledge},
+  author    = {Singhal, Karan and Azizi, Shekoofeh and Tu, Tao and others},
+  journal   = {Nature},
+  volume    = {620},
+  pages     = {172--180},
+  year      = {2023},
+}
+
+@misc{bedi2025medhelm,
+  title         = {{MedHELM}: Holistic Evaluation of Large Language Models for Medical Tasks},
+  author        = {Bedi, Suhana and Jain, Saurabh Sandeep and Pfohl, Stephen R. and Wornow, Michael and Goel, Akshay and Bishara, Andrew and Cui, Hejie and Liang, Percy and Jurafsky, Daniel and Pollard, Tom J. and Shah, Nigam H.},
+  year          = {2025},
+  eprint        = {2505.23802},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL},
+}
+
+@inproceedings{beauchemin2024quebec,
+  title     = {Quebec Automobile Insurance Question-Answering With Retrieval-Augmented Generation},
+  author    = {Beauchemin, David and Khoury, Richard and Gagnon, Zachary},
+  booktitle = {Proceedings of the Natural Legal Language Processing Workshop 2024},
+  pages     = {48--60},
+  year      = {2024},
+}
+
+@inproceedings{judgebert2025,
+  title     = {{JUDGEBERT}: Assessing Legal Meaning Preservation Between Sentences},
+  author    = {Beauchemin, David and others},
+  booktitle = {Proceedings of the Conference on Empirical Methods in Natural Language Processing},
+  year      = {2025},
+}
+
+% --- Medical evidence for calibration ---
+
+@techreport{ahrq2023ade,
+  title       = {Adverse Drug Events in Hospitals: National Estimates},
+  author      = {{Agency for Healthcare Research and Quality}},
+  institution = {U.S. Department of Health and Human Services},
+  year        = {2023},
+}
+
+@article{makary2016,
+  title     = {Medical Error---The Third Leading Cause of Death in the {US}},
+  author    = {Makary, Martin A. and Daniel, Michael},
+  journal   = {BMJ},
+  volume    = {353},
+  pages     = {i2139},
+  year      = {2016},
+}
+
+@article{seymour2017sepsis,
+  title     = {Time to Treatment and Mortality during Mandated Emergency Care for Sepsis},
+  author    = {Seymour, Christopher W. and Gesten, Foster and Prescott, Hallie C. and others},
+  journal   = {New England Journal of Medicine},
+  volume    = {376},
+  number    = {23},
+  pages     = {2235--2244},
+  year      = {2017},
+}
+
+@article{newmantoker2024burden,
+  title     = {Burden of Serious Harms from Diagnostic Error in the {USA}},
+  author    = {Newman-Toker, David E. and Nassery, Najlla and Schaffer, Adam C. and Yu-Moe, Chihwen Winnie and Clemens, Gwendolyn D. and Wang, Zheyu and Zhu, Yuxin and Saber Tehrani, Ali S. and Fanai, Mehdi and Hassoon, Ahmed and Siegal, Dana},
+  journal   = {BMJ Quality \& Safety},
+  volume    = {33},
+  pages     = {109--120},
+  year      = {2024},
+}
+
+@techreport{diederich2023,
+  title       = {Medical Malpractice Verdicts, Settlements, and Statistical Reports},
+  author      = {Diederich Healthcare},
+  year        = {2023},
+}
+
+@techreport{fda2023mederrors,
+  title       = {Medication Errors Related to {CDER}-Regulated Drug Products},
+  author      = {{U.S. Food and Drug Administration}},
+  year        = {2023},
+}
+
+% --- Financial evidence for calibration ---
+
+@techreport{ponemon2024,
+  title       = {Cost of a Data Breach Report 2024},
+  author      = {{IBM Security and Ponemon Institute}},
+  year        = {2024},
+}
+
+@book{labovitz1992,
+  title       = {Making Quality Work: A Leadership Guide for the Results-Driven Manager},
+  author      = {Labovitz, George H. and Chang, Yu Sang and Rosansky, Victor},
+  publisher   = {John Wiley \& Sons},
+  year        = {1992},
+}
+
+@misc{wilmerhale2022,
+  title       = {2022 Financial Restatement Trends and Analysis},
+  author      = {{WilmerHale}},
+  year        = {2022},
+}
+
+@misc{gartner2024accounting,
+  title       = {Survey: Finance Teams Struggle with Data Quality},
+  author      = {{Gartner}},
+  year        = {2024},
+}
+
+@misc{sec2025latefiling,
+  title       = {Updated Late Filing Penalty Schedule},
+  author      = {{U.S. Securities and Exchange Commission}},
+  year        = {2025},
+}
+
+@techreport{orx2023,
+  title       = {Operational Risk Loss Data Report 2023},
+  author      = {{ORX Association}},
+  year        = {2023},
+}
+
+@misc{csglaw2024,
+  title       = {{FINRA} Disciplinary Actions Analysis 2024},
+  author      = {{CSG Law}},
+  year        = {2024},
+}
+
+@article{harvard2016sec,
+  title       = {{SEC} Enforcement Actions: Penalties and Remedies},
+  author      = {{Harvard Law School Forum on Corporate Governance}},
+  year        = {2016},
+}
+
+@misc{accountingtoday2024,
+  title       = {Financial Restatement Trends: Annual Analysis},
+  author      = {{Accounting Today}},
+  year        = {2024},
+}
+
+@article{gleason2008contagion,
+  title       = {The Contagion Effects of Accounting Restatements},
+  author      = {Gleason, Cristi A. and Jenkins, Nicole T. and Johnson, W. Bruce},
+  journal     = {The Accounting Review},
+  volume      = {83},
+  number      = {1},
+  pages       = {83--110},
+  year        = {2008},
+}
+
+@techreport{gao2003,
+  title       = {Financial Statement Restatements: Trends, Market Impacts, Regulatory Responses, and Remaining Challenges},
+  author      = {{U.S. Government Accountability Office}},
+  year        = {2003},
+  number      = {GAO-03-138},
+}
+
+@techreport{cornerstone2024,
+  title       = {Securities Class Action Settlements: 2024 Review and Analysis},
+  author      = {{Cornerstone Research}},
+  year        = {2024},
+}
+
+% --- Legal evidence for calibration ---
+
+@techreport{iaccm2022,
+  title       = {The Cost of Poor Contract Management},
+  author      = {{World Commerce and Contracting}},
+  year        = {2022},
+}
+
+@misc{aba2021indemnification,
+  title       = {Indemnification Provisions in Commercial Contracts: Litigation Trends},
+  author      = {{American Bar Association}},
+  year        = {2021},
+}
+
+% --- Code/security evidence for calibration ---
+
+@techreport{bugcrowd2024,
+  title       = {Inside the Mind of a Hacker: Bug Bounty Trends 2024},
+  author      = {{Bugcrowd}},
+  year        = {2024},
+}
+
+@techreport{nist2024nvd,
+  title       = {National Vulnerability Database Statistics 2023},
+  author      = {{National Institute of Standards and Technology}},
+  year        = {2024},
+}
+
+@misc{ftc2019equifax,
+  title       = {{FTC} Imposes \$700 Million Penalty on {Equifax} for 2017 Data Breach},
+  author      = {{Federal Trade Commission}},
+  year        = {2019},
+}
+
+@misc{cybereason2022log4shell,
+  title       = {The True Cost of {Log4Shell}},
+  author      = {{Cybereason}},
+  year        = {2022},
+}
+
+@misc{solarwinds2021,
+  title       = {{SolarWinds} Breach: Incident Response and Recovery Costs},
+  author      = {{SolarWinds}},
+  year        = {2021},
+}
+
+@techreport{veracode2024,
+  title       = {State of Software Security 2024},
+  author      = {{Veracode}},
+  year        = {2024},
+}
+
+% --- Moderation evidence for calibration ---
+
+@techreport{meta2023transparency,
+  title       = {Community Standards Enforcement Report, Q4 2023},
+  author      = {{Meta Platforms}},
+  year        = {2023},
+}
+
+@misc{reuters2020stophate,
+  title       = {Facebook Loses \$7.2 Billion as Advertisers Boycott over Hate Speech},
+  author      = {{Reuters}},
+  year        = {2020},
+}
+
+% --- Case studies ---
+
+@misc{aircanada2024,
+  title     = {Moffatt v.\ Air {Canada}},
+  author    = {{Civil Resolution Tribunal of British Columbia}},
+  year      = {2024},
+  note      = {2024 BCCRT 149},
+}
+
+@misc{prosperspark2023,
+  title     = {History's Most Costly Spreadsheet Errors},
+  author    = {{ProsperSpark}},
+  year      = {2023},
+  howpublished = {\url{https://prosperspark.com/blog/most-costly-spreadsheet-errors}},
+}

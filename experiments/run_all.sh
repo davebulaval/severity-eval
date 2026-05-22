@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+# =============================================================================
+# run_all.sh — Run the full severity-eval experiment matrix
+#
+# Usage:
+#   ./experiments/run_all.sh                 # All datasets × all models (wandb on)
+#   ./experiments/run_all.sh --limit 100     # Cap instances per dataset
+#   ./experiments/run_all.sh --dry-run       # Show what would run
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
+
+# --- Configuration -----------------------------------------------------------
+
+MODELS_API=(
+    o3 o3-mini gpt-5 gpt-5-mini
+    claude-sonnet claude-haiku
+    command-a command-r-plus
+    deepseek-v3 deepseek-r1
+    gemini-3.1-pro
+    grok-3 grok-3-mini
+    mistral-large mistral-medium
+    qwen3-235b-thinking qwen3-235b
+)
+
+MODELS_LOCAL=(
+    llama-3.3-70b deepseek-r1-distill-70b
+    qwq-32b qwen3-30b-a3b gemma-2-27b mistral-small-3
+    qwen3-14b phi-4
+    gemma-2-9b granite-3.2-8b
+)
+
+# Tier 1: public datasets that auto-download (server-ready)
+DATASETS_PUBLIC=(
+    financebench
+    finqa
+    tatqa
+    medcalc
+    medqa
+    headqa
+    cuad
+    maud
+    contractnli
+)
+
+# Tier 2: private / local datasets (require manual file placement)
+DATASETS_PRIVATE=(
+    rag_insurance
+    judgebert
+)
+
+DELAY=1.0
+LIMIT=""
+DRY_RUN=false
+SKIP_PRIVATE=false
+SKIP_LOCAL=false
+SKIP_API=false
+FORCE_FLAG=""
+PROMPT_STYLE="original"
+GPU=""
+BATCH_SIZE=""
+
+# --- Parse arguments ---------------------------------------------------------
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --limit)        LIMIT="$2"; shift 2 ;;
+        --delay)        DELAY="$2"; shift 2 ;;
+        --prompt-style) PROMPT_STYLE="$2"; shift 2 ;;
+        --dry-run)      DRY_RUN=true; shift ;;
+        --skip-private) SKIP_PRIVATE=true; shift ;;
+        --skip-local)   SKIP_LOCAL=true; shift ;;
+        --skip-api)     SKIP_API=true; shift ;;
+        --force)        FORCE_FLAG="--force"; shift ;;
+        --gpu)          GPU="$2"; shift 2 ;;
+        --batch-size)   BATCH_SIZE="$2"; shift 2 ;;
+        -h|--help)
+            echo "Usage: $0 [--limit N] [--delay S] [--prompt-style original|standard] [--dry-run] [--skip-private] [--skip-local] [--skip-api] [--force] [--gpu ID] [--batch-size N]"
+            exit 0
+            ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
+    esac
+done
+
+# --- Load environment --------------------------------------------------------
+
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$PROJECT_DIR/.env"
+    set +a
+    echo "[OK] Loaded .env"
+else
+    echo "[WARN] No .env file found at $PROJECT_DIR/.env"
+fi
+
+# --- Select models based on --skip-local / --skip-api -----------------------
+
+MODELS=()
+if [[ "$SKIP_API" == "false" ]]; then
+    MODELS+=("${MODELS_API[@]}")
+fi
+if [[ "$SKIP_LOCAL" == "false" ]]; then
+    MODELS+=("${MODELS_LOCAL[@]}")
+fi
+
+if [[ ${#MODELS[@]} -eq 0 ]]; then
+    echo "[ERROR] No models selected (both --skip-api and --skip-local?)"
+    exit 1
+fi
+
+# --- Validate API keys (only if running API models) -------------------------
+
+if [[ "$SKIP_API" == "false" ]]; then
+    MISSING_KEYS=0
+    for var in OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY MISTRAL_API_KEY GEMINI_API_KEY XAI_API_KEY COHERE_API_KEY DEEPSEEK_API_KEY; do
+        if [[ -z "${!var:-}" ]]; then
+            echo "[ERROR] Missing $var"
+            MISSING_KEYS=1
+        else
+            echo "[OK] $var is set"
+        fi
+    done
+
+    if [[ $MISSING_KEYS -eq 1 ]]; then
+        echo ""
+        echo "Set missing keys in $PROJECT_DIR/.env and retry."
+        exit 1
+    fi
+else
+    echo "[INFO] Skipping API key validation (--skip-api)"
+fi
+
+# --- Check private datasets --------------------------------------------------
+
+DATASETS_TO_RUN=("${DATASETS_PUBLIC[@]}")
+
+if [[ "$SKIP_PRIVATE" == "false" ]]; then
+    DATASET_DIR="$PROJECT_DIR/dataset"
+    for ds in "${DATASETS_PRIVATE[@]}"; do
+        case $ds in
+            rag_insurance)
+                if [[ -f "$DATASET_DIR/all_manual_evaluations.jsonl" ]]; then
+                    DATASETS_TO_RUN+=("$ds")
+                    echo "[OK] Private dataset '$ds' found"
+                else
+                    echo "[SKIP] Private dataset '$ds' — place all_manual_evaluations.jsonl in dataset/"
+                fi
+                ;;
+            judgebert)
+                if [[ -f "$DATASET_DIR/insurance_text_simplifications_annotated.jsonl" ]]; then
+                    DATASETS_TO_RUN+=("$ds")
+                    echo "[OK] Private dataset '$ds' found"
+                else
+                    echo "[SKIP] Private dataset '$ds' — place insurance_text_simplifications_annotated.jsonl in dataset/"
+                fi
+                ;;
+        esac
+    done
+else
+    echo "[INFO] Skipping private datasets (--skip-private)"
+fi
+
+# --- Summary -----------------------------------------------------------------
+
+echo ""
+echo "=========================================="
+echo "  severity-eval — experiment matrix"
+echo "=========================================="
+echo "  Datasets : ${#DATASETS_TO_RUN[@]} (${DATASETS_TO_RUN[*]})"
+echo "  Models   : ${#MODELS[@]} (${MODELS[*]})"
+echo "  Total    : $((${#DATASETS_TO_RUN[@]} * ${#MODELS[@]})) runs"
+echo "  Delay    : ${DELAY}s between API calls"
+echo "  Limit    : ${LIMIT:-none (full dataset)}"
+echo "  wandb    : on"
+echo "  Prompts  : ${PROMPT_STYLE}"
+echo "  Force    : ${FORCE_FLAG:-off (skip existing)}"
+echo "  GPU      : ${GPU:-auto}"
+echo "=========================================="
+echo ""
+
+if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[DRY RUN] Would execute:"
+    for ds in "${DATASETS_TO_RUN[@]}"; do
+        for model in "${MODELS[@]}"; do
+            echo "  python -m experiments.evaluate_models --dataset $ds --model $model --delay $DELAY --prompt-style $PROMPT_STYLE ${LIMIT:+--limit $LIMIT} ${GPU:+--gpu $GPU} ${BATCH_SIZE:+--batch-size $BATCH_SIZE} $FORCE_FLAG"
+        done
+    done
+    exit 0
+fi
+
+# --- Run experiments ---------------------------------------------------------
+
+RESULTS_DIR="$PROJECT_DIR/experiments/results"
+mkdir -p "$RESULTS_DIR"
+
+TOTAL=$((${#DATASETS_TO_RUN[@]} * ${#MODELS[@]}))
+CURRENT=0
+FAILED=0
+SKIPPED=0
+START_TIME=$(date +%s)
+
+LOG_FILE="$RESULTS_DIR/run_$(date +%Y%m%d_%H%M%S).log"
+echo "Logging to $LOG_FILE"
+
+for ds in "${DATASETS_TO_RUN[@]}"; do
+    for model in "${MODELS[@]}"; do
+        CURRENT=$((CURRENT + 1))
+        RESULT_FILE="$RESULTS_DIR/${ds}_${model}.json"
+
+        # Skip if already done (unless --force)
+        if [[ -f "$RESULT_FILE" && -z "$FORCE_FLAG" ]]; then
+            echo "[$CURRENT/$TOTAL] SKIP $ds × $model (results exist)"
+            SKIPPED=$((SKIPPED + 1))
+            continue
+        fi
+
+        echo ""
+        echo "[$CURRENT/$TOTAL] START $ds × $model"
+        echo "  $(date '+%Y-%m-%d %H:%M:%S')"
+
+        CMD=(python -m experiments.evaluate_models
+             --dataset "$ds"
+             --model "$model"
+             --delay "$DELAY"
+             --prompt-style "$PROMPT_STYLE")
+
+        [[ -n "$LIMIT" ]] && CMD+=(--limit "$LIMIT")
+        [[ -n "$GPU" ]] && CMD+=(--gpu "$GPU")
+        [[ -n "$BATCH_SIZE" ]] && CMD+=(--batch-size "$BATCH_SIZE")
+        [[ -n "$FORCE_FLAG" ]] && CMD+=("$FORCE_FLAG")
+
+        if "${CMD[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+            echo "[$CURRENT/$TOTAL] DONE  $ds × $model"
+        else
+            echo "[$CURRENT/$TOTAL] FAIL  $ds × $model (exit code $?)"
+            FAILED=$((FAILED + 1))
+            # Continue with next run — don't abort the full matrix
+        fi
+    done
+done
+
+# --- Summary -----------------------------------------------------------------
+
+END_TIME=$(date +%s)
+ELAPSED=$(( END_TIME - START_TIME ))
+HOURS=$(( ELAPSED / 3600 ))
+MINUTES=$(( (ELAPSED % 3600) / 60 ))
+SECONDS_REM=$(( ELAPSED % 60 ))
+
+echo ""
+echo "=========================================="
+echo "  Experiments complete"
+echo "=========================================="
+echo "  Total    : $TOTAL"
+echo "  Done     : $((TOTAL - FAILED - SKIPPED))"
+echo "  Skipped  : $SKIPPED"
+echo "  Failed   : $FAILED"
+echo "  Time     : ${HOURS}h ${MINUTES}m ${SECONDS_REM}s"
+echo "  Results  : $RESULTS_DIR/"
+echo "  Log      : $LOG_FILE"
+echo "=========================================="
+
+# --- List result files -------------------------------------------------------
+
+echo ""
+echo "Result files:"
+ls -lh "$RESULTS_DIR"/*.json 2>/dev/null || echo "  (none)"
+
+exit $FAILED

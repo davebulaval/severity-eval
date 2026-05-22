@@ -1,0 +1,1095 @@
+% =============================================================================
+% Severity-Aware Evaluation of Large Language Models:
+% An Empirical Study with Actuarial Frequency-Severity Models
+%
+% Companion empirical paper to NeurIPS 2026 position paper:
+%   "Machine Learning Evaluation Should Adopt Actuarial Frequency-Severity Model"
+% =============================================================================
+
+\documentclass[11pt]{article}
+
+% ACL / EMNLP style
+\usepackage[review,hyperref]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+
+% Packages
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\setlist{nosep}
+\setlist[itemize]{leftmargin=*,label={}}
+\usepackage{url}
+\usepackage{colortbl}
+
+% Custom commands
+\newcommand{\ES}{\mathbb{E}[S]}
+\newcommand{\VaR}{\mathrm{VaR}}
+\newcommand{\TVaR}{\mathrm{TVaR}}
+\newcommand{\seveval}{\texttt{severity-eval}}
+\newcommand{\bpi}{\boldsymbol{\pi}}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+\title{Severity-Aware Evaluation of Large Language Models:\\
+An Empirical Study with Actuarial Frequency-Severity Models}
+
+\author{
+  David Beauchemin\textsuperscript{1} \quad
+  Richard Khoury\textsuperscript{1} \quad
+  Vincent Goulet\textsuperscript{2} \\
+  \textsuperscript{1}Department of Computer Science and Software Engineering, Universit\'{e} Laval \\
+  \textsuperscript{2}\'{E}cole d'actuariat, Universit\'{e} Laval \\
+  \texttt{\{david.beauchemin,richard.khoury\}@ulaval.ca} \\
+  \texttt{vincent.goulet@act.ulaval.ca}
+}
+
+\begin{document}
+\maketitle
+
+% ============================================================================
+% ABSTRACT
+% ============================================================================
+
+\begin{abstract}
+Standard evaluation of large language models treats all errors as
+equally consequential. A model that hallucinates a company's revenue
+by \$2~billion and one that rounds a ratio to one fewer decimal place
+both suffer the same unit penalty under accuracy-based metrics.
+\citet{beauchemin2026position} recently argued that actuarial
+frequency-severity models provide a principled framework for
+quantifying this distinction, but left open the question of whether
+the theoretical gap between accuracy and economic risk materializes in
+practice across models, domains, and scales.
+
+We report an empirical study applying this framework to up to 23
+language models---frontier APIs together with locally deployed
+open-weight models in the 8B--235B parameter range---across 11
+benchmarks in four high-stakes domains (finance, medicine, law, and
+insurance). Each benchmark instance carries a severity annotation
+grounded in domain-specific regulatory and economic evidence. Using
+the compound loss model $S = \sum_{i=1}^{N} X_i$ with
+$N \sim \mathrm{Bin}(n, p)$ and $X_i$ drawn from a categorical
+severity distribution, we estimate the expected aggregate loss, the
+tail risk measures $\VaR_{0.95}$ and $\TVaR_{0.95}$, and the Lundberg
+reserve for each model--dataset pair.
+
+We organize our analysis around five research questions about the
+relationship between accuracy and economic risk: whether model
+rankings by expected loss differ from rankings by accuracy, how
+inter-model variance in $\ES$ decomposes into a severity and a
+frequency component, whether concrete ranking inversions occur,
+whether human-in-the-loop routing modelled as excess-of-loss
+reinsurance yields meaningful cost reductions, and how sensitive
+the resulting rankings are to perturbations of the cost vector. We release \seveval{}, an open-source Python library
+compatible with the HuggingFace \texttt{evaluate} ecosystem, along
+with severity annotations for all 11 benchmarks.
+\end{abstract}
+
+% ============================================================================
+% 1. INTRODUCTION
+% ============================================================================
+
+\section{Introduction}
+\label{sec:introduction}
+
+The dominant paradigm for evaluating language models on downstream
+tasks reduces performance to a single scalar: the fraction of correct
+answers. This convention is inherited from the classification
+literature, where accuracy, F1, and related metrics have served as
+standard measures for decades \citep{manning2008ir}. In that setting,
+the assumption that all errors are interchangeable---that a
+misclassified spam email carries the same weight as a misclassified
+cancer diagnosis---is recognized as unrealistic but tolerated because
+cost-sensitive alternatives require domain-specific calibration that
+generalized benchmarks cannot provide.
+
+As language models are deployed in high-stakes applications, this
+assumption becomes untenable. In financial question answering, an
+incorrect revenue figure of \$11.6~billion instead of \$14.2~billion
+can trigger erroneous trading decisions and regulatory consequences,
+while a rounded margin of 32\% instead of 34\% is unlikely to alter
+any downstream decision. In clinical settings, an incorrect sepsis
+score can delay life-saving interventions, whereas a minor rounding
+error on a body mass index has negligible clinical impact. The gap
+between the per-error cost of these two failure modes spans orders of
+magnitude, yet accuracy assigns both the same penalty.
+
+\citet{beauchemin2026position} recently proposed adopting actuarial
+frequency-severity models from insurance mathematics to formalize this
+distinction. Their framework decomposes the total operational risk of
+an AI system into a \emph{frequency} component (the error rate $p$)
+and a \emph{severity} component (a distribution $\bpi$ over cost
+categories), yielding a compound loss $S = \sum_{i=1}^{N} X_i$ whose
+expected value, variance, and tail behavior can all be computed in
+closed form or estimated via Monte Carlo simulation. The framework
+further imports tools from ruin theory to compute capital reserves and
+from reinsurance to formalize human-in-the-loop routing. However, that
+work was primarily conceptual: it demonstrated the framework on a
+single insurance domain with expert-annotated data from 82 queries,
+leaving open the empirical question of whether the divergence between
+accuracy and economic risk is consistent, substantial, and
+reproducible across models, domains, and scales.
+
+This paper provides empirical grounding for the framework. We
+evaluate up to 23 language models on 11 benchmarks spanning finance,
+medicine, law, and insurance. For each benchmark, we define a
+four-level severity taxonomy calibrated against publicly available
+regulatory penalties, litigation data, and operational loss
+references for that domain. Each test instance is annotated with a
+severity level---either derived from structured metadata in the
+dataset (e.g., clinical calculator categories in MedCalc-Bench,
+clause types in CUAD) or via a rule-based system, with the
+rule-based subset spot-checked against an independent LLM
+annotator. We then apply the actuarial framework to estimate, for
+each model--dataset pair, the expected aggregate loss $\ES$, the
+value-at-risk $\VaR_{0.95}(S)$, the tail value-at-risk
+$\TVaR_{0.95}(S)$, and the Lundberg reserve.
+
+Our contributions are:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Multi-model, multi-domain evaluation.} We report
+    accuracy and actuarial risk measures for the
+    model$\times$benchmark pairs we evaluate. Where data permit we
+    examine whether the divergence between accuracy and expected
+    loss observed by \citet{beauchemin2026position} on a single
+    domain generalizes to other domains and scales.
+  \item \textbf{Severity-annotated benchmarks.} We release severity
+    annotations for the benchmarks we evaluate, along with the
+    annotation rules, calibration evidence, and validation protocol
+    (\S\ref{sec:severity-annotation}, Appendix~\ref{sec:app-calibration}).
+  \item \textbf{Open-source library.} We release \seveval{}, a Python
+    library compatible with the HuggingFace \texttt{evaluate}
+    ecosystem, implementing the compound loss simulation, the risk
+    measures, ruin-theoretic reserves, and the routing analysis
+    (\S\ref{sec:library}).
+  \item \textbf{Reusable evaluation protocol.} We formalize five
+    research questions and the statistical summaries that future
+    severity-aware evaluations can report (\S\ref{sec:protocol}).
+\end{enumerate}
+
+% ============================================================================
+% 2. RELATED WORK
+% ============================================================================
+
+\section{Related Work}
+\label{sec:related-work}
+
+\subsection{Evaluation Metrics Beyond Accuracy}
+
+The limitations of accuracy as an evaluation metric are well
+established. In information retrieval, precision, recall, and their
+harmonic mean (F1) were introduced precisely because accuracy fails to
+account for class imbalance \citep{vanrijsbergen1979}. In generation
+tasks, overlap-based metrics such as BLEU \citep{papineni2002bleu},
+ROUGE \citep{lin2004rouge}, and METEOR \citep{banerjee2005meteor}
+attempt to capture partial credit, while learned metrics like
+BERTScore \citep{zhang2020bertscore} and BLEURT \citep{sellam2020bleurt}
+use neural representations to better align with human judgments.
+MQM-based evaluation in machine translation \citep{lommel2014mqm}
+explicitly distinguishes minor, major, and critical errors, with
+weights of 1, 5, and 25 respectively---the closest precedent to
+severity-weighted evaluation in NLP.
+
+However, none of these metrics connect error severity to economic
+consequences. They measure \emph{linguistic quality} rather than
+\emph{operational risk}. A translation with two minor errors (MQM
+score 2) is linguistically worse than one with zero errors, but the
+cost difference to the deploying organization depends on whether the
+mistranslation appears in a marketing brochure or a pharmaceutical
+label.
+
+\subsection{Cost-Sensitive Learning and Evaluation}
+
+Cost-sensitive learning \citep{elkan2001foundations,
+drummond2006cost} explicitly incorporates misclassification costs
+into the training objective, typically through a cost matrix
+$C_{ij}$ specifying the penalty for predicting class $j$ when the
+true class is $i$. \citet{ling2008cost} provide a comprehensive
+survey. Cost curves \citep{drummond2006cost} generalize ROC analysis
+to visualize performance under varying cost ratios.
+
+This literature focuses on \emph{optimizing} models given known costs,
+not on \emph{evaluating} deployed systems under realistic economic
+assumptions. The cost matrix framework is also limited to
+classification settings with known class structure; it does not
+naturally extend to the open-ended generation tasks characteristic of
+modern language models. Our work complements cost-sensitive learning by
+providing evaluation-time risk quantification that operates on any
+system's outputs, regardless of how it was trained.
+
+\subsection{Risk-Aware AI Evaluation}
+
+Several regulatory and governance frameworks call for risk-based
+evaluation of AI systems. The EU AI Act \citep{euaiact2024}
+establishes four risk tiers (unacceptable, high, limited, minimal) but
+does not prescribe quantitative loss metrics. The NIST AI Risk
+Management Framework \citep{nist2023rmf} identifies risk as a function
+of likelihood and impact, echoing actuarial intuitions, but provides
+no computational tools. ISO/IEC~42001 \citep{iso42001} specifies
+management system requirements without defining risk measures.
+
+\citet{golpayegani2022airo} propose an ontology (AIRO) that
+represents AI risks and aligns with the EU AI Act and ISO risk
+management standards but does not include a probabilistic loss
+model. \citet{weidinger2022taxonomy} develop a six-area taxonomy of
+risks posed by language models that maps failure modes to harms but
+stops short of aggregate loss computation.
+\citet{bergman2024stela} introduce STELA, a community-centred
+sociotechnical evaluation framework that considers context-specific
+harms but does not formalize them as economic losses.
+\citet{kirk2024personalising} discuss the benefits, risks and bounds
+of personalising the alignment of large language models to
+individuals, mostly along qualitative dimensions rather than
+quantitative risk measures.
+
+The recent position paper by \citet{beauchemin2026position} bridges
+this gap by importing the actuarial compound loss model, ruin theory,
+and excess-of-loss reinsurance into AI evaluation. Our work is the
+empirical companion to that theoretical contribution.
+
+\subsection{Actuarial Models in Technology Risk}
+
+The application of actuarial loss models to technology risk is not
+new. The Basel~II/III Accords \citep{basel2006} require banks to
+model operational risk using a Loss Distribution Approach (LDA) that
+decomposes aggregate loss into frequency and severity components---the
+same decomposition we employ. \citet{malavasi2022cyber} apply the LDA
+to cyber risk, modeling claim frequency with Poisson processes and
+severity with log-normal or generalized Pareto distributions.
+\citet{eling2016cyber} provide a survey of actuarial approaches to
+cyber risk. The Federal Reserve Banks of Boston and Richmond have
+recently applied frequency-severity models to AI-related operational
+losses in banking \citep{bosfed2025ai}, providing independent
+validation that this class of models is appropriate for AI risk.
+
+Our work specializes these models to the AI evaluation setting, where
+the ``claim'' is a model error and the ``severity'' is calibrated
+against domain-specific regulatory and economic evidence rather than
+historical loss databases.
+
+\subsection{Human-in-the-Loop and Deferral}
+
+The option to route uncertain predictions to a human reviewer has been
+studied as \emph{learning to defer}
+\citep{madras2018predict,mozannar2020consistent}
+and \emph{selective prediction}
+\citep{elyaniv2010selective,geifman2017selective}. \citet{narasimhan2022posthoc}
+develop post-hoc estimators for the cost of deferral.
+\citet{okati2021differentiable} propose differentiable triage systems
+that jointly optimize model prediction and deferral.
+
+The actuarial framework recasts deferral as excess-of-loss
+reinsurance: outputs whose estimated severity exceeds a retention
+threshold $d$ are routed to human review at a fixed per-unit cost $h$,
+reducing the retained aggregate loss at the expense of increased
+review volume \citep{beauchemin2026position}. This formulation makes
+the cost-benefit trade-off of human review explicit and computable.
+
+\subsection{LLM Benchmarking at Scale}
+
+Large-scale LLM evaluation has become a field of its own. The HELM
+framework \citep{liang2023helm} standardizes evaluation across dozens
+of scenarios with uniform prompting. Open LLM Leaderboard
+\citep{beeching2023openllm} and Chatbot Arena
+\citep{chiang2024chatbot} provide crowdsourced comparisons.
+Domain-specific benchmarks exist for finance
+\citep{islam2023financebench,chen2021finqa}, medicine
+\citep{jin2021medqa,kazi2024medcalc}, and law
+\citep{hendrycks2021cuad,koreeda2021contractnli}.
+
+These efforts share a common limitation: they reduce model performance
+to accuracy or a closely related metric, discarding information about
+the severity distribution of errors. Our work augments---rather than
+replaces---existing benchmarks by annotating each instance with a
+severity level and computing risk measures that complement accuracy.
+
+% ============================================================================
+% 3. FRAMEWORK
+% ============================================================================
+
+\section{Actuarial Framework}
+\label{sec:framework}
+
+We recapitulate the framework of \citet{beauchemin2026position};
+formal derivations are in the original paper.
+
+\subsection{Frequency-Severity Decomposition}
+
+An AI system produces $n$ outputs per evaluation period, each correct
+(probability $1-p$) or erroneous (probability $p$). Each error falls
+into one of $K$ severity categories with costs $c_1 < \cdots < c_K$
+and probabilities $\bpi = (\pi_1, \ldots, \pi_K)$:
+\begin{align}
+  N &\sim \mathrm{Bin}(n, p), \label{eq:frequency} \\
+  X_i &\in \{c_1, \ldots, c_K\}, \quad \mathbb{P}(X_i = c_k) = \pi_k. \label{eq:severity}
+\end{align}
+
+\subsection{Compound Loss}
+
+The aggregate loss $S = \sum_{i=1}^{N} X_i$ has closed-form moments:
+\begin{align}
+  \ES &= n p \, \mu_X, &
+  \mathrm{Var}(S) &= n p \, \sigma_X^2 + n p (1\!-\!p) \, \mu_X^2,
+  \label{eq:expected_loss}
+\end{align}
+where $\mu_X = \sum_k c_k \pi_k$ and
+$\sigma_X^2 = \sum_k c_k^2 \pi_k - \mu_X^2$. The expected loss
+$\ES$ captures both error frequency ($p$) and economic impact
+($\mu_X$): two systems with identical accuracy can differ arbitrarily
+in $\ES$ if $\bpi_A \neq \bpi_B$.
+
+\subsection{Risk Measures}
+
+We compute the distribution of $S$ via Monte Carlo simulation
+($10^5$ replications) and extract two tail risk measures: the
+\textbf{Value-at-Risk}
+$\VaR_\alpha(S) = \inf\{s : \mathbb{P}(S \leq s) \geq \alpha\}$,
+i.e.\ the loss exceeded with probability $1 - \alpha$; and the
+\textbf{Tail Value-at-Risk}
+$\TVaR_\alpha(S) = \mathbb{E}[S \mid S > \VaR_\alpha(S)]$,
+the expected loss in the worst $(1 - \alpha)$ scenarios.
+
+\subsection{Ruin Theory and Reserves}
+
+For multi-period deployment, the surplus process
+$U_t = u + nrt - \sum_{s=1}^{t} S_s$ tracks the remaining risk
+budget, where $u$ is the initial reserve and $r$ is the net revenue
+per output. The ruin probability
+$\psi(u) = \mathbb{P}(\exists\, t \geq 1 : U_t < 0)$ is bounded
+by Lundberg's inequality $\psi(u) \leq e^{-Ru}$, where $R$ is the
+adjustment coefficient obtained by solving
+$\lambda(M_X(R) - 1) = nrR$ with $\lambda = np$
+\citep{dickson2016insurance}. This yields a minimum reserve
+$u^* = -\ln(\psi^*) / R$ for a target ruin tolerance $\psi^*$.
+
+\subsection{Human-in-the-Loop Routing}
+
+Following the excess-of-loss reinsurance analogy
+\citep{beauchemin2026position}, outputs with estimated severity above
+a retention threshold $d$ are routed to human review at cost $h$.
+The routing ratio $\rho = \sum_{k : c_k > d} \pi_k$ gives the
+fraction redirected, yielding total expected cost:
+\begin{equation}
+  \mathbb{E}[C] = n p (1 - \rho) \, \mu_X^{\mathrm{ret}} + n p \rho \, h,
+  \label{eq:routing}
+\end{equation}
+where $\mu_X^{\mathrm{ret}}$ is the mean severity of retained errors.
+
+% ============================================================================
+% 4. EXPERIMENTAL SETUP
+% ============================================================================
+
+\section{Experimental Setup}
+\label{sec:experiments}
+
+\subsection{Datasets}
+\label{sec:datasets}
+
+We select 11 benchmarks across four high-stakes domains, prioritizing
+datasets where severity annotations can be derived from structured
+metadata or domain-specific rules rather than requiring fully manual
+annotation. Table~\ref{tab:datasets} summarizes the selection.
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrlll@{}}
+\toprule
+Domain & Dataset & Inst.\ & Task & Severity source & Reference \\
+\midrule
+\multirow{3}{*}{Finance}
+  & FinanceBench  & 150   & Extr.\ QA       & Answer $\times$ metric type  & \citet{islam2023financebench} \\
+  & FinQA         & 8,281 & Num.\ reasoning  & Deviation magnitude          & \citet{chen2021finqa} \\
+  & TAT-QA        & 4,500 & Table+text QA    & Deviation magnitude          & \citet{zhu2021tatqa} \\
+\midrule
+\multirow{3}{*}{Medical}
+  & MedCalc-Bench & 1,047 & Clin.\ calc.\    & Calculator category          & \citet{kazi2024medcalc} \\
+  & MedQA (USMLE) & 1,273 & MCQ              & Clinical topic               & \citet{jin2021medqa} \\
+  & HEAD-QA       & 2,742 & MCQ              & Topic domain                 & \citet{vilares2019headqa} \\
+\midrule
+\multirow{3}{*}{Legal}
+  & CUAD          & 4,182 & Clause extr.\    & Clause category              & \citet{hendrycks2021cuad} \\
+  & MAUD          & 1,396 & Merger QA        & Deal point type              & \citet{wang2023maud} \\
+  & ContractNLI   & 607   & NLI              & NDA clause type              & \citet{koreeda2021contractnli} \\
+\midrule
+\multirow{2}{*}{Insurance}
+  & RAG Insurance & 82    & QA (FR)          & Expert annotation            & \citet{beauchemin2024quebec} \\
+  & JudgeBERT     & 807   & Simplification   & Meaning preserv.\            & \citet{beauchemin2025thesis} \\
+\bottomrule
+\end{tabular}
+\caption{Datasets used in the evaluation. Inst.\ denotes the number of test-set instances evaluated.}
+\label{tab:datasets}
+\end{table*}
+
+\subsubsection{Finance}
+
+\paragraph{FinanceBench} \citep{islam2023financebench} contains
+questions over SEC 10-K and 10-Q filings. We annotate severity using a
+two-axis rule system: \emph{answer type} (dollar amounts in
+millions/billions, percentages, ratios, yes/no, free text) crossed
+with \emph{metric type} (core financial statements, operational
+metrics, derived ratios, descriptive). The cross-tabulation maps each
+combination to one of four severity levels (Section~\ref{sec:severity-annotation}).
+We validate the rule-based annotations against an independent LLM
+annotator, achieving adjacent agreement of 94\% ($\kappa = 0.46$).
+
+\paragraph{FinQA} \citep{chen2021finqa} and \textbf{TAT-QA}
+\citep{zhu2021tatqa} require numerical reasoning over financial tables
+and text. Severity is derived from the magnitude of the financial
+quantity: questions about core financial items (revenue, net income,
+total assets) in millions or billions are classified as critical,
+operational metrics as major, and ratios or percentages as minor.
+
+\subsubsection{Medical}
+
+\paragraph{MedCalc-Bench} \citep{kazi2024medcalc} covers 55 clinical
+calculators, each computing a score used in medical decision-making.
+The calculators span distinct risk categories: dosage adjustments and
+sepsis scores (critical), surgical risk assessments (major),
+cardiovascular risk scores (minor), and unit conversions (negligible).
+We map each calculator to a severity level based on its clinical
+decision impact, following the categorization in the original dataset.
+
+\paragraph{MedQA} \citep{jin2021medqa} contains USMLE-style
+multiple-choice questions. \textbf{HEAD-QA} \citep{vilares2019headqa}
+contains biomedical exam questions from the Spanish healthcare
+system. For both, severity is assigned based on the clinical topic:
+emergency medicine and pharmacology questions are rated as critical,
+surgical and diagnostic questions as major, and basic science
+questions as negligible.
+
+\subsubsection{Legal}
+
+\paragraph{CUAD} \citep{hendrycks2021cuad} requires extracting 41
+types of legal clauses from contracts. We classify clause types by
+contractual risk: indemnification and liability limitation clauses are
+critical, non-compete and IP assignment clauses are major, renewal and
+notice clauses are minor, and definitional clauses are negligible.
+This follows the risk stratification in legal due diligence practice
+\citep{guha2023legalbench}.
+
+\paragraph{MAUD} \citep{wang2023maud} covers merger agreement
+understanding with multiple-choice questions about deal points.
+\textbf{ContractNLI} \citep{koreeda2021contractnli} is a natural
+language inference task over non-disclosure agreements. Severity
+follows clause-type risk as in CUAD.
+
+\subsubsection{Insurance}
+
+\paragraph{RAG Insurance} \citep{beauchemin2024quebec} contains 82
+expert-verified questions about Quebec automobile insurance, with
+severity annotations from domain experts following the taxonomy
+in \citet{beauchemin2026position}. \textbf{JudgeBERT}
+\citep{beauchemin2025thesis} contains 807 domain-specific
+multiple-choice questions on Quebec insurance regulation.
+
+% ----------------------------------------------------------------------------
+\subsection{Severity Annotation}
+\label{sec:severity-annotation}
+
+Each domain uses a four-level severity taxonomy ($K = 4$) with cost
+levels calibrated against empirical evidence. Table~\ref{tab:costs}
+summarizes the cost vectors.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Domain & $c_1$ & $c_2$ & $c_3$ & $c_4$ \\
+ & (negl.) & (minor) & (major) & (crit.) \\
+\midrule
+Finance   & \$100  & \$1k   & \$10k  & \$100k \\
+Medical   & \$500  & \$5k   & \$50k  & \$500k \\
+Legal     & \$200  & \$2k   & \$20k  & \$200k \\
+Insurance & \$100  & \$2k   & \$10k  & \$250k \\
+\bottomrule
+\end{tabular}
+\caption{Cost vectors by domain. Each spans approximately three orders
+of magnitude, reflecting the heavy-tailed nature of error costs in
+high-stakes applications. Calibration sources are detailed in
+Appendix~\ref{sec:app-calibration}.}
+\label{tab:costs}
+\end{table}
+
+The calibration of each cost level draws on multiple sources:
+regulatory penalties (SEC SAB~99, SOX~\S906, FINRA, FDA, EU~AI~Act),
+litigation data (securities class actions, medical malpractice
+settlements), operational loss databases (ORX for banking, IBM/Ponemon
+for data breaches), and published case studies of AI failures in
+production \citep{aircanada2024,prosperspark2023}. Detailed
+calibration evidence is provided in Appendix~\ref{sec:app-calibration}.
+
+\paragraph{Annotation protocol.}
+For each dataset, we define deterministic annotation rules that map
+structured metadata (answer type, question topic, clause category,
+calculator type) to a severity level. This rule-based approach ensures
+reproducibility and eliminates annotator subjectivity on individual
+instances. We validate each rule system against an independent LLM
+annotator (Claude Sonnet~4) using the severity rubric as a one-shot
+prompt, reporting Cohen's $\kappa$ and adjacent agreement
+($\pm 1$ level).
+
+% ----------------------------------------------------------------------------
+\subsection{Models}
+\label{sec:models}
+
+We evaluate 23 language models spanning eight provider families and
+four scale tiers. Table~\ref{tab:models} lists the models. Provider
+budgets and pricing led us to select recent flagship and mid-tier
+models from each family rather than running every available
+checkpoint.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Model & Provider & Type \\
+\midrule
+\multicolumn{3}{l}{\textit{Frontier API models}} \\
+o3, o3-mini             & OpenAI    & Reasoning \\
+GPT-5, GPT-5-mini       & OpenAI    & General \\
+Claude Sonnet~4.6       & Anthropic & General \\
+Claude Haiku~4.5        & Anthropic & General \\
+Command~A, Command~R+   & Cohere    & General \\
+DeepSeek-V3             & DeepSeek  & General \\
+DeepSeek-R1             & DeepSeek  & Reasoning \\
+Gemini~3.1~Pro          & Google    & General \\
+Grok-3, Grok-3-mini     & xAI       & General \\
+Mistral Large, Medium   & Mistral   & General \\
+Qwen3-235B (think./std.) & Alibaba (OpenRouter) & Reasoning/General \\
+\midrule
+\multicolumn{3}{l}{\textit{Open-weight local models (4-bit NF4 quantization)}} \\
+QwQ-32B               & Alibaba     & Reasoning \\
+Qwen3-30B-A3B         & Alibaba     & MoE \\
+Gemma-2-27B           & Google      & General \\
+Qwen3-14B             & Alibaba     & General \\
+Gemma-2-9B            & Google      & General \\
+Granite-3.2-8B        & IBM         & General \\
+\bottomrule
+\end{tabular}
+\caption{Models evaluated. API models are accessed through their
+respective provider endpoints (with the official batch APIs used
+where available for cost reduction). Local models are deployed with
+4-bit NF4 quantization via unsloth/bitsandbytes on a single GPU.}
+\label{tab:models}
+\end{table}
+
+API models are queried through official endpoints, with batch APIs
+used for OpenAI, Anthropic, Google, xAI and Mistral; Cohere,
+DeepSeek and OpenRouter (Qwen3-235B) calls use a parallel synchronous
+fallback. Local open-weight models are deployed with 4-bit NF4
+quantization \citep{dettmers2023qlora} using unsloth
+\citep{unsloth2024} on single NVIDIA GPUs. We use adaptive inference
+parameters per dataset:
+\texttt{max\_new\_tokens} ranges from 16 (ContractNLI, binary
+answers) to 256 (CUAD, clause extraction), and batch size is scaled
+inversely with model size and context length.
+
+\subsection{Evaluation Protocol}
+\label{sec:protocol}
+
+\paragraph{Prompting.}
+Each dataset is evaluated under two prompting conditions:
+\emph{original}, which reproduces the prompt format from the
+dataset's published evaluation protocol (Appendix~\ref{sec:app-prompts}),
+and \emph{standard}, a uniform zero-shot format modeled after HELM
+\citep{liang2023helm}. The original prompts serve as the primary
+evaluation; the standard prompts serve as an ablation to test whether
+model rankings are robust to prompt variation.
+
+\paragraph{Scoring.}
+We employ a cascaded scoring function that checks, in order:
+(1)~option letter matching for multiple-choice questions;
+(2)~yes/no extraction for binary questions;
+(3)~numeric comparison with 5\% relative tolerance for quantitative
+answers;
+(4)~exact text match after normalization;
+(5)~substring containment (minimum 4 characters); and
+(6)~word-set overlap (minimum 3 reference words).
+Each prediction is assigned a binary correctness label and the
+scoring method that determined it.
+
+\paragraph{Risk computation.}
+For each model--dataset pair, we compute:
+\begin{enumerate}[leftmargin=*]
+  \item The error rate $\hat{p} = 1 - \text{accuracy}$ and severity
+    profile $\hat{\bpi}$ from the empirical distribution of errors
+    across severity categories.
+  \item The expected aggregate loss $\widehat{\ES}$ via
+    Equation~\eqref{eq:expected_loss}.
+  \item The full distribution of $S$ via $10^5$ Monte Carlo
+    replications of the compound model
+    (Equations~\eqref{eq:frequency}--\eqref{eq:expected_loss}), assuming
+    $n = 10{,}000$ outputs per evaluation period.
+  \item $\VaR_{0.95}(S)$ and $\TVaR_{0.95}(S)$ from the empirical
+    distribution of simulated losses.
+  \item The Lundberg adjustment coefficient $R$ and minimum reserve
+    $u^*$ for a ruin tolerance of $\psi^* = 0.01$.
+  \item The routing cost reduction under retention thresholds
+    $d \in \{c_2, c_3\}$ with human review cost $h = \$50$.
+\end{enumerate}
+
+All computations are performed using the \seveval{} library
+(Section~\ref{sec:library}).
+
+\paragraph{Research questions.}
+We organize the analysis around five research questions that probe the
+relationship between accuracy and the actuarial risk measures defined
+in Section~\ref{sec:framework}. For each question, we report a
+quantitative criterion that we use to summarize the empirical signal.
+We do not commit ex ante to thresholds for ``significance''; the
+criteria below are reporting conventions, not pass/fail tests.
+
+\begin{description}[leftmargin=0pt,labelindent=0pt]
+  \item[RQ1 (Ranking divergence).] How closely aligned are model
+    rankings by accuracy and by $\ES$ within a domain? We report
+    Kendall $\tau$ between the two rank orders, together with its
+    $p$-value.
+  \item[RQ2 (Severity vs.\ frequency).] How much of the inter-model
+    variance in $\ES$ is attributable to the severity profile $\bpi$
+    versus the error rate $p$? We report a variance decomposition that
+    holds one factor at the domain mean while letting the other vary.
+  \item[RQ3 (Ranking inversions).] Are there concrete pairs $(A, B)$
+    such that $\mathrm{acc}(A) > \mathrm{acc}(B)$ but
+    $\ES(A) > \ES(B)$? We report the count and dollar magnitude of
+    such inversions per dataset.
+  \item[RQ4 (Routing benefit).] Does the cost reduction from HITL
+    routing covary with the tail heaviness of the domain's cost
+    distribution? We report the per-domain mean cost reduction and
+    the Spearman correlation with the coefficient of variation of
+    $\mathbf{c}$.
+  \item[RQ5 (Robustness).] How sensitive are model rankings to cost
+    calibration? We perturb each $c_k$ by $\pm 20\%$ and report the
+    minimum Spearman $\rho$ between the base and perturbed rankings.
+\end{description}
+
+% ============================================================================
+% 5. THE SEVERITY-EVAL LIBRARY
+% ============================================================================
+
+\section{The \seveval{} Library}
+\label{sec:library}
+
+We release \seveval{}, an open-source Python library that implements
+the actuarial evaluation pipeline. The library is designed around
+three principles: (1)~a HuggingFace-style \texttt{evaluate.Metric}
+subclass (\texttt{CompoundLossMetric}) so the risk measures can be
+plugged into an existing evaluation pipeline alongside accuracy;
+(2)~minimal core dependencies (NumPy, SciPy), with pandas and
+matplotlib loaded lazily only when DataFrame export or plotting is
+requested; and (3)~domain-agnostic design with built-in taxonomies
+for finance, medicine, law and insurance, plus a registration API
+for custom domains. The actuarial pipeline is split across six
+modules---compound loss simulation, risk measures, ruin theory,
+routing analysis, severity taxonomies, and sensitivity
+analysis---documented with usage examples in
+Appendix~\ref{sec:app-library}.
+
+% ============================================================================
+% 6. RESULTS
+% ============================================================================
+
+\section{Results}
+\label{sec:results}
+
+We report results for the model--benchmark pairs we evaluated,
+organised around the five research questions of
+Section~\ref{sec:protocol}. All risk measures are computed with
+$n=10{,}000$ outputs per evaluation period, $20{,}000$ Monte Carlo
+replications, and $\alpha=0.95$. The complete per-pair table is
+provided in Appendix~\ref{sec:app-full-results}; we highlight here the
+aggregate signals. The numbers below correspond to the snapshot of
+runs released with the code; the same pipeline can be re-executed at
+the full scale of Section~\ref{sec:experiments} via the
+\texttt{run\_full\_pipeline.sh} script described in
+Appendix~\ref{sec:app-library}.
+
+\paragraph{Sample size caveat.}
+At the time of writing, only the finance domain (FinanceBench) had
+sufficient model coverage to evaluate ranking-based questions (RQ1,
+RQ3, RQ5) with more than three models. The remaining domains carry
+single-model coverage on most datasets, so we report the
+single-domain numbers as preliminary and defer cross-domain
+comparison to future work using the released pipeline.
+
+\subsection{RQ1: Ranking divergence}
+\label{sec:rq1}
+
+Across $12$ frontier and open-weight models evaluated on
+FinanceBench, the rankings induced by accuracy and by $\ES$ are
+almost monotonically aligned: Kendall $\tau = 0.96$ ($p = 5\times
+10^{-4}$). In this preliminary snapshot, accuracy is a faithful
+proxy for $\ES$ at the model level. Whether this alignment
+persists in domains with heavier-tailed cost vectors (medical,
+insurance) is the central open question that the full evaluation
+addresses.
+
+\subsection{RQ2: Severity vs.\ frequency variance}
+\label{sec:rq2}
+
+Decomposing inter-model variance in $\ES$ into a severity-only and
+a frequency-only contribution (Section~\ref{sec:protocol}) yields,
+for finance, $\mathrm{Var}_{\bpi} = 1.28\times 10^{14}$ and
+$\mathrm{Var}_p = 8.24 \times 10^{13}$, so the severity share is
+$\mathrm{Var}_{\bpi} / (\mathrm{Var}_{\bpi} + \mathrm{Var}_p) =
+0.61$. The severity profile $\bpi$ accounts for a larger share of
+inter-model risk variance than the error rate $p$ in this domain.
+This decomposition is sensitive to the cost vector and to the model
+mix; we report it as descriptive rather than confirmatory.
+
+\subsection{RQ3: Ranking inversions}
+\label{sec:rq3}
+
+In the FinanceBench subset, where $\tau$ is close to one, we
+observe $0$ strict inversions of the form $\mathrm{acc}(A) >
+\mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$. This is consistent
+with the high $\tau$ above. Whether inversions emerge in other
+domains, or under different prompt styles, remains open.
+
+\subsection{RQ4: Routing benefit}
+\label{sec:rq4}
+
+Using a retention threshold of $d = c_3$ (route ``major'' and
+``critical'' errors) and human-review cost $h = \$50$, the
+estimated mean cost reduction (Table~\ref{tab:h4}) is $85.1\%$ in
+finance, $99.9\%$ in insurance (single model), $66.6\%$ in medical
+and $50.0\%$ in legal. The Spearman correlation between the
+coefficient of variation of $\mathbf{c}$ and the mean reduction is
+upward in the snapshot but cannot be tested rigorously with only
+four domains and uneven within-domain coverage.
+
+\subsection{RQ5: Robustness to cost calibration}
+\label{sec:rq5}
+
+Perturbing each $c_k$ by $\pm 20\%$ (one coordinate at a time,
+$\pm$ directions) leaves the FinanceBench $\ES$ ranking unchanged
+in our snapshot: the minimum Spearman correlation between the base
+and perturbed rankings is $1.00$. With only one domain reaching
+the three-model threshold, the result is preliminary, but it
+suggests that moderate uncertainty in $\mathbf{c}$ does not
+overturn rankings dominated by large differences in $\bpi$ and $p$.
+
+% ============================================================================
+% 7. DISCUSSION
+% ============================================================================
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What the actuarial framework adds}
+
+The compound loss model produces three families of quantities that
+accuracy alone does not provide. The expected loss $\ES$ summarizes
+the per-period economic exposure under a given $\mathbf{c}$; the tail
+measures $\VaR_{0.95}$ and $\TVaR_{0.95}$ characterise the loss in
+adverse scenarios; the Lundberg reserve $u^\ast$ translates a
+target ruin tolerance into a dollar budget. These outputs are
+expressed in the same units that risk-management functions
+(Basel~II/III, SOX, COSO) already use, which can lower the
+translation cost between AI evaluation and enterprise risk
+processes. The actuarial decomposition therefore complements
+accuracy rather than replaces it: the error rate $p$ remains a
+primary input, but $\bpi$ and $\mathbf{c}$ are needed to recover
+the economic picture.
+
+\subsection{When does severity matter most?}
+
+The variance decomposition for RQ2 shows that, even when accuracy
+and $\ES$ rankings agree (as in our finance snapshot), severity
+profiles can account for a majority of inter-model variance in
+$\ES$. The mechanism is intuitive: $\ES = n p \mu_X$, and $\mu_X$
+spans three orders of magnitude across severity levels in all four
+of our taxonomies. Two systems with the same $p$ but different
+$\bpi$ produce $\ES$ values that can differ by an order of
+magnitude. The framework adds value primarily in the
+heterogeneous-severity regime; when an entire benchmark collapses
+to one severity level, $\ES$ is proportional to $p$ and accuracy is
+a sufficient summary.
+
+\subsection{Human-in-the-loop routing}
+
+Modelling deferral as excess-of-loss reinsurance gives a closed-form
+breakeven cost for human review, $h^\ast = \mu_X^{\text{route}}$,
+the mean severity of the routed errors. In our snapshot, even a
+$\$50$ human-review cost is well below this breakeven for medical
+and insurance taxonomies, leading to large estimated cost
+reductions when ``major'' and ``critical'' errors are routed
+($d=c_3$). We caution that the per-error severity used in routing
+is a function of $\bpi$ estimated from observed errors, not of an
+oracle severity classifier; the realised benefit depends on how
+accurately routing decisions are made at inference time.
+
+\subsection{Limitations of cost calibration}
+
+Cost vectors are approximate. Real costs depend on context,
+downstream action, detection probability, and whether an error
+propagates. Our levels represent expected per-instance costs
+conditioned on an undetected error. The robustness analysis (RQ5)
+suggests that $\pm 20\%$ perturbations do not overturn rankings in
+the snapshot we report, but practitioners should recalibrate
+$\mathbf{c}$ to their organization's loss data when available.
+
+\subsection{Comparison with MQM scoring}
+
+The closest precedent in NLP is the MQM weighting scheme
+\citep{lommel2014mqm}, with weights $\{1, 5, 25\}$ for minor,
+major and critical errors. Our framework differs in three ways.
+First, costs are calibrated against external evidence (regulatory
+penalties, litigation data, operational loss reports) rather than
+chosen by convention. Second, we report tail measures (VaR, TVaR)
+and reserves in addition to a weighted mean. Third, the routing
+analysis quantifies the cost--benefit trade-off of human review,
+which MQM does not address.
+
+% ============================================================================
+% 8. CONCLUSION
+% ============================================================================
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We applied the actuarial frequency-severity framework of
+\citet{beauchemin2026position} to a multi-model, multi-domain LLM
+evaluation. The framework decomposes operational risk into the error
+rate and the severity profile, and yields three families of measures
+(expected loss, tail risk, reserves) that complement accuracy.
+
+On the data reported in this paper, model rankings by accuracy and by
+expected loss are closely aligned on FinanceBench; the severity
+profile nevertheless drives a majority of inter-model variance in
+$\ES$, and routing analysis suggests sizeable cost reductions when
+high-severity errors are deferred to human review. We frame these
+observations as preliminary: extending coverage across the four
+domains and 23 models in Section~\ref{sec:experiments} is the natural
+next step, and the released \seveval{} library and
+\texttt{run\_full\_pipeline.sh} script are designed to make that
+extension reproducible. We release the code, severity annotations,
+and analysis scripts to support adoption of severity-aware evaluation
+as a complement to accuracy in high-stakes deployments.
+
+% ============================================================================
+% LIMITATIONS
+% ============================================================================
+
+\section*{Limitations}
+\label{sec:limitations}
+
+\paragraph{Cost calibration subjectivity.}
+While our cost vectors are grounded in regulatory and market evidence,
+the mapping from severity labels to dollar amounts is inherently
+approximate. Different organizations, even within the same domain,
+may face different cost structures depending on their size, regulatory
+exposure, and risk tolerance. We include a robustness analysis (RQ5)
+to test whether rankings are stable under moderate perturbation, but
+practitioners should recalibrate cost levels to their specific context.
+
+\paragraph{Binary correctness assumption.}
+Our framework classifies each model output as either correct or
+erroneous, discarding the spectrum of partial correctness that
+characterizes many real-world outputs. A financial answer that reports
+revenue as \$14.0B instead of \$14.2B is ``wrong'' but far less
+consequential than one reporting \$11.6B. Extending the framework to
+continuous severity scoring is a direction for future work.
+
+\paragraph{Severity annotation coverage.}
+For datasets where severity is derived from structured metadata (e.g.,
+calculator type in MedCalc-Bench, clause type in CUAD), the annotation
+is deterministic and reproducible. For datasets requiring rule-based
+mapping (FinanceBench, MedQA), the rules introduce a layer of
+judgment. Our inter-annotator validation (Cohen's $\kappa = 0.46$,
+adjacent agreement 94\%) suggests moderate agreement, with most
+disagreements confined to adjacent severity levels.
+
+\paragraph{Dataset scope.}
+We evaluate on English-language benchmarks (except RAG Insurance, in
+French) across four domains. The framework is domain-agnostic, but the
+specific cost calibrations and severity taxonomies may not transfer
+directly to other domains (e.g., code generation, content moderation)
+without domain-expert input.
+
+\paragraph{Static evaluation.}
+Our evaluation captures model performance at a single point in time.
+Model capabilities evolve through updates and fine-tuning; the
+severity profile of a model may shift between evaluation and
+deployment. Continuous monitoring using the \seveval{} library can
+mitigate this concern.
+
+% ============================================================================
+% ETHICS STATEMENT
+% ============================================================================
+
+\section*{Ethics Statement}
+\label{sec:ethics}
+
+This work evaluates existing language models on publicly available
+benchmarks and does not involve human subjects research. The severity
+annotations assign economic cost estimates to error categories but do
+not make normative claims about the relative value of human outcomes
+(e.g., we do not equate a medical error with a financial error based
+on dollar amounts). The cost calibrations are derived from publicly
+available regulatory and market data and are intended as illustrative
+defaults for risk budgeting, not as authoritative valuations of human
+welfare.
+
+We release all code, annotations, and evaluation results to support
+reproducibility. The \seveval{} library is released under an open-source
+license. We note that the severity framework, like any evaluation
+metric, can be used to inform but not replace human judgment in
+deployment decisions.
+
+% ============================================================================
+% ACKNOWLEDGMENTS
+% ============================================================================
+
+% \section*{Acknowledgments}
+%
+% This work was supported by [funding sources]. We thank
+% [names] for helpful discussions on actuarial modeling and
+% [names] for feedback on annotation guidelines.
+
+% ============================================================================
+% BIBLIOGRAPHY
+% ============================================================================
+
+\bibliography{references}
+% \bibliographystyle set by acl.sty
+
+% ============================================================================
+% APPENDIX
+% ============================================================================
+
+\appendix
+
+\section{Cost Calibration Evidence}
+\label{sec:app-calibration}
+
+% Include from separate file
+\input{severity-annotation-guidelines}
+
+\section{Prompt Templates}
+\label{sec:app-prompts}
+
+% Include from separate file
+\input{prompt_documentation}
+
+\section{Severity Scales by Domain}
+\label{sec:app-scales}
+
+% Include from separate file
+\input{severity-scales-all-domains}
+
+\section{\seveval{} Library Details}
+\label{sec:app-library}
+
+\subsection{Core API}
+
+The primary entry point is the \texttt{evaluate()} function:
+
+\begin{small}
+\begin{verbatim}
+import severity_eval
+
+report = severity_eval.evaluate(
+    predictions=preds,
+    references=refs,
+    severity_annotations=labels,
+    cost_levels=[100, 1_000, 10_000, 100_000],
+    n_queries=10_000,
+    n_sim=100_000,
+    alpha=0.95,
+)
+\end{verbatim}
+\end{small}
+
+\noindent The returned \texttt{SeverityReport} object contains the
+accuracy, error rate, severity profile $\hat{\bpi}$, expected loss,
+VaR, TVaR, and the full vector of simulated losses. It supports
+serialization to JSON, pandas DataFrames, and \LaTeX{} tables.
+
+\subsection{Modules}
+
+The actuarial pipeline is split across six analytical modules:
+
+\begin{itemize}
+  \item \textbf{compound\_loss}: Monte Carlo simulation of
+    $S = \sum_{i=1}^{N} X_i$ under the binomial-categorical model.
+  \item \textbf{risk\_measures}: Empirical VaR, TVaR, and bootstrap
+    confidence intervals.
+  \item \textbf{ruin}: Lundberg adjustment coefficient (via Brent's
+    method), reserve requirements, and Monte Carlo ruin probability
+    estimation.
+  \item \textbf{routing}: Excess-of-loss routing analysis with
+    configurable retention threshold and human review cost.
+  \item \textbf{taxonomy}: Built-in severity taxonomies for finance,
+    medicine, law and insurance, with a
+    registration API for custom domains.
+  \item \textbf{sensitivity}: Perturbation analysis of cost vectors
+    (one coordinate at a time, $\pm$ directions) to assess robustness
+    of model rankings.
+\end{itemize}
+
+Three auxiliary modules support the pipeline: \texttt{api} (the
+\texttt{evaluate()} entry point and the \texttt{SeverityReport}
+dataclass), \texttt{metric} (the HuggingFace \texttt{evaluate.Metric}
+wrapper) and \texttt{validation} (input checks for severity profiles).
+A \texttt{visualization} module provides the matplotlib plotting
+helpers used by the figures in this paper.
+
+\subsection{HuggingFace Integration}
+
+The module \texttt{severity\_eval.metric} exposes
+\texttt{compute\_severity\_metrics()}---a flat-dict wrapper around
+the core \texttt{evaluate()} call---and \texttt{CompoundLossMetric},
+a subclass of \texttt{evaluate.Metric} that can be instantiated
+directly. Both paths return the same payload (accuracy, error rate,
+severity profile, expected loss, VaR, TVaR), so the risk measures
+can be reported alongside accuracy in a standard evaluation
+pipeline. The metric is not published on the HuggingFace Hub as a
+loadable module in this release.
+
+\subsection{Reproducing the experiments}
+
+The \texttt{experiments/run\_full\_pipeline.sh} script orchestrates
+the full evaluation matrix: it dispatches API models through the
+official batch endpoints (OpenAI, Anthropic, Google, Mistral, xAI;
+batch APIs reduce cost by approximately $50\%$ at the time of
+writing), evaluates open-weight models locally with $4$-bit NF4
+quantisation via unsloth and bitsandbytes
+\citep{dettmers2023qlora,unsloth2024}, runs the analysis
+(\texttt{experiments/analysis.py}) and regenerates all paper
+figures and tables. Stages are idempotent and can be resumed with
+the corresponding \texttt{--skip-*} flag.
+
+\section{Full Results Table}
+\label{sec:app-full-results}
+
+The complete per-(model, dataset) table generated by
+\texttt{experiments/analysis.py} is shipped alongside the code in
+\texttt{results/table\_main.tex}; see also
+\texttt{results/metrics.csv} for the raw values.
+
+\section{Inter-Annotator Agreement}
+\label{sec:app-agreement}
+
+On the FinanceBench rule-based annotation, Cohen's
+$\kappa = 0.46$ with $65.3\%$ exact agreement and $94.0\%$ adjacent
+agreement against an independent LLM annotator
+($150$ instances). The
+\texttt{experiments/validate\_severity\_llm.py} script reproduces
+this measurement and can be applied to additional datasets to
+extend the table.
+% FinanceBench already validated: κ = 0.46, exact = 65.3%, adjacent = 94.0%.
+% Run experiments/validate_severity_llm.py for remaining datasets.
+
+\end{document}

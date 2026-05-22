@@ -1,0 +1,49 @@
+# Private datasets — do NOT commit
+dataset/*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Experiment outputs
+experiments/results/
+results/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Lint/test caches
+.pytest_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# wandb
+wandb/
+wandb-metadata.json
+
+# Paper v1 archive (sources extracted into paper/)
+paper/Severity___EMNLP.zip
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/main.pdf
