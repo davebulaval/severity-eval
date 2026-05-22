@@ -909,6 +909,7 @@ def _load_local_model(model_id: str):
             dtype=None,
             load_in_4bit=True,
             trust_remote_code=True,
+            attn_implementation="eager",
         )
         model.eval()
     else:
@@ -929,9 +930,19 @@ def _load_local_model(model_id: str):
             device_map="auto",
             max_memory=max_mem,
             trust_remote_code=True,
-            attn_implementation="sdpa",
+            attn_implementation="eager",
         )
         model.eval()
+
+    # Force dynamic KV cache. The HybridCache that transformers >= 4.46
+    # auto-selects for SWA architectures (Gemma-2, Phi-4, QwQ/Qwen2,
+    # Llama-3 distill) trips on a broadcast shape mismatch
+    # ([1, H, 1, D] vs [1, H, seq_len, D]) during generation with
+    # unsloth/bnb-4bit loaders. Using "dynamic" sidesteps the bug.
+    try:
+        model.generation_config.cache_implementation = "dynamic"
+    except AttributeError:
+        pass
 
     _clients[cache_key] = (model, tokenizer)
     return model, tokenizer
@@ -1051,7 +1062,11 @@ def _evaluate_local(
             max_length,
         )
 
-    # Create text-generation pipeline
+    # Create text-generation pipeline.
+    # max_length is intentionally omitted: prompts are already truncated to
+    # max_length above via tokenizer.encode/decode. Passing both max_length
+    # and max_new_tokens triggers warnings and, for thinking models where
+    # max_new_tokens is huge, can lead to malformed generation_config.
     gen_pipeline = pipeline(
         task="text-generation",
         model=model,
@@ -1061,8 +1076,8 @@ def _evaluate_local(
         return_full_text=False,
         max_new_tokens=max_new_tokens,
         padding=True,
-        truncation=True,
-        max_length=max_length,
+        truncation=False,
+        do_sample=False,
     )
 
     # Batch inference
