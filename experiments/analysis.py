@@ -589,6 +589,114 @@ def generate_latex_h4_table(h4: dict, output_path: Path):
 # ---------------------------------------------------------------------------
 
 
+def log_to_wandb(
+    metrics: pd.DataFrame,
+    domain_metrics: pd.DataFrame,
+    h1: dict,
+    h2: dict,
+    h3: dict,
+    h4: dict,
+    h5: dict,
+    project: str = "severity-eval",
+    run_name: str | None = None,
+) -> None:
+    """Push the aggregated analysis to W&B as a single synthesis run.
+
+    Complements the per-(dataset, model) evaluation runs already logged by
+    `evaluate_models.py` with one consolidated "analysis" run containing
+    summary statistics, the full metrics table, and the RQ1-RQ5 results.
+    """
+    try:
+        import wandb
+    except ImportError:
+        print("[WARN] wandb not installed; skipping --wandb")
+        return
+
+    if run_name is None:
+        from datetime import datetime
+
+        run_name = f"analysis-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+    run = wandb.init(
+        project=project, name=run_name, job_type="analysis", tags=["analysis"]
+    )
+
+    # Per-(model, dataset) table
+    cols = [
+        "model",
+        "dataset",
+        "domain",
+        "taxonomy_domain",
+        "n",
+        "n_errors",
+        "accuracy",
+        "error_rate",
+        "mu_X",
+        "expected_loss",
+        "expected_loss_ci_lo",
+        "expected_loss_ci_hi",
+        "var",
+        "tvar",
+    ]
+    metric_table = wandb.Table(
+        columns=cols,
+        data=metrics[cols].astype(object).values.tolist(),
+    )
+    wandb.log({"metrics_per_model_dataset": metric_table})
+
+    # Per-domain aggregate
+    dom_cols = [c for c in domain_metrics.columns if c != "severity_profile"]
+    if not domain_metrics.empty:
+        dom_table = wandb.Table(
+            columns=dom_cols,
+            data=domain_metrics[dom_cols].astype(object).values.tolist(),
+        )
+        wandb.log({"metrics_per_domain": dom_table})
+
+    # Summary scalars
+    summary = {
+        "n_predictions": int(metrics["n"].sum()),
+        "n_models": int(metrics["model"].nunique()),
+        "n_datasets": int(metrics["dataset"].nunique()),
+        "mean_accuracy": float(metrics["accuracy"].mean()),
+        "median_accuracy": float(metrics["accuracy"].median()),
+        "h1_n_divergent_domains": h1.get("n_divergent", 0),
+        "h1_supported": int(h1.get("hypothesis_supported", False)),
+        "h2_supported": int(h2.get("hypothesis_supported", False)),
+        "h3_n_inversions": h3.get("n_inversions", 0),
+        "h5_supported": int(h5.get("hypothesis_supported", False)),
+    }
+    for dom, r in h1.get("per_domain", {}).items():
+        summary[f"h1_tau_{dom}"] = r["tau"]
+        summary[f"h1_pvalue_{dom}"] = r["p_value"]
+    for dom, r in h4.items():
+        summary[f"h4_mean_reduction_{dom}"] = r["mean_reduction_pct"]
+        summary[f"h4_cost_cv_{dom}"] = r["cost_cv"]
+    for dom, r in h5.get("per_domain", {}).items():
+        summary[f"h5_min_spearman_{dom}"] = r["min_spearman"]
+
+    wandb.summary.update(summary)
+
+    # Inversions table (RQ3)
+    if h3.get("inversions"):
+        inv_cols = [
+            "domain",
+            "dataset",
+            "better_acc",
+            "worse_acc",
+            "acc_gap",
+            "loss_gap",
+        ]
+        inv_table = wandb.Table(
+            columns=inv_cols,
+            data=[[i[c] for c in inv_cols] for i in h3["inversions"][:200]],
+        )
+        wandb.log({"rq3_inversions": inv_table})
+
+    run.finish()
+    print(f"[OK] W&B analysis run logged: {project}/{run_name}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Analyse severity-aware evaluation results"
@@ -600,6 +708,16 @@ def main():
         default=None,
         choices=["original", "standard", None],
         help="Filter by prompt style; default uses all",
+    )
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        help="Log the aggregated analysis to W&B as a synthesis run",
+    )
+    parser.add_argument(
+        "--wandb-project",
+        default="severity-eval",
+        help="W&B project name (default: severity-eval)",
     )
     args = parser.parse_args()
 
@@ -681,6 +799,12 @@ def main():
     generate_latex_main_table(metrics, args.output / "table_main.tex")
     generate_latex_h1_table(h1, args.output / "table_h1.tex")
     generate_latex_h4_table(h4, args.output / "table_h4.tex")
+
+    # W&B logging (optional)
+    if args.wandb:
+        log_to_wandb(
+            metrics, domain_metrics, h1, h2, h3, h4, h5, project=args.wandb_project
+        )
 
     print(f"\nAll outputs saved to {args.output}/")
 
