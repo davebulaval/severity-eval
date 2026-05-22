@@ -24,11 +24,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)  # our own progress lines remain visible
+
+# Silence third-party loggers that flood stdout with HTTP traces.
+for _noisy in (
+    "httpx",
+    "httpcore",
+    "urllib3",
+    "huggingface_hub",
+    "transformers",
+    "datasets",
+    "filelock",
+    "fsspec",
+    "unsloth",
+):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 # ---------------------------------------------------------------------------
 # Models — OpenRouter replaces Together for Llama-3

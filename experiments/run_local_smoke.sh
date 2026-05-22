@@ -169,15 +169,16 @@ echo "============================================================"
 # columns (model, prediction, correct, score_method, severity, domain).
 echo ""
 echo "Per-(model, dataset) summary:"
+
+MODELS_PY="["$(printf '"%s",' "${MODELS[@]}" | sed 's/,$//')"]"
+DATASETS_PY="["$(printf '"%s",' "${DATASETS[@]}" | sed 's/,$//')"]"
+
 PYTHONPATH=src python3 - <<PY
-import json, glob, os
+import json, os
 from collections import Counter
 
-models = $(printf '"%s",' "${MODELS[@]}" | sed 's/,$//')
-datasets = $(printf '"%s",' "${DATASETS[@]}" | sed 's/,$//')
-
-models = [${models}]
-datasets = [${datasets}]
+models = $MODELS_PY
+datasets = $DATASETS_PY
 
 print(f"{'Model':<28} {'Dataset':<14} {'n':>4} {'acc':>6} {'methods'}")
 print("-" * 90)
