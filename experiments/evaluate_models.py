@@ -934,11 +934,22 @@ def _load_local_model(model_id: str):
         )
         model.eval()
 
+    # Override unsloth's xformers attention. unsloth ignores the
+    # attn_implementation kwarg and uses xformers, which produces a
+    # broadcast shape mismatch ([1, H, 1, D] vs [1, H, seq_len, D])
+    # during generation on SWA / GQA architectures (Gemma-2, Phi-4,
+    # QwQ, Llama-3-distill). Force eager on the config directly.
+    try:
+        model.config._attn_implementation = "eager"
+        if hasattr(model, "_attn_implementation"):
+            model._attn_implementation = "eager"
+    except Exception:
+        pass
+
     # Force dynamic KV cache. The HybridCache that transformers >= 4.46
-    # auto-selects for SWA architectures (Gemma-2, Phi-4, QwQ/Qwen2,
-    # Llama-3 distill) trips on a broadcast shape mismatch
-    # ([1, H, 1, D] vs [1, H, seq_len, D]) during generation with
-    # unsloth/bnb-4bit loaders. Using "dynamic" sidesteps the bug.
+    # auto-selects for SWA architectures trips on the same broadcast
+    # bug. Using "dynamic" sidesteps the bug; for stubborn models the
+    # use_cache=False fallback in the pipeline below is the safety net.
     try:
         model.generation_config.cache_implementation = "dynamic"
     except AttributeError:
@@ -1062,11 +1073,21 @@ def _evaluate_local(
             max_length,
         )
 
+    # Cap the tokenizer's reported context to silence the
+    # "Both max_new_tokens and max_length(=131072)" warning that
+    # transformers emits when the tokenizer reports a 128K context
+    # while we only allow `max_length` of input.
+    try:
+        tokenizer.model_max_length = max_length + max_new_tokens
+    except Exception:
+        pass
+
     # Create text-generation pipeline.
-    # max_length is intentionally omitted: prompts are already truncated to
-    # max_length above via tokenizer.encode/decode. Passing both max_length
-    # and max_new_tokens triggers warnings and, for thinking models where
-    # max_new_tokens is huge, can lead to malformed generation_config.
+    # use_cache=False is the safety net for SWA/GQA models where the KV
+    # cache produces a shape mismatch under unsloth+bnb-4bit. Generation
+    # is ~5x slower without cache but always correct. Trade-off accepted
+    # for the local-model smoke/full runs; granite and qwen3 are
+    # unaffected and just see a small slowdown.
     gen_pipeline = pipeline(
         task="text-generation",
         model=model,
@@ -1078,6 +1099,7 @@ def _evaluate_local(
         padding=True,
         truncation=False,
         do_sample=False,
+        use_cache=False,
     )
 
     # Batch inference
