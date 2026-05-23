@@ -938,13 +938,17 @@ def _load_local_model(model_id: str):
     # attn_implementation kwarg and uses xformers, which produces a
     # broadcast shape mismatch ([1, H, 1, D] vs [1, H, seq_len, D])
     # during generation on SWA / GQA architectures (Gemma-2, Phi-4,
-    # QwQ, Llama-3-distill). Force eager on the config directly.
+    # QwQ, Llama-3-distill). Force eager on the config directly. Catch
+    # only AttributeError; any other failure should be surfaced.
     try:
         model.config._attn_implementation = "eager"
-        if hasattr(model, "_attn_implementation"):
+    except AttributeError as exc:
+        log.warning("Could not set _attn_implementation=eager on model.config: %s", exc)
+    if hasattr(model, "_attn_implementation"):
+        try:
             model._attn_implementation = "eager"
-    except Exception:
-        pass
+        except AttributeError as exc:
+            log.warning("Could not set _attn_implementation=eager on model: %s", exc)
 
     # Force dynamic KV cache. The HybridCache that transformers >= 4.46
     # auto-selects for SWA architectures trips on the same broadcast
@@ -952,8 +956,8 @@ def _load_local_model(model_id: str):
     # use_cache=False fallback in the pipeline below is the safety net.
     try:
         model.generation_config.cache_implementation = "dynamic"
-    except AttributeError:
-        pass
+    except AttributeError as exc:
+        log.warning("Could not set cache_implementation=dynamic: %s", exc)
 
     _clients[cache_key] = (model, tokenizer)
     return model, tokenizer
@@ -1076,11 +1080,12 @@ def _evaluate_local(
     # Cap the tokenizer's reported context to silence the
     # "Both max_new_tokens and max_length(=131072)" warning that
     # transformers emits when the tokenizer reports a 128K context
-    # while we only allow `max_length` of input.
+    # while we only allow `max_length` of input. AttributeError is
+    # the only realistic failure (e.g. tokenizer is a slot class).
     try:
         tokenizer.model_max_length = max_length + max_new_tokens
-    except Exception:
-        pass
+    except AttributeError as exc:
+        log.warning("Could not cap tokenizer.model_max_length: %s", exc)
 
     # Create text-generation pipeline.
     # use_cache=False is the safety net for SWA/GQA models where the KV

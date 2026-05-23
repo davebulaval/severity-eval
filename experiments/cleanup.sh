@@ -112,7 +112,6 @@ if [[ "$DO_BATCH" == "true" ]]; then
 import glob, json, os, sys
 from collections import Counter
 
-apply = ${APPLY:+True} or False
 apply_flag = $( [[ "$APPLY" == "true" ]] && echo "True" || echo "False" )
 
 bad = []
