@@ -78,31 +78,41 @@ MODELS = {
         "model_id": "qwen/qwen3-235b-a22b-thinking-2507",
     },
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
-    # --- Local (unsloth bnb-4bit) ---
+    # --- Local (Unsloth Dynamic 2.0 bnb-4bit; falls back to standard
+    #          bnb-4bit at load time if the dynamic variant is 404 on HF) ---
     "llama-3.3-70b": {
         "provider": "local",
-        "model_id": "unsloth/Llama-3.3-70B-Instruct-bnb-4bit",
+        "model_id": "unsloth/Llama-3.3-70B-Instruct-unsloth-bnb-4bit",
     },
     "deepseek-r1-distill-70b": {
         "provider": "local",
-        "model_id": "unsloth/DeepSeek-R1-Distill-Llama-70B-bnb-4bit",
+        "model_id": "unsloth/DeepSeek-R1-Distill-Llama-70B-unsloth-bnb-4bit",
     },
     "qwq-32b": {"provider": "local", "model_id": "unsloth/QwQ-32B-unsloth-bnb-4bit"},
-    "qwen3-30b-a3b": {"provider": "local", "model_id": "Qwen/Qwen3-30B-A3B"},
-    "gemma-2-27b": {"provider": "local", "model_id": "unsloth/gemma-2-27b-it-bnb-4bit"},
+    "qwen3-30b-a3b": {
+        "provider": "local",
+        "model_id": "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit",
+    },
+    "gemma-2-27b": {
+        "provider": "local",
+        "model_id": "unsloth/gemma-2-27b-it-unsloth-bnb-4bit",
+    },
     "mistral-small-3": {
         "provider": "local",
-        "model_id": "unsloth/Mistral-Small-3.1-24B-Instruct-2503-bnb-4bit",
+        "model_id": "unsloth/Mistral-Small-3.1-24B-Instruct-2503-unsloth-bnb-4bit",
     },
     "qwen3-14b": {
         "provider": "local",
         "model_id": "unsloth/Qwen3-14B-unsloth-bnb-4bit",
     },
-    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-bnb-4bit"},
-    "gemma-2-9b": {"provider": "local", "model_id": "unsloth/gemma-2-9b-it-bnb-4bit"},
+    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-unsloth-bnb-4bit"},
+    "gemma-2-9b": {
+        "provider": "local",
+        "model_id": "unsloth/gemma-2-9b-it-unsloth-bnb-4bit",
+    },
     "granite-3.2-8b": {
         "provider": "local",
-        "model_id": "unsloth/granite-3.2-8b-instruct-bnb-4bit",
+        "model_id": "unsloth/granite-3.2-8b-instruct-unsloth-bnb-4bit",
     },
 }
 
@@ -926,23 +936,44 @@ def _load_local_model(model_id: str):
     if model_id.startswith("unsloth/"):
         from unsloth import FastLanguageModel
 
-        log.info("Loading unsloth model %s ...", model_id)
         # Cap at model's native context length to avoid RoPE issues
         # gemma-2 maxes at 8K; qwen3/qwq/granite support 32K+
         if "gemma-2" in model_id.lower():
             seq_len = 8192
         else:
             seq_len = 32768
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_id,
-            max_seq_length=seq_len,
-            device_map="auto",
-            max_memory=max_mem,
-            dtype=None,
-            load_in_4bit=True,
-            trust_remote_code=True,
-            attn_implementation="eager",
-        )
+
+        def _try_load(repo_id: str):
+            log.info("Loading unsloth model %s ...", repo_id)
+            return FastLanguageModel.from_pretrained(
+                repo_id,
+                max_seq_length=seq_len,
+                device_map="auto",
+                max_memory=max_mem,
+                dtype=None,
+                load_in_4bit=True,
+                trust_remote_code=True,
+                attn_implementation="eager",
+            )
+
+        # Dynamic 2.0 variants (-unsloth-bnb-4bit) upcast sensitive
+        # layers to FP16, gaining ~1-2% accuracy for ~5-10% extra VRAM.
+        # Not every model has a published variant; fall back to the
+        # standard -bnb-4bit on 404.
+        try:
+            model, tokenizer = _try_load(model_id)
+        except (OSError, ValueError) as exc:
+            if "unsloth-bnb-4bit" not in model_id:
+                raise
+            fallback_id = model_id.replace("unsloth-bnb-4bit", "bnb-4bit")
+            log.warning(
+                "Dynamic variant %s unavailable (%s); falling back to %s",
+                model_id,
+                type(exc).__name__,
+                fallback_id,
+            )
+            model, tokenizer = _try_load(fallback_id)
+            model_id = fallback_id  # surface the actual id loaded
         model.eval()
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
