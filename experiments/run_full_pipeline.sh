@@ -4,7 +4,8 @@
 #
 # Stages (each is idempotent and can be re-run):
 #   1. Evaluate API models (batch APIs, 50% cost reduction where available).
-#   2. Evaluate local open-weight models (4-bit NF4 via unsloth / bitsandbytes).
+#   2. Evaluate local open-weight models (4-bit NF4 via vLLM + bitsandbytes;
+#      checkpoints are the Unsloth Dynamic 2.0 -unsloth-bnb-4bit variants).
 #   3. Validate severity labels against an LLM judge (one run per dataset).
 #   4. Compute actuarial metrics and run RQ1-RQ5 analyses.
 #   5. Generate paper figures (PDF) and LaTeX tables.
