@@ -38,15 +38,31 @@ cd "$(dirname "$0")/.."
 FIX=false
 GPU="0"
 SKIP_MICRO=false
+
+_require_arg() {
+    if [[ $# -lt 2 || -z "${2:-}" || "${2:0:2}" == "--" ]]; then
+        echo "[ABORT] $1 requires a value" >&2
+        exit 1
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --fix)        FIX=true; shift ;;
-        --gpu)        GPU="$2"; shift 2 ;;
+        --gpu)        _require_arg "$@"; GPU="$2"; shift 2 ;;
         --skip-micro) SKIP_MICRO=true; shift ;;
         -h|--help)    sed -n '2,32p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+
+# Detect the python3.X directory inside the venv (the site-packages live
+# under lib/pythonX.Y/, so hardcoding 3.11 breaks on 3.10 / 3.12 venvs).
+PY_LIB_DIR=""
+if [[ -n "${VIRTUAL_ENV:-}" ]]; then
+    PY_LIB_DIR=$(find "$VIRTUAL_ENV/lib" -maxdepth 1 -mindepth 1 \
+        -type d -name "python3.*" 2>/dev/null | sort | tail -1)
+fi
 
 PASS=0
 FAIL=0
@@ -130,30 +146,26 @@ echo
 echo "## 4. LD_LIBRARY_PATH"
 EXPECTED_CU13=""
 EXPECTED_CU12=""
-if [[ -n "${VIRTUAL_ENV:-}" ]]; then
-    EXPECTED_CU13="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib"
-    EXPECTED_CU12="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu12/lib"
+if [[ -n "$PY_LIB_DIR" ]]; then
+    EXPECTED_CU13="$PY_LIB_DIR/site-packages/nvidia/cu13/lib"
+    EXPECTED_CU12="$PY_LIB_DIR/site-packages/nvidia/cu12/lib"
 fi
-LIBPATH_OK=false
-if [[ -d "$EXPECTED_CU13" ]] \
+if [[ -z "$PY_LIB_DIR" ]]; then
+    warn "skipped (no venv active, cannot anchor cuXX path against \$VIRTUAL_ENV)"
+elif [[ -d "$EXPECTED_CU13" ]] \
    && [[ ":${LD_LIBRARY_PATH:-}:" == *":$EXPECTED_CU13:"* ]]; then
     ok "LD_LIBRARY_PATH contains $EXPECTED_CU13"
-    LIBPATH_OK=true
 elif [[ -d "$EXPECTED_CU12" ]] \
    && [[ ":${LD_LIBRARY_PATH:-}:" == *":$EXPECTED_CU12:"* ]]; then
     ok "LD_LIBRARY_PATH contains $EXPECTED_CU12 (CUDA 12 toolkit)"
-    LIBPATH_OK=true
-fi
-if [[ "$LIBPATH_OK" == "false" ]]; then
-    if [[ -d "$EXPECTED_CU13" ]]; then
-        fail "LD_LIBRARY_PATH missing $EXPECTED_CU13"
-        echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
-    elif [[ -d "$EXPECTED_CU12" ]]; then
-        fail "LD_LIBRARY_PATH missing $EXPECTED_CU12"
-        echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
-    else
-        warn "nvidia/cu13 and nvidia/cu12 lib dirs both missing -- pure-pip torch?"
-    fi
+elif [[ -d "$EXPECTED_CU13" ]]; then
+    fail "LD_LIBRARY_PATH missing $EXPECTED_CU13"
+    echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
+elif [[ -d "$EXPECTED_CU12" ]]; then
+    fail "LD_LIBRARY_PATH missing $EXPECTED_CU12"
+    echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
+else
+    warn "nvidia/cu13 and nvidia/cu12 lib dirs both missing -- pure-pip torch?"
 fi
 
 # -----------------------------------------------------------------------------
@@ -171,14 +183,19 @@ else
         warn "activate does NOT export LD_LIBRARY_PATH for nvidia/cuXX"
         if [[ "$FIX" == "true" ]]; then
             echo "        appending export ..."
+            # The patch uses a shell glob at activation time so it auto-discovers
+            # the Python version (3.10 / 3.11 / 3.12) inside the venv.
             cat <<'PATCH' >> "$ACTIVATE"
 
 # === added by experiments/check_env.sh --fix ===
-if [ -d "$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib" ]; then
-    export LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib:${LD_LIBRARY_PATH:-}"
-elif [ -d "$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu12/lib" ]; then
-    export LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu12/lib:${LD_LIBRARY_PATH:-}"
-fi
+for _cudir in "$VIRTUAL_ENV"/lib/python3.*/site-packages/nvidia/cu13/lib \
+              "$VIRTUAL_ENV"/lib/python3.*/site-packages/nvidia/cu12/lib; do
+    if [ -d "$_cudir" ]; then
+        export LD_LIBRARY_PATH="$_cudir:${LD_LIBRARY_PATH:-}"
+        break
+    fi
+done
+unset _cudir
 PATCH
             ok "appended. Re-source the venv: deactivate; source .severity/bin/activate"
         else
