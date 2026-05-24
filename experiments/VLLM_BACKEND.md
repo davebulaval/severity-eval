@@ -14,26 +14,39 @@ unsloth Python lib.
 
 ## Install
 
-The venv on caribou is `.severity`. From the project root:
+One-shot install + validation:
 
 ```bash
-source .severity/bin/activate
-pip install -r requirements.txt
+./experiments/setup_env.sh                       # default venv .severity
+./experiments/setup_env.sh --venv .severity_2    # custom name
 ```
 
-`requirements.txt` already pins `vllm>=0.6`.
+The script is idempotent (re-running only patches what's missing). It:
+1. Creates the venv if absent (requires Python >= 3.10)
+2. `pip install -r requirements.txt` (torch, vllm, bnb, API clients, ...)
+3. `pip install nvidia-cuda-nvcc` (CUDA compiler, needed by flashinfer JIT
+   inside vLLM -- the engine crashes mid-init without it)
+4. Patches `$VENV/bin/activate` with the right `LD_LIBRARY_PATH` (cu13 /
+   cu12 runtime libs) and `CUDA_HOME` + `PATH` (nvcc) exports
+5. Runs `experiments/check_env.sh` to validate the whole stack
+
+After it finishes, in any new shell:
+
+```bash
+source <venv-name>/bin/activate
+```
+
+Manual validation alone (no install):
+
+```bash
+./experiments/check_env.sh
+```
 
 Requires:
-- Python 3.11 (matches the venv)
-- PyTorch 2.4+ (the venv has 2.12+cu130)
-- CUDA 12.x or 13.0 (we are on 13.0; do NOT upgrade to 13.2 -- Unsloth
+- Python 3.10+ (3.11 recommended)
+- PyTorch 2.4+ (currently 2.11+cu130 in the venv)
+- CUDA 12.x or 13.0 (we run 13.0; do NOT upgrade to 13.2 -- Unsloth
   reports gibberish outputs on that toolkit, NVIDIA is working on it)
-
-Validate the install:
-
-```bash
-python -c "from vllm import LLM, SamplingParams; print('vllm OK')"
-```
 
 ## Usage
 

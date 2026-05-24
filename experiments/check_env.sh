@@ -17,8 +17,9 @@
 #   6. severity_eval imports cleanly
 #   7. torch + CUDA visibility (cuda.is_available, GPU count, compute cap)
 #   8. bitsandbytes native lib loads (no libnvJitLink error)
-#   9. vLLM imports (LLM, SamplingParams)
-#  10. Optional micro-inference smoke (1 prompt, granite-3.2-8b)
+#   9. nvcc + CUDA_HOME (flashinfer JIT compile inside vLLM needs them)
+#  10. vLLM imports (LLM, SamplingParams)
+#  11. Optional micro-inference smoke (1 prompt, granite-3.2-8b)
 #
 # Flags:
 #   --fix         append the LD_LIBRARY_PATH export to .severity/bin/activate
@@ -264,10 +265,35 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 9. vLLM
+# 9. nvcc + CUDA_HOME (flashinfer JIT compile)
 # -----------------------------------------------------------------------------
 echo
-echo "## 9. vLLM import"
+echo "## 9. nvcc + CUDA_HOME (flashinfer JIT)"
+# vLLM uses flashinfer for its sampling kernels; flashinfer JIT-compiles
+# them at first run via nvcc. Without nvcc on PATH (and CUDA_HOME pointing
+# at the toolkit) the engine crashes mid-init with
+#   /bin/sh: 1: /usr/local/cuda/bin/nvcc: not found
+if command -v nvcc >/dev/null 2>&1; then
+    nvcc_v=$(nvcc --version 2>/dev/null | grep -oE "release [0-9]+\.[0-9]+" | awk '{print $2}')
+    ok "nvcc on PATH: $(command -v nvcc) (release $nvcc_v)"
+else
+    fail "nvcc not on PATH -- flashinfer JIT will crash at engine init"
+    echo "        Run ./experiments/setup_env.sh, or:"
+    echo "          pip install nvidia-cuda-nvcc"
+    echo "          export CUDA_HOME=\$VIRTUAL_ENV/lib/python3.*/site-packages/nvidia/cuda_nvcc"
+    echo "          export PATH=\$CUDA_HOME/bin:\$PATH"
+fi
+if [[ -n "${CUDA_HOME:-}" && -d "$CUDA_HOME" ]]; then
+    ok "CUDA_HOME set: $CUDA_HOME"
+elif command -v nvcc >/dev/null 2>&1; then
+    warn "CUDA_HOME unset (some libs still need it explicitly)"
+fi
+
+# -----------------------------------------------------------------------------
+# 10. vLLM
+# -----------------------------------------------------------------------------
+echo
+echo "## 10. vLLM import"
 if python3 -c "from vllm import LLM, SamplingParams; import vllm; print(vllm.__version__)" \
         >/tmp/check_env_vllm.out 2>&1; then
     ok "vllm $(cat /tmp/check_env_vllm.out)"
@@ -277,17 +303,17 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 10. Micro-inference smoke (optional)
+# 11. Micro-inference smoke (optional)
 # -----------------------------------------------------------------------------
 if [[ "$SKIP_MICRO" == "true" ]]; then
     echo
-    echo "## 10. End-to-end micro-inference: SKIPPED (--skip-micro)"
+    echo "## 11. End-to-end micro-inference: SKIPPED (--skip-micro)"
 elif [[ $FAIL -gt 0 ]]; then
     echo
-    echo "## 10. End-to-end micro-inference: SKIPPED (earlier FAIL detected)"
+    echo "## 11. End-to-end micro-inference: SKIPPED (earlier FAIL detected)"
 else
     echo
-    echo "## 10. End-to-end micro-inference (granite-3.2-8b on medqa --limit 1)"
+    echo "## 11. End-to-end micro-inference (granite-3.2-8b on medqa --limit 1)"
     echo "        (this exercises the full vLLM load path; can take 1-2 min cold)"
     echo
     if PYTHONPATH=src python3 -m experiments.evaluate_models \
