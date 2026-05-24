@@ -190,16 +190,16 @@ _SWA_MODEL_PATTERNS = ("gemma-2", "phi-4", "qwq", "deepseek-r1-distill")
 
 # Speculative-decoding draft models. The draft must share the same
 # tokenizer vocab as the target. For Qwen3-family (Qwen3-14B, Qwen3-30B-A3B,
-# QwQ-32B) we use Qwen3-0.6B as the draft -- same vocab, 0.6 GB extra
-# VRAM. Expected gain on thinking models: 1.4-2.2x (Unsloth's reported
-# range for MTP on Qwen3). Llama / DeepSeek-R1-distill / others are
-# not wired up because the off-the-shelf draft choices have either
-# vocab mismatches or unclear gains.
-_DRAFT_MODEL_FOR: dict[str, str] = {
-    "qwen3-14b": "unsloth/Qwen3-0.6B-unsloth-bnb-4bit",
-    "qwen3-30b-a3b": "unsloth/Qwen3-0.6B-unsloth-bnb-4bit",
-    "qwq-32b": "unsloth/Qwen3-0.6B-unsloth-bnb-4bit",
-}
+# QwQ-32B) Qwen3-0.6B is the natural draft -- same vocab, 0.6 GB extra
+# VRAM. Expected gain on thinking models: 1.4-2.2x.
+#
+# DISABLED by default: transformers._assisted_decoding calls
+# outputs.past_key_values.crop(...) but unsloth's unsloth_fast_generate
+# returns the cache in legacy tuple format (no .crop method), which
+# raises AttributeError mid-generation. Re-enable once unsloth ships a
+# DynamicCache-returning fast path, or when we move to vLLM (which has
+# its own speculative-decoding implementation).
+_DRAFT_MODEL_FOR: dict[str, str] = {}
 
 
 def _is_thinking_model(model_id: str) -> bool:
