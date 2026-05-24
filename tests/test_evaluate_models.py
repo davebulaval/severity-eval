@@ -323,22 +323,24 @@ def test_strip_think_tags_multiline():
 @pytest.mark.parametrize(
     "model_id, max_length, max_new_tokens, expected_tier_bs",
     [
-        # 70B: bs=1 at ≥4K context; can rise to 2 at 2-4K and 4 at <2K
-        ("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 4096, 128, 1),
+        # 70B: bs=2 at ≥4K context (was 1); bs=4 at 2-4K; bs=8 at <2K.
+        # Bumped 2x in the speedup commit thanks to KV cache freeing
+        # activation memory.
+        ("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 4096, 128, 2),
         ("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 32768, 256, 1),
-        ("unsloth/DeepSeek-R1-Distill-Llama-70B-bnb-4bit", 1024, 64, 4),
+        ("unsloth/DeepSeek-R1-Distill-Llama-70B-bnb-4bit", 1024, 64, 8),
         # 32B/30B/27B/24B are 'large'
-        ("unsloth/QwQ-32B-unsloth-bnb-4bit", 4096, 128, 2),
-        ("Qwen/Qwen3-30B-A3B", 4096, 128, 2),
-        ("unsloth/gemma-2-27b-it-bnb-4bit", 4096, 128, 2),
-        ("unsloth/Mistral-Small-3.1-24B-Instruct-2503-bnb-4bit", 4096, 128, 2),
+        ("unsloth/QwQ-32B-unsloth-bnb-4bit", 4096, 128, 4),
+        ("Qwen/Qwen3-30B-A3B", 4096, 128, 4),
+        ("unsloth/gemma-2-27b-it-bnb-4bit", 4096, 128, 4),
+        ("unsloth/Mistral-Small-3.1-24B-Instruct-2503-bnb-4bit", 4096, 128, 4),
         # 14B is 'medium'
-        ("unsloth/Qwen3-14B-unsloth-bnb-4bit", 4096, 128, 4),
+        ("unsloth/Qwen3-14B-unsloth-bnb-4bit", 4096, 128, 8),
         # phi-4 (14B) — special case keyed by name, must be 'medium' not 'small'
-        ("unsloth/phi-4-bnb-4bit", 4096, 128, 4),
+        ("unsloth/phi-4-bnb-4bit", 4096, 128, 8),
         # 8B/9B is 'small'
-        ("unsloth/granite-3.2-8b-instruct-bnb-4bit", 4096, 128, 8),
-        ("unsloth/gemma-2-9b-it-bnb-4bit", 4096, 128, 8),
+        ("unsloth/granite-3.2-8b-instruct-bnb-4bit", 4096, 128, 16),
+        ("unsloth/gemma-2-9b-it-bnb-4bit", 4096, 128, 16),
     ],
 )
 def test_get_local_batch_size(

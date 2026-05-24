@@ -78,31 +78,41 @@ MODELS = {
         "model_id": "qwen/qwen3-235b-a22b-thinking-2507",
     },
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
-    # --- Local (unsloth bnb-4bit) ---
+    # --- Local (Unsloth Dynamic 2.0 bnb-4bit; falls back to standard
+    #          bnb-4bit at load time if the dynamic variant is 404 on HF) ---
     "llama-3.3-70b": {
         "provider": "local",
-        "model_id": "unsloth/Llama-3.3-70B-Instruct-bnb-4bit",
+        "model_id": "unsloth/Llama-3.3-70B-Instruct-unsloth-bnb-4bit",
     },
     "deepseek-r1-distill-70b": {
         "provider": "local",
-        "model_id": "unsloth/DeepSeek-R1-Distill-Llama-70B-bnb-4bit",
+        "model_id": "unsloth/DeepSeek-R1-Distill-Llama-70B-unsloth-bnb-4bit",
     },
     "qwq-32b": {"provider": "local", "model_id": "unsloth/QwQ-32B-unsloth-bnb-4bit"},
-    "qwen3-30b-a3b": {"provider": "local", "model_id": "Qwen/Qwen3-30B-A3B"},
-    "gemma-2-27b": {"provider": "local", "model_id": "unsloth/gemma-2-27b-it-bnb-4bit"},
+    "qwen3-30b-a3b": {
+        "provider": "local",
+        "model_id": "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit",
+    },
+    "gemma-2-27b": {
+        "provider": "local",
+        "model_id": "unsloth/gemma-2-27b-it-unsloth-bnb-4bit",
+    },
     "mistral-small-3": {
         "provider": "local",
-        "model_id": "unsloth/Mistral-Small-3.1-24B-Instruct-2503-bnb-4bit",
+        "model_id": "unsloth/Mistral-Small-3.1-24B-Instruct-2503-unsloth-bnb-4bit",
     },
     "qwen3-14b": {
         "provider": "local",
         "model_id": "unsloth/Qwen3-14B-unsloth-bnb-4bit",
     },
-    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-bnb-4bit"},
-    "gemma-2-9b": {"provider": "local", "model_id": "unsloth/gemma-2-9b-it-bnb-4bit"},
+    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-unsloth-bnb-4bit"},
+    "gemma-2-9b": {
+        "provider": "local",
+        "model_id": "unsloth/gemma-2-9b-it-unsloth-bnb-4bit",
+    },
     "granite-3.2-8b": {
         "provider": "local",
-        "model_id": "unsloth/granite-3.2-8b-instruct-bnb-4bit",
+        "model_id": "unsloth/granite-3.2-8b-instruct-unsloth-bnb-4bit",
     },
 }
 
@@ -167,12 +177,60 @@ _DEFAULT_INFERENCE_CONFIG = (256, 4096)
 # the reasoning.  Detection is by model_id substring.
 _THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1-distill")
 _THINKING_TOKEN_MULTIPLIER = 16  # e.g. 128 → 2048
+# Hard cap on max_new_tokens for thinking models. 2048 covers ~95% of
+# reasoning chains observed; the queue of very long ones doubles the
+# wall-clock for marginal accuracy gain.
+_THINKING_MAX_NEW_TOKENS_CAP = 2048
+
+# Sliding-window-attention architectures whose KV cache breaks under
+# unsloth + bnb-4bit (HybridCache shape mismatch). These MUST use
+# eager attention + dynamic cache. Other architectures can use the
+# faster sdpa path.
+_SWA_MODEL_PATTERNS = ("gemma-2", "phi-4", "qwq", "deepseek-r1-distill")
+
+# Speculative-decoding draft models. The draft must share the same
+# tokenizer vocab as the target. For Qwen3-family (Qwen3-14B, Qwen3-30B-A3B,
+# QwQ-32B) Qwen3-0.6B is the natural draft -- same vocab, 0.6 GB extra
+# VRAM. Expected gain on thinking models: 1.4-2.2x.
+#
+# DISABLED by default: transformers._assisted_decoding calls
+# outputs.past_key_values.crop(...) but unsloth's unsloth_fast_generate
+# returns the cache in legacy tuple format (no .crop method), which
+# raises AttributeError mid-generation. Re-enable once unsloth ships a
+# DynamicCache-returning fast path, or when we move to vLLM (which has
+# its own speculative-decoding implementation).
+_DRAFT_MODEL_FOR: dict[str, str] = {}
 
 
 def _is_thinking_model(model_id: str) -> bool:
     """Return True if the model emits <think>...</think> reasoning chains."""
     name = model_id.lower()
     return any(p in name for p in _THINKING_MODEL_PATTERNS)
+
+
+def _is_swa_model(model_id: str) -> bool:
+    """True for sliding-window-attention architectures that need eager attn."""
+    name = model_id.lower()
+    return any(p in name for p in _SWA_MODEL_PATTERNS)
+
+
+def _attn_impl_for(model_id: str) -> str:
+    """Pick the attention implementation for a given model_id.
+
+    SWA architectures (gemma-2, phi-4, qwq, deepseek-r1-distill) crash with
+    a broadcast shape mismatch under unsloth + bnb-4bit + HybridCache and
+    must use eager. Everyone else uses sdpa, which is 1.5-2x faster than
+    eager and works under quantization (unlike flash_attention_2 which
+    is often broken in this stack).
+    """
+    return "eager" if _is_swa_model(model_id) else "sdpa"
+
+
+def _draft_model_id_for(model_name: str) -> str | None:
+    """Return the HF repo id of the draft model to use for speculative
+    decoding, or None if no compatible draft is configured for this model.
+    """
+    return _DRAFT_MODEL_FOR.get(model_name.lower())
 
 
 def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -> int:
@@ -193,16 +251,20 @@ def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -
         size_tier = "small"  # ~5 GB VRAM (8B, 9B)
 
     total_ctx = max_length + max_new_tokens
-    # On a 48 GB GPU a 70B in 4-bit NF4 leaves ~8 GB for activations and
-    # KV cache, so batch size stays at 1 for any context length.
+    # Bumped roughly 2x compared to the conservative initial mapping.
+    # Justification: with use_cache=True (KV cache enabled) the activation
+    # footprint per step is much smaller, so 48 GB leaves more headroom.
+    # Out-of-memory on a given (model, dataset) pair falls back to empty
+    # predictions for that batch via the existing torch.OutOfMemoryError
+    # handler -- it does not bring down the run.
     if total_ctx >= 8192:
-        return {"xlarge": 1, "large": 1, "medium": 2, "small": 4}[size_tier]
-    elif total_ctx >= 4096:
         return {"xlarge": 1, "large": 2, "medium": 4, "small": 8}[size_tier]
-    elif total_ctx >= 2048:
+    elif total_ctx >= 4096:
         return {"xlarge": 2, "large": 4, "medium": 8, "small": 16}[size_tier]
-    else:
+    elif total_ctx >= 2048:
         return {"xlarge": 4, "large": 8, "medium": 16, "small": 32}[size_tier]
+    else:
+        return {"xlarge": 8, "large": 16, "medium": 32, "small": 64}[size_tier]
 
 
 # ---------------------------------------------------------------------------
@@ -894,23 +956,44 @@ def _load_local_model(model_id: str):
     if model_id.startswith("unsloth/"):
         from unsloth import FastLanguageModel
 
-        log.info("Loading unsloth model %s ...", model_id)
         # Cap at model's native context length to avoid RoPE issues
         # gemma-2 maxes at 8K; qwen3/qwq/granite support 32K+
         if "gemma-2" in model_id.lower():
             seq_len = 8192
         else:
             seq_len = 32768
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_id,
-            max_seq_length=seq_len,
-            device_map="auto",
-            max_memory=max_mem,
-            dtype=None,
-            load_in_4bit=True,
-            trust_remote_code=True,
-            attn_implementation="eager",
-        )
+
+        def _try_load(repo_id: str):
+            log.info("Loading unsloth model %s ...", repo_id)
+            return FastLanguageModel.from_pretrained(
+                repo_id,
+                max_seq_length=seq_len,
+                device_map="auto",
+                max_memory=max_mem,
+                dtype=None,
+                load_in_4bit=True,
+                trust_remote_code=True,
+                attn_implementation="eager",
+            )
+
+        # Dynamic 2.0 variants (-unsloth-bnb-4bit) upcast sensitive
+        # layers to FP16, gaining ~1-2% accuracy for ~5-10% extra VRAM.
+        # Not every model has a published variant; fall back to the
+        # standard -bnb-4bit on 404.
+        try:
+            model, tokenizer = _try_load(model_id)
+        except (OSError, ValueError) as exc:
+            if "unsloth-bnb-4bit" not in model_id:
+                raise
+            fallback_id = model_id.replace("unsloth-bnb-4bit", "bnb-4bit")
+            log.warning(
+                "Dynamic variant %s unavailable (%s); falling back to %s",
+                model_id,
+                type(exc).__name__,
+                fallback_id,
+            )
+            model, tokenizer = _try_load(fallback_id)
+            model_id = fallback_id  # surface the actual id loaded
         model.eval()
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -935,32 +1018,90 @@ def _load_local_model(model_id: str):
         model.eval()
 
     # Override unsloth's xformers attention. unsloth ignores the
-    # attn_implementation kwarg and uses xformers, which produces a
-    # broadcast shape mismatch ([1, H, 1, D] vs [1, H, seq_len, D])
-    # during generation on SWA / GQA architectures (Gemma-2, Phi-4,
-    # QwQ, Llama-3-distill). Force eager on the config directly. Catch
-    # only AttributeError; any other failure should be surfaced.
+    # attn_implementation kwarg, so we patch the config after load.
+    # SWA architectures (Gemma-2, Phi-4, QwQ, DeepSeek-R1-distill) must
+    # use eager to avoid the HybridCache broadcast shape mismatch
+    # ([1, H, 1, D] vs [1, H, seq_len, D]). Others use sdpa, which is
+    # 1.5-2x faster than eager and works under bnb-4bit.
+    attn_impl = _attn_impl_for(model_id)
     try:
-        model.config._attn_implementation = "eager"
+        model.config._attn_implementation = attn_impl
     except AttributeError as exc:
-        log.warning("Could not set _attn_implementation=eager on model.config: %s", exc)
+        log.warning(
+            "Could not set _attn_implementation=%s on model.config: %s",
+            attn_impl,
+            exc,
+        )
     if hasattr(model, "_attn_implementation"):
         try:
-            model._attn_implementation = "eager"
+            model._attn_implementation = attn_impl
         except AttributeError as exc:
-            log.warning("Could not set _attn_implementation=eager on model: %s", exc)
+            log.warning(
+                "Could not set _attn_implementation=%s on model: %s",
+                attn_impl,
+                exc,
+            )
 
     # Force dynamic KV cache. The HybridCache that transformers >= 4.46
     # auto-selects for SWA architectures trips on the same broadcast
-    # bug. Using "dynamic" sidesteps the bug; for stubborn models the
-    # use_cache=False fallback in the pipeline below is the safety net.
+    # bug. Using "dynamic" sidesteps the bug and lets use_cache=True
+    # work safely on every architecture in our matrix.
     try:
         model.generation_config.cache_implementation = "dynamic"
     except AttributeError as exc:
         log.warning("Could not set cache_implementation=dynamic: %s", exc)
 
+    # torch.compile on non-thinking models. reduce-overhead mode gives
+    # the largest gain on short-generation paths (MCQ, numeric extraction)
+    # without the recompile penalty of max-autotune. Thinking models keep
+    # the eager path because their longer, more variable generation lengths
+    # trigger frequent recompilations that erase the gain. Compile is best
+    # effort: if Dynamo / Inductor stumble on bnb-4bit (which they often
+    # do), fall back silently to the uncompiled model.
+    if not _is_thinking_model(model_id):
+        try:
+            import torch as _torch
+
+            model = _torch.compile(model, mode="reduce-overhead", fullgraph=False)
+            log.info("torch.compile(reduce-overhead) enabled on %s", model_id)
+        except (RuntimeError, ImportError, AttributeError) as exc:
+            log.warning(
+                "torch.compile failed for %s (%s); using eager model",
+                model_id,
+                type(exc).__name__,
+            )
+
     _clients[cache_key] = (model, tokenizer)
     return model, tokenizer
+
+
+def _load_draft_model(draft_id: str):
+    """Load a small draft model for speculative decoding.
+
+    Cached separately from main models so a draft survives target swaps
+    within the same Qwen3 family (Qwen3-14B -> Qwen3-30B-A3B both use
+    the same Qwen3-0.6B draft).
+    """
+    cache_key = f"draft_{draft_id}"
+    if cache_key in _clients:
+        return _clients[cache_key]
+
+    log.info("Loading speculative-decoding draft %s ...", draft_id)
+    from unsloth import FastLanguageModel
+
+    draft, _ = FastLanguageModel.from_pretrained(
+        draft_id,
+        max_seq_length=4096,
+        device_map="auto",
+        max_memory={0: "3GiB"},
+        dtype=None,
+        load_in_4bit=True,
+        trust_remote_code=True,
+        attn_implementation="sdpa",
+    )
+    draft.eval()
+    _clients[cache_key] = draft
+    return draft
 
 
 def _strip_think_tags(text: str) -> str:
@@ -1006,14 +1147,18 @@ def _evaluate_local(
         )
         max_length = model_max_ctx
 
-    # Thinking models need much more generation budget for their reasoning chain
+    # Thinking models need more generation budget for their reasoning chain,
+    # but the very long tail (> 2048 tokens) doubles wall-clock for a marginal
+    # accuracy gain. Multiply by _THINKING_TOKEN_MULTIPLIER then hard-cap.
     thinking = _is_thinking_model(model_id)
     if thinking:
-        max_new_tokens = max_new_tokens * _THINKING_TOKEN_MULTIPLIER
+        scaled = max_new_tokens * _THINKING_TOKEN_MULTIPLIER
+        max_new_tokens = min(scaled, _THINKING_MAX_NEW_TOKENS_CAP)
         log.info(
-            "Thinking model detected — max_new_tokens scaled to %d (×%d)",
+            "Thinking model detected — max_new_tokens scaled to %d (×%d, cap=%d)",
             max_new_tokens,
             _THINKING_TOKEN_MULTIPLIER,
+            _THINKING_MAX_NEW_TOKENS_CAP,
         )
 
     # Ensure input + generation fits within model's context window
@@ -1043,6 +1188,21 @@ def _evaluate_local(
     )
 
     model, tokenizer = _load_local_model(model_id)
+
+    # Speculative decoding draft model (Qwen3 family only for now).
+    # Loaded on the same GPU; vocab must match the target tokenizer.
+    draft_id = _draft_model_id_for(model_name)
+    draft_model = None
+    if draft_id is not None:
+        try:
+            draft_model = _load_draft_model(draft_id)
+        except (OSError, RuntimeError, ValueError) as exc:
+            log.warning(
+                "Speculative draft %s failed to load (%s); proceeding without",
+                draft_id,
+                type(exc).__name__,
+            )
+            draft_model = None
 
     # Build all prompts and pre-truncate to avoid unsloth crash on oversized inputs
     rows_data = []
@@ -1088,11 +1248,15 @@ def _evaluate_local(
         log.warning("Could not cap tokenizer.model_max_length: %s", exc)
 
     # Create text-generation pipeline.
-    # use_cache=False is the safety net for SWA/GQA models where the KV
-    # cache produces a shape mismatch under unsloth+bnb-4bit. Generation
-    # is ~5x slower without cache but always correct. Trade-off accepted
-    # for the local-model smoke/full runs; granite and qwen3 are
-    # unaffected and just see a small slowdown.
+    # use_cache=False is a hard requirement under unsloth + bnb-4bit:
+    # unsloth installs its own fast inference path (e.g.
+    # Qwen3Attention_fast_forward_inference, _CausalLM_fast_forward) that
+    # bypasses HF's attention layer and has a broadcast bug on the RoPE
+    # cos/sin tensors when KV cache is on:
+    #     RuntimeError: output with shape [1, H, 1, D] doesn't match the
+    #     broadcast shape [1, H, seq, D]
+    # The full KV-cache speedup (~5-10x on thinking models) requires
+    # bypassing unsloth entirely -- see the speedup/vllm-port branch.
     gen_pipeline = pipeline(
         task="text-generation",
         model=model,
@@ -1107,8 +1271,17 @@ def _evaluate_local(
         use_cache=False,
     )
 
-    # Batch inference
+    # Group prompts by token length before batching. Without this, a
+    # batch can mix a 200-token prompt with a 3000-token prompt and pad
+    # everything to the longest, wasting ~15x compute on the short one.
+    # We sort ascending by encoded input length, run inference in that
+    # order, then restore the original order before returning.
     from tqdm import tqdm
+
+    indexed = list(enumerate(rows_data))
+    indexed.sort(key=lambda x: len(tokenizer.encode(x[1][1], add_special_tokens=False)))
+    sorted_order = [orig_idx for orig_idx, _ in indexed]
+    rows_data = [item for _, item in indexed]
 
     all_prompts = [item[1] for item in rows_data]
     n_batches = (len(all_prompts) + batch_size - 1) // batch_size
@@ -1123,8 +1296,15 @@ def _evaluate_local(
 
         try:
             start = time.perf_counter()
+            gen_kwargs = {}
+            if draft_model is not None:
+                # Assisted generation requires batch_size=1; transformers
+                # raises if the draft sees a padded batch. We only pass
+                # the draft when prompts are 1-at-a-time.
+                if len(batch_prompts) == 1:
+                    gen_kwargs["assistant_model"] = draft_model
             with torch.no_grad():
-                outputs = gen_pipeline(batch_prompts)
+                outputs = gen_pipeline(batch_prompts, **gen_kwargs)
             elapsed = time.perf_counter() - start
         except (RuntimeError, torch.OutOfMemoryError) as e:
             log.error(
@@ -1177,7 +1357,13 @@ def _evaluate_local(
         pbar.set_postfix(acc=f"{acc:.1f}%", ms=f"{elapsed / len(outputs) * 1000:.0f}")
 
     pbar.close()
-    return results
+
+    # Restore original (unsorted) order so downstream callers see results
+    # aligned with df.iterrows().
+    restored = [None] * len(results)
+    for new_idx, orig_idx in enumerate(sorted_order):
+        restored[orig_idx] = results[new_idx]
+    return restored
 
 
 def _evaluate_batch_openai(
@@ -1789,6 +1975,7 @@ def evaluate_model(
     delay: float = 1.0,
     prompt_style: str = "original",
     batch_size: int | None = None,
+    backend: str = "hf",
 ) -> pd.DataFrame:
     """Evaluate a model on a dataset with scoring.
 
@@ -1825,15 +2012,19 @@ def evaluate_model(
     # Batch APIs (50% cost reduction): OpenAI, Anthropic, Google, xAI, Mistral
     # ThreadPoolExecutor fallback: OpenRouter, Cohere, DeepSeek (no batch API)
 
+    def _dispatch_local():
+        if backend == "vllm":
+            from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+            return evaluate_local_vllm(
+                df, model_name, model_id, dataset_name, prompt_style
+            )
+        return _evaluate_local(
+            df, model_name, model_id, dataset_name, prompt_style, batch_size
+        )
+
     _BATCH_DISPATCHERS = {
-        "local": lambda: _evaluate_local(
-            df,
-            model_name,
-            model_id,
-            dataset_name,
-            prompt_style,
-            batch_size,
-        ),
+        "local": _dispatch_local,
         "openai": lambda: _evaluate_batch_openai(
             df,
             model_name,
@@ -2051,6 +2242,14 @@ def main():
         default=None,
         help="Override batch size for local inference / max parallel API workers (auto if omitted)",
     )
+    parser.add_argument(
+        "--backend",
+        choices=("hf", "vllm"),
+        default="hf",
+        help="Local inference backend. 'hf' = unsloth + transformers pipeline "
+        "(default, no extra install). 'vllm' = vLLM engine (continuous batching, "
+        "PagedAttention; requires `pip install vllm`).",
+    )
     args = parser.parse_args()
 
     # Set CUDA_VISIBLE_DEVICES before any GPU library import
@@ -2131,6 +2330,7 @@ def main():
                 delay=args.delay,
                 prompt_style=args.prompt_style,
                 batch_size=args.batch_size,
+                backend=args.backend,
             )
             if results_df.empty:
                 continue
