@@ -1,32 +1,31 @@
 """vLLM backend for local-model evaluation.
 
 vLLM provides continuous batching, PagedAttention KV cache, and prefix
-caching, which together are 5-30x faster than the HF pipeline path for
-the workloads in this paper. It bypasses unsloth's fast-inference patches
-entirely, so it does not hit the RoPE broadcast bug that forces
-use_cache=False in the HF path.
+caching. It is the only local-inference engine in this repo since the
+unsloth + transformers.pipeline path was removed (the unsloth fast
+forward patches forced use_cache=False due to a HybridCache RoPE
+broadcast bug under bnb-4bit).
 
-This module mirrors the public surface of experiments.evaluate_models'
-local-evaluation helpers but with vLLM as the engine:
+Public surface:
 
     - _load_local_vllm(model_id, ...)  ->  vllm.LLM
     - evaluate_local_vllm(df, model_name, ...) -> list[dict]
 
-The main `evaluate_models.py` dispatches to this module when
-`--backend vllm` is passed on the CLI.
+experiments.evaluate_models.evaluate_model dispatches to evaluate_local_vllm
+when provider == "local".
 
-Install:
+Install (already pinned in requirements.txt):
     pip install vllm  # requires CUDA 12.x or 13.0 + recent torch
 
-Known limitations vs the HF path:
+Known limitations:
     - Loading a vLLM engine claims a fixed fraction of GPU memory; we
       destroy the previous engine before loading a new one.
-    - assisted_decoding / draft models are not used here; vLLM has its
-      own speculative-decoding implementation reachable via the
-      --speculative-model server flag, not wired up in this script.
+    - assisted_decoding / draft models are not wired up here; vLLM has
+      its own speculative-decoding stack reachable via the
+      --speculative-model server flag.
     - Some -unsloth-bnb-4bit checkpoints carry config that vLLM's
       bnb loader rejects; we fall back to the standard -bnb-4bit
-      variant on load failure, same convention as the HF path.
+      variant on load failure.
 """
 
 from __future__ import annotations

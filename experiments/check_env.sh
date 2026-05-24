@@ -169,14 +169,22 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 5. Persistence patch in .severity/bin/activate
+# 5. Persistence patch in the *currently active* venv's activate
 # -----------------------------------------------------------------------------
 echo
-echo "## 5. Persistence in .severity/bin/activate"
-ACTIVATE=".severity/bin/activate"
-if [[ ! -f "$ACTIVATE" ]]; then
-    fail "$ACTIVATE missing"
+echo "## 5. Persistence in \$VIRTUAL_ENV/bin/activate"
+# Target the active venv's activate, not a hard-coded path -- the user may
+# have several venvs (.severity, .severity_2, etc.) and we want to patch
+# the one that is actually being sourced.
+if [[ -z "${VIRTUAL_ENV:-}" ]]; then
+    warn "skipped (no venv active, cannot locate bin/activate)"
+    ACTIVATE=""
 else
+    ACTIVATE="$VIRTUAL_ENV/bin/activate"
+fi
+if [[ -n "$ACTIVATE" && ! -f "$ACTIVATE" ]]; then
+    fail "$ACTIVATE missing"
+elif [[ -n "$ACTIVATE" ]]; then
     if grep -q "nvidia/cu13/lib\|nvidia/cu12/lib" "$ACTIVATE"; then
         ok "activate exports LD_LIBRARY_PATH for nvidia/cuXX libs"
     else
@@ -197,7 +205,7 @@ for _cudir in "$VIRTUAL_ENV"/lib/python3.*/site-packages/nvidia/cu13/lib \
 done
 unset _cudir
 PATCH
-            ok "appended. Re-source the venv: deactivate; source .severity/bin/activate"
+            ok "appended. Re-source the venv: deactivate; source $ACTIVATE"
         else
             echo "        (re-run with --fix to append it automatically)"
         fi
