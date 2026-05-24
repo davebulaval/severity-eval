@@ -13,7 +13,6 @@ import pytest
 from experiments.evaluate_models import (
     _extract_number,
     _extract_yes_no,
-    _get_local_batch_size,
     _is_mcq_match,
     _is_thinking_model,
     _normalize_text,
@@ -313,66 +312,6 @@ def test_strip_think_tags_no_tag():
 def test_strip_think_tags_multiline():
     raw = "<think>line1\nline2\nline3</think>\n\nFinal: 7"
     assert _strip_think_tags(raw) == "Final: 7"
-
-
-# ----------------------------------------------------------------------
-# _get_local_batch_size — tier dispatch
-# ----------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "model_id, max_length, max_new_tokens, expected_tier_bs",
-    [
-        # 70B: bs=2 at ≥4K context (was 1); bs=4 at 2-4K; bs=8 at <2K.
-        # Bumped 2x in the speedup commit thanks to KV cache freeing
-        # activation memory.
-        ("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 4096, 128, 2),
-        ("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 32768, 256, 1),
-        ("unsloth/DeepSeek-R1-Distill-Llama-70B-bnb-4bit", 1024, 64, 8),
-        # 32B/30B/27B/24B are 'large'
-        ("unsloth/QwQ-32B-unsloth-bnb-4bit", 4096, 128, 4),
-        ("Qwen/Qwen3-30B-A3B", 4096, 128, 4),
-        ("unsloth/gemma-2-27b-it-bnb-4bit", 4096, 128, 4),
-        ("unsloth/Mistral-Small-3.1-24B-Instruct-2503-bnb-4bit", 4096, 128, 4),
-        # 14B is 'medium'
-        ("unsloth/Qwen3-14B-unsloth-bnb-4bit", 4096, 128, 8),
-        # phi-4 (14B) — special case keyed by name, must be 'medium' not 'small'
-        ("unsloth/phi-4-bnb-4bit", 4096, 128, 8),
-        # 8B/9B is 'small'
-        ("unsloth/granite-3.2-8b-instruct-bnb-4bit", 4096, 128, 16),
-        ("unsloth/gemma-2-9b-it-bnb-4bit", 4096, 128, 16),
-    ],
-)
-def test_get_local_batch_size(
-    model_id: str, max_length: int, max_new_tokens: int, expected_tier_bs: int
-):
-    assert (
-        _get_local_batch_size(model_id, max_length, max_new_tokens) == expected_tier_bs
-    )
-
-
-def test_batch_size_70b_with_huge_context_still_one():
-    """70B at 32K context: batch size must collapse to 1 to avoid OOM."""
-    bs = _get_local_batch_size("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 32768, 128)
-    assert bs == 1
-
-
-def test_batch_size_decreases_with_context():
-    """For a given tier, batch size is non-increasing in context length."""
-    name = "unsloth/granite-3.2-8b-instruct-bnb-4bit"
-    bs1 = _get_local_batch_size(name, 1024, 32)  # total 1056 → < 2048
-    bs2 = _get_local_batch_size(name, 2048, 32)  # total 2080 → >= 2048
-    bs3 = _get_local_batch_size(name, 4096, 32)  # total >= 4096
-    bs4 = _get_local_batch_size(name, 8192, 64)  # total >= 8192
-    assert bs1 >= bs2 >= bs3 >= bs4
-
-
-def test_batch_size_70b_separates_from_large_tier():
-    """70B must use the xlarge tier (bs=1) even at low context, never large (bs=2+)."""
-    bs_70b = _get_local_batch_size("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", 4096, 128)
-    bs_32b = _get_local_batch_size("unsloth/QwQ-32B-unsloth-bnb-4bit", 4096, 128)
-    # 70B may equal 32B at small contexts but must never exceed it
-    assert bs_70b <= bs_32b
 
 
 # ----------------------------------------------------------------------

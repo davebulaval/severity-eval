@@ -134,53 +134,13 @@ def _model_id_for(model_name: str) -> str:
     return spec["model_id"]
 
 
-def _run_hf(
-    model_name: str, prompts: list[str], max_new_tokens: int
-) -> tuple[float, list[float], list[int], str]:
-    """HF + unsloth path. Returns (load_seconds, per_sample_latency,
-    per_sample_out_tokens, attn_impl)."""
-    import torch
-    from transformers import pipeline
-
-    from experiments.evaluate_models import _attn_impl_for, _load_local_model
-
-    model_id = _model_id_for(model_name)
-    t0 = time.perf_counter()
-    model, tokenizer = _load_local_model(model_id)
-    load_s = time.perf_counter() - t0
-
-    gen = pipeline(
-        task="text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=1,
-        dtype="float16",
-        return_full_text=False,
-        max_new_tokens=max_new_tokens,
-        padding=True,
-        truncation=False,
-        do_sample=False,
-        use_cache=False,
-    )
-
-    latency: list[float] = []
-    out_tokens: list[int] = []
-    for prompt in prompts:
-        t_start = time.perf_counter()
-        with torch.no_grad():
-            outputs = gen(prompt)
-        latency.append(time.perf_counter() - t_start)
-        text = outputs[0]["generated_text"] if outputs else ""
-        out_tokens.append(len(tokenizer.encode(text, add_special_tokens=False)))
-    return load_s, latency, out_tokens, _attn_impl_for(model_id)
-
-
 def _run_vllm(
     model_name: str, prompts: list[str], max_new_tokens: int
 ) -> tuple[float, list[float], list[int], str]:
-    """vLLM path. The engine batches internally; we record the batch
-    wall-clock and attribute it evenly across prompts for the latency
-    columns. Tokens are exact per output."""
+    """Submit prompts to a cached vLLM engine and record per-sample
+    timing. The engine batches internally; we record the batch wall-clock
+    and attribute it evenly across prompts for the latency columns.
+    Tokens are exact per output."""
     from vllm import SamplingParams
 
     from experiments.evaluate_local_vllm import _load_local_vllm
@@ -212,7 +172,6 @@ def run_benchmark(
     model_name: str,
     n_samples: int,
     max_new_tokens: int,
-    backend: str = "hf",
 ) -> dict:
     """Run the benchmark and return the metrics dict.
 
@@ -226,23 +185,18 @@ def run_benchmark(
     model_id = _model_id_for(model_name)
     prompts = (PROMPTS * ((n_samples // len(PROMPTS)) + 1))[:n_samples]
 
-    log.info("Loading %s (%s) [backend=%s]", model_name, model_id, backend)
+    log.info("Loading %s (%s)", model_name, model_id)
     _reset_vram_peak()
-    if backend == "vllm":
-        load_s, latency, out_tokens, attn_impl = _run_vllm(
-            model_name, prompts, max_new_tokens
-        )
-    else:
-        load_s, latency, out_tokens, attn_impl = _run_hf(
-            model_name, prompts, max_new_tokens
-        )
+    load_s, latency, out_tokens, attn_impl = _run_vllm(
+        model_name, prompts, max_new_tokens
+    )
 
     total_elapsed = sum(latency)
     total_out_tokens = sum(out_tokens)
     return {
         "model_name": model_name,
         "model_id": model_id,
-        "backend": backend,
+        "backend": "vllm",
         "attn_impl": attn_impl,
         "thinking": _is_thinking_model(model_id),
         "n_samples": n_samples,
@@ -327,13 +281,6 @@ def main() -> None:
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--gpu", default="0", help="CUDA_VISIBLE_DEVICES value")
     parser.add_argument(
-        "--backend",
-        choices=("hf", "vllm"),
-        default="hf",
-        help="Inference engine. 'hf' = unsloth + transformers pipeline "
-        "(no extra install). 'vllm' = vLLM (pip install vllm).",
-    )
-    parser.add_argument(
         "--compare",
         nargs=2,
         metavar=("BASELINE", "NEW"),
@@ -354,9 +301,7 @@ def main() -> None:
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    metrics = run_benchmark(
-        args.model, args.n_samples, args.max_new_tokens, backend=args.backend
-    )
+    metrics = run_benchmark(args.model, args.n_samples, args.max_new_tokens)
     path = _save(metrics)
     log.info("Saved benchmark to %s", path)
 

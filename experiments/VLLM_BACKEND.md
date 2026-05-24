@@ -1,20 +1,16 @@
-# vLLM backend
+# Local inference (vLLM)
 
-vLLM is an alternative inference engine for the local-model bucket. It
-provides continuous batching, PagedAttention, and prefix caching, which
-together are 5-30x faster than the unsloth + HF pipeline path used by
-default.
+vLLM is the only inference engine for the local-model bucket. It provides
+continuous batching, PagedAttention KV cache, and prefix caching. It
+replaces an earlier unsloth + transformers pipeline path that was removed
+in commit `refactor/vllm-only-backend` because the unsloth fast forward
+patches had a HybridCache broadcast bug under bnb-4bit on Qwen3 / SWA
+architectures.
 
-This document covers the install, the gotchas, and how to switch back
-to HF if vLLM does not load a checkpoint.
-
-## When to use vLLM vs HF
-
-| Use HF (`--backend hf`)                | Use vLLM (`--backend vllm`)            |
-|----------------------------------------|----------------------------------------|
-| You have not installed vLLM yet        | Long thinking-model runs               |
-| You need use_cache=False (debugging)   | Many prompts per (model, dataset) pair |
-| The checkpoint fails to load in vLLM   | Production runs at `--limit 100+`      |
+The checkpoints we load are still the `unsloth/X-unsloth-bnb-4bit`
+Dynamic 2.0 quants (gain ~1-2% accuracy from upcasted sensitive layers),
+but vLLM reads the safetensors directly without going through the
+unsloth Python lib.
 
 ## Install
 
@@ -22,21 +18,16 @@ The venv on caribou is `.severity`. From the project root:
 
 ```bash
 source .severity/bin/activate
-pip install vllm
+pip install -r requirements.txt
 ```
+
+`requirements.txt` already pins `vllm>=0.6`.
 
 Requires:
 - Python 3.11 (matches the venv)
-- PyTorch 2.4+ (the venv has 2.12+cu130, well above)
-- CUDA 12.x or 13.0 (we are on 13.0)
-
-If the install pulls a torch wheel that conflicts with the existing
-2.12+cu130, force-pin first:
-
-```bash
-pip install --no-deps vllm
-pip install -r .severity/requirements-vllm.txt   # generate via pip freeze pre-install
-```
+- PyTorch 2.4+ (the venv has 2.12+cu130)
+- CUDA 12.x or 13.0 (we are on 13.0; do NOT upgrade to 13.2 -- Unsloth
+  reports gibberish outputs on that toolkit, NVIDIA is working on it)
 
 Validate the install:
 
@@ -46,36 +37,37 @@ python -c "from vllm import LLM, SamplingParams; print('vllm OK')"
 
 ## Usage
 
-### Run a single (model, dataset) pair with vLLM
+### Run a single (model, dataset) pair
 
 ```bash
 PYTHONPATH=src python -m experiments.evaluate_models \
     --dataset medqa --model qwen3-14b \
-    --limit 100 --gpu 0 --backend vllm
+    --limit 100 --gpu 0
 ```
 
-### Run the smoke matrix with vLLM
+### Run the smoke matrix
 
 ```bash
-./experiments/run_local_smoke_parallel.sh \
-    --gpus 0,1,2 --limit 100 --backend vllm
+./experiments/run_local_smoke_parallel.sh --gpus 0,1,2 --limit 100
 ```
 
-### Benchmark HF vs vLLM on one model
+### Benchmark a single model
 
 ```bash
-# HF baseline
 PYTHONPATH=src python -m experiments.bench_inference \
-    --model qwen3-14b --backend hf
+    --model qwen3-14b --n-samples 8 --gpu 0
+```
 
-# vLLM
-PYTHONPATH=src python -m experiments.bench_inference \
-    --model qwen3-14b --backend vllm
+The script writes `experiments/benchmarks/<branch>_<commit>_<model>_<ts>.json`
+with mean / p50 / p90 latency, tokens/sec, peak VRAM, and a generation
+config snapshot.
 
-# Side-by-side
+Compare two benchmark runs:
+
+```bash
 PYTHONPATH=src python -m experiments.bench_inference --compare \
-    experiments/benchmarks/*_qwen3-14b_*hf*.json \
-    experiments/benchmarks/*_qwen3-14b_*vllm*.json
+    experiments/benchmarks/main_*_qwen3-14b_*.json \
+    experiments/benchmarks/speedup_*_qwen3-14b_*.json
 ```
 
 ## Known limitations
@@ -88,20 +80,14 @@ PYTHONPATH=src python -m experiments.bench_inference --compare \
 2. **bnb-4bit checkpoint compatibility**: some `-unsloth-bnb-4bit`
    checkpoints carry config fields that vLLM's bnb loader rejects with
    `ValueError`. The loader falls back to the standard `-bnb-4bit`
-   variant automatically (same convention as the HF path).
+   variant automatically with a warning.
 
 3. **No assisted_decoding**: vLLM has its own speculative-decoding
    stack (`--speculative-model` on the server, `SpecDecodeWorker` in
-   the engine). The HF `assistant_model` knob is not wired up here; if
-   you need spec decoding under vLLM, switch to the server mode and
-   point it at Qwen3-0.6B.
+   the engine). The HF `assistant_model` flow is not wired up here; if
+   you need spec decoding, switch to vLLM server mode and point it at
+   Qwen3-0.6B.
 
 4. **CUDA 13.2 warning**: Unsloth's docs note that CUDA 13.2 produces
    gibberish outputs. We run CUDA 13.0, so this does not apply to our
    setup -- but if anyone bumps the toolkit, watch for it.
-
-## Falling back to HF
-
-If vLLM crashes on a model (e.g. unsupported architecture, OOM on
-PagedAttention warmup), drop the `--backend vllm` flag. The HF path
-is the default and is known-stable on every checkpoint in the matrix.

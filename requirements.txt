@@ -25,15 +25,12 @@ python-dotenv>=1.0
 wandb>=0.16
 tqdm>=4.60
 
-# Local-model HF backend (default)
+# Local-model inference (vLLM only). PagedAttention + continuous
+# batching + prefix caching. Pulls ~2-3 GB of CUDA kernels.
+# See experiments/VLLM_BACKEND.md for install notes.
 torch>=2.1
-unsloth
-bitsandbytes>=0.43      # used via transformers.BitsAndBytesConfig
-accelerate>=1.0         # required by device_map="auto"
-
-# Local-model vLLM backend (optional; see experiments/VLLM_BACKEND.md)
-# Uncomment or `pip install vllm` separately on machines that need it.
-# vllm>=0.6
+vllm>=0.6
+bitsandbytes>=0.43      # used by vLLM for the unsloth/-bnb-4bit quants
 
 # Dev / testing / styling
 pytest>=7.0
