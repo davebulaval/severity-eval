@@ -188,19 +188,6 @@ _THINKING_MAX_NEW_TOKENS_CAP = 2048
 # faster sdpa path.
 _SWA_MODEL_PATTERNS = ("gemma-2", "phi-4", "qwq", "deepseek-r1-distill")
 
-# Speculative-decoding draft models. The draft must share the same
-# tokenizer vocab as the target. For Qwen3-family (Qwen3-14B, Qwen3-30B-A3B,
-# QwQ-32B) Qwen3-0.6B is the natural draft -- same vocab, 0.6 GB extra
-# VRAM. Expected gain on thinking models: 1.4-2.2x.
-#
-# DISABLED by default: transformers._assisted_decoding calls
-# outputs.past_key_values.crop(...) but unsloth's unsloth_fast_generate
-# returns the cache in legacy tuple format (no .crop method), which
-# raises AttributeError mid-generation. Re-enable once unsloth ships a
-# DynamicCache-returning fast path, or when we move to vLLM (which has
-# its own speculative-decoding implementation).
-_DRAFT_MODEL_FOR: dict[str, str] = {}
-
 
 def _is_thinking_model(model_id: str) -> bool:
     """Return True if the model emits <think>...</think> reasoning chains."""
@@ -224,13 +211,6 @@ def _attn_impl_for(model_id: str) -> str:
     is often broken in this stack).
     """
     return "eager" if _is_swa_model(model_id) else "sdpa"
-
-
-def _draft_model_id_for(model_name: str) -> str | None:
-    """Return the HF repo id of the draft model to use for speculative
-    decoding, or None if no compatible draft is configured for this model.
-    """
-    return _DRAFT_MODEL_FOR.get(model_name.lower())
 
 
 def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -> int:
@@ -1075,35 +1055,6 @@ def _load_local_model(model_id: str):
     return model, tokenizer
 
 
-def _load_draft_model(draft_id: str):
-    """Load a small draft model for speculative decoding.
-
-    Cached separately from main models so a draft survives target swaps
-    within the same Qwen3 family (Qwen3-14B -> Qwen3-30B-A3B both use
-    the same Qwen3-0.6B draft).
-    """
-    cache_key = f"draft_{draft_id}"
-    if cache_key in _clients:
-        return _clients[cache_key]
-
-    log.info("Loading speculative-decoding draft %s ...", draft_id)
-    from unsloth import FastLanguageModel
-
-    draft, _ = FastLanguageModel.from_pretrained(
-        draft_id,
-        max_seq_length=4096,
-        device_map="auto",
-        max_memory={0: "3GiB"},
-        dtype=None,
-        load_in_4bit=True,
-        trust_remote_code=True,
-        attn_implementation="sdpa",
-    )
-    draft.eval()
-    _clients[cache_key] = draft
-    return draft
-
-
 def _strip_think_tags(text: str) -> str:
     """Extract the answer after </think> tags, if present.
 
@@ -1188,21 +1139,6 @@ def _evaluate_local(
     )
 
     model, tokenizer = _load_local_model(model_id)
-
-    # Speculative decoding draft model (Qwen3 family only for now).
-    # Loaded on the same GPU; vocab must match the target tokenizer.
-    draft_id = _draft_model_id_for(model_name)
-    draft_model = None
-    if draft_id is not None:
-        try:
-            draft_model = _load_draft_model(draft_id)
-        except (OSError, RuntimeError, ValueError) as exc:
-            log.warning(
-                "Speculative draft %s failed to load (%s); proceeding without",
-                draft_id,
-                type(exc).__name__,
-            )
-            draft_model = None
 
     # Build all prompts and pre-truncate to avoid unsloth crash on oversized inputs
     rows_data = []
@@ -1296,15 +1232,8 @@ def _evaluate_local(
 
         try:
             start = time.perf_counter()
-            gen_kwargs = {}
-            if draft_model is not None:
-                # Assisted generation requires batch_size=1; transformers
-                # raises if the draft sees a padded batch. We only pass
-                # the draft when prompts are 1-at-a-time.
-                if len(batch_prompts) == 1:
-                    gen_kwargs["assistant_model"] = draft_model
             with torch.no_grad():
-                outputs = gen_pipeline(batch_prompts, **gen_kwargs)
+                outputs = gen_pipeline(batch_prompts)
             elapsed = time.perf_counter() - start
         except (RuntimeError, torch.OutOfMemoryError) as e:
             log.error(
