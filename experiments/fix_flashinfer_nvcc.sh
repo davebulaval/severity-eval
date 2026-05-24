@@ -15,10 +15,14 @@
 #   1. Verify a venv is active and CUDA_HOME is set
 #   2. Clear the flashinfer cache (~/.cache/flashinfer/) so the rebuilt
 #      .ninja files use the new toolchain
-#   3. Try sudo symlink `/usr/local/cuda -> $CUDA_HOME` (the clean fix)
-#   4. If sudo is unavailable, build a per-user shim at ~/.cuda-shim/ and
-#      export CUDA_PATH / TORCH_CUDA_HOME pointing at it. Persists those
-#      exports into $VIRTUAL_ENV/bin/activate (guarded by a marker).
+#   3. Try sudo symlink `/usr/local/cuda -> $CUDA_HOME` (the clean fix --
+#      survives flashinfer/vllm upgrades)
+#   4. If sudo is unavailable, sed-patch the hard-coded "/usr/local/cuda"
+#      paths inside flashinfer's source files to point at $CUDA_HOME.
+#      Persists CUDA_PATH + TORCH_CUDA_HOME into $VENV/bin/activate too
+#      (some downstream tools check those instead of CUDA_HOME). NOTE:
+#      a future `pip install flashinfer` overwrites the patched files,
+#      re-run this script after any upgrade.
 #   5. Run check_env.sh to validate that section 11 now passes.
 #
 # Flags:
@@ -36,7 +40,7 @@ SKIP_CHECK=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-check) SKIP_CHECK=true; shift ;;
-        -h|--help)    sed -n '2,28p' "$0"; exit 0 ;;
+        -h|--help)    sed -n '2,32p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -117,40 +121,60 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 4. Per-user shim if /usr/local/cuda is not usable
+# 4. No-sudo fallback: sed-patch flashinfer's hard-coded CUDA path
 # -----------------------------------------------------------------------------
 echo
-echo "## 4. Per-user shim (if needed)"
+echo "## 4. Patch flashinfer sources (no-sudo fallback)"
 if [[ "$NEED_SHIM" == "true" ]]; then
-    SHIM="$HOME/.cuda-shim"
-    mkdir -p "$SHIM/bin" "$SHIM/include" "$SHIM/lib"
-    ln -sfn "$CUDA_HOME/bin/nvcc" "$SHIM/bin/nvcc"
-    # Mirror include + lib via directory-level symlinks where possible
-    if [[ -d "$CUDA_HOME/include" ]]; then
-        ln -sfn "$CUDA_HOME/include" "$SHIM/include.real" 2>/dev/null || true
+    # Find the flashinfer install dir inside the venv
+    FLASH_DIR=$(find "$VIRTUAL_ENV" -maxdepth 5 -type d -name "flashinfer" 2>/dev/null \
+        | grep -E "/site-packages/flashinfer$" | head -1)
+    if [[ -z "$FLASH_DIR" ]]; then
+        echo "[ABORT] flashinfer not found in venv -- pip install vllm first"
+        exit 1
     fi
-    if [[ -d "$CUDA_HOME/lib" ]]; then
-        ln -sfn "$CUDA_HOME/lib" "$SHIM/lib.real" 2>/dev/null || true
+    echo "  flashinfer dir: $FLASH_DIR"
+
+    # Find every .py file under flashinfer that hard-codes "/usr/local/cuda"
+    # and rewrite it to point at $CUDA_HOME. We touch only flashinfer code,
+    # never torch or other deps. Idempotent: a second run finds 0 matches
+    # because the string was already replaced.
+    SAFE_CUDA_HOME="${CUDA_HOME//\//\\/}"
+    PATCHED=0
+    while IFS= read -r pyfile; do
+        if grep -q "/usr/local/cuda" "$pyfile"; then
+            sed -i "s|/usr/local/cuda|$CUDA_HOME|g" "$pyfile"
+            PATCHED=$((PATCHED+1))
+            echo "    patched $pyfile"
+        fi
+    done < <(grep -rlE "/usr/local/cuda" "$FLASH_DIR" --include="*.py" 2>/dev/null || true)
+    if [[ "$PATCHED" -eq 0 ]]; then
+        echo "  no flashinfer .py file mentioned /usr/local/cuda (already patched"
+        echo "  or a future flashinfer release that fixed the issue upstream)"
+    else
+        echo "  patched $PATCHED file(s). A future 'pip install flashinfer' will"
+        echo "  overwrite them -- re-run this script after any upgrade."
     fi
-    echo "  shim at $SHIM (bin/nvcc symlinked)"
+    : "${SAFE_CUDA_HOME:=}"  # silence shellcheck on unused-after-decl
+
+    # Export the standard CUDA env vars so downstream tools that respect them
+    # (and not just the hard-coded path we just patched) also find the right
+    # toolkit.
     export CUDA_PATH="$CUDA_HOME"
     export TORCH_CUDA_HOME="$CUDA_HOME"
-    echo "  exported CUDA_PATH=$CUDA_PATH"
-    echo "  exported TORCH_CUDA_HOME=$TORCH_CUDA_HOME"
 
-    # Persist into activate (guarded by marker, idempotent)
+    # Persist into activate, guarded by marker (idempotent).
     ACTIVATE="$VIRTUAL_ENV/bin/activate"
     MARKER="# === severity-eval fix_flashinfer_nvcc.sh patch ==="
     if grep -q "$MARKER" "$ACTIVATE"; then
-        echo "  activate already patched -- skipping"
+        echo "  activate already exports CUDA_PATH / TORCH_CUDA_HOME -- skipping"
     else
         cat >> "$ACTIVATE" << 'PATCH'
 
 # === severity-eval fix_flashinfer_nvcc.sh patch ===
-# flashinfer hard-codes /usr/local/cuda/bin/nvcc in its ninja build.
-# When the toolkit lives in the venv, /usr/local/cuda is missing.
-# Export both CUDA_PATH and TORCH_CUDA_HOME so tools that consult those
-# (instead of CUDA_HOME) also find the right path.
+# Some tools (notably torch.utils.cpp_extension lookups) check CUDA_PATH or
+# TORCH_CUDA_HOME instead of CUDA_HOME. Mirror them so a fresh shell sees
+# all three pointing at the venv toolkit.
 if [ -n "${CUDA_HOME:-}" ] && [ -d "$CUDA_HOME" ]; then
     export CUDA_PATH="$CUDA_HOME"
     export TORCH_CUDA_HOME="$CUDA_HOME"
@@ -159,7 +183,7 @@ PATCH
         echo "  appended CUDA_PATH / TORCH_CUDA_HOME exports to $ACTIVATE"
     fi
 else
-    echo "  (skipped, system symlink is in place)"
+    echo "  (skipped, system symlink is in place -- flashinfer will find it)"
 fi
 
 # -----------------------------------------------------------------------------
@@ -178,9 +202,15 @@ echo "============================================================"
 echo " FIX COMPLETE"
 echo "============================================================"
 if [[ "$NEED_SHIM" == "true" ]]; then
-    echo "  No sudo was available. CUDA_PATH + TORCH_CUDA_HOME are now"
-    echo "  persisted in $VIRTUAL_ENV/bin/activate."
-    echo "  If section 11 still FAILs, ask an admin to run:"
+    echo "  No sudo was available. flashinfer sources have been patched"
+    echo "  in-place; CUDA_PATH + TORCH_CUDA_HOME are persisted in"
+    echo "  $VIRTUAL_ENV/bin/activate."
+    echo
+    echo "  CAVEAT: a future 'pip install flashinfer' (or any reinstall of"
+    echo "  vllm pulling in flashinfer) overwrites the patched files."
+    echo "  Re-run this script after any such upgrade."
+    echo
+    echo "  Cleaner long-term fix (ask an admin):"
     echo "      sudo ln -sf $CUDA_HOME /usr/local/cuda"
 else
     echo "  System symlink in place; future runs will skip step 3-4."
