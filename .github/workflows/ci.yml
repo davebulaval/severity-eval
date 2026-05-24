@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -r requirements-ci.txt
       - name: Run tests
         run: |
           pytest tests/ -v --cov=severity_eval --cov-report=term-missing

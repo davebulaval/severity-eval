@@ -35,7 +35,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Make sure the experiments package is importable.
@@ -266,7 +266,7 @@ def run_benchmark(
         "per_sample_out_tokens": out_tokens,
         "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
         "git_commit": _git("rev-parse", "--short=8", "HEAD"),
-        "timestamp_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 
