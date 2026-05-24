@@ -1,26 +1,35 @@
 #!/usr/bin/env bash
 # =============================================================================
-# check_env.sh -- Diagnose why the smoke buckets exit in 0 seconds
+# check_env.sh -- Validate that the local-model bucket is ready to run
 #
-# Runs a chain of checks that mirror what run_local_smoke.sh needs:
-#   1. venv is active
-#   2. LD_LIBRARY_PATH points at the nvidia/cu13 libs
-#   3. The persistence patch is in .severity/bin/activate
-#   4. severity_eval imports cleanly
-#   5. bitsandbytes native library loads
-#   6. unsloth imports
-#   7. transformers imports
-#   8. A 1-instance evaluate_models.py call actually produces output
+# Runs a chain of checks before launching evaluate_models / bench_inference.
+# Failures here always block the smoke / full runs, so the script exits
+# non-zero on any FAIL.
 #
-# Pass --fix to add the LD_LIBRARY_PATH export to .severity/bin/activate
-# if it's missing.
+# Checks (in order):
+#   1. venv .severity activated
+#   2. CUDA toolkit version
+#       - warn if 13.2 (Unsloth reports gibberish outputs, NVIDIA bug)
+#       - error if missing
+#   3. NVIDIA driver + nvidia-smi
+#   4. LD_LIBRARY_PATH points at nvidia/cu13/lib (CUDA 13 runtime libs)
+#   5. Persistence patch in .severity/bin/activate
+#   6. severity_eval imports cleanly
+#   7. torch + CUDA visibility (cuda.is_available, GPU count, compute cap)
+#   8. bitsandbytes native lib loads (no libnvJitLink error)
+#   9. vLLM imports (LLM, SamplingParams)
+#  10. Optional micro-inference smoke (1 prompt, granite-3.2-8b)
 #
-# Pass --gpu N to pin the test inference to GPU N (default 0).
+# Flags:
+#   --fix         append the LD_LIBRARY_PATH export to .severity/bin/activate
+#                 if missing
+#   --gpu N       pin the smoke micro-inference to GPU N (default 0)
+#   --skip-micro  skip step 10 (saves ~60 s on cold caches)
 #
 # Usage:
 #   ./experiments/check_env.sh
-#   ./experiments/check_env.sh --fix
-#   ./experiments/check_env.sh --fix --gpu 1
+#   ./experiments/check_env.sh --fix --gpu 0
+#   ./experiments/check_env.sh --skip-micro
 # =============================================================================
 set -uo pipefail
 
@@ -28,11 +37,13 @@ cd "$(dirname "$0")/.."
 
 FIX=false
 GPU="0"
+SKIP_MICRO=false
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --fix) FIX=true; shift ;;
-        --gpu) GPU="$2"; shift 2 ;;
-        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+        --fix)        FIX=true; shift ;;
+        --gpu)        GPU="$2"; shift 2 ;;
+        --skip-micro) SKIP_MICRO=true; shift ;;
+        -h|--help)    sed -n '2,32p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -46,11 +57,11 @@ fail() { echo "  FAIL  $*"; FAIL=$((FAIL+1)); }
 warn() { echo "  WARN  $*"; WARN=$((WARN+1)); }
 
 echo "============================================================"
-echo " ENV DIAGNOSTIC"
+echo " ENV DIAGNOSTIC -- severity-eval (vLLM backend)"
 echo "============================================================"
 
 # -----------------------------------------------------------------------------
-# 1. venv
+# 1. venv .severity
 # -----------------------------------------------------------------------------
 echo
 echo "## 1. venv .severity"
@@ -63,35 +74,101 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 2. LD_LIBRARY_PATH (current shell)
+# 2. CUDA toolkit
 # -----------------------------------------------------------------------------
 echo
-echo "## 2. LD_LIBRARY_PATH for CUDA 13"
-EXPECTED_LIB="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib"
-if [[ -d "$EXPECTED_LIB" ]]; then
-    if [[ ":${LD_LIBRARY_PATH:-}:" == *":$EXPECTED_LIB:"* ]]; then
-        ok "LD_LIBRARY_PATH contains $EXPECTED_LIB"
-    else
-        fail "LD_LIBRARY_PATH missing $EXPECTED_LIB"
-        echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
+echo "## 2. CUDA toolkit"
+CUDA_VERSION=""
+if python3 -c "import torch; print(torch.version.cuda)" >/tmp/check_env_cuda_v.out 2>&1; then
+    CUDA_VERSION=$(cat /tmp/check_env_cuda_v.out)
+fi
+if [[ -z "$CUDA_VERSION" || "$CUDA_VERSION" == "None" ]]; then
+    if command -v nvcc >/dev/null 2>&1; then
+        CUDA_VERSION=$(nvcc --version 2>/dev/null \
+            | grep -oE "release [0-9]+\.[0-9]+" | awk '{print $2}')
     fi
+fi
+if [[ -z "$CUDA_VERSION" || "$CUDA_VERSION" == "None" ]]; then
+    fail "CUDA toolkit not detected (torch.version.cuda is None and nvcc missing)"
+elif [[ "$CUDA_VERSION" == "13.2"* ]]; then
+    fail "CUDA toolkit is 13.2 -- known to produce gibberish outputs under"
+    echo "        unsloth and vLLM. NVIDIA is working on a fix."
+    echo "        Downgrade to 13.0 or 13.1, or roll back to 12.x."
+elif [[ "$CUDA_VERSION" == "13."* ]]; then
+    ok "CUDA toolkit $CUDA_VERSION (13.0 / 13.1 are known-good)"
+elif [[ "$CUDA_VERSION" == "12."* ]]; then
+    ok "CUDA toolkit $CUDA_VERSION (12.x supported)"
 else
-    fail "expected dir does not exist: $EXPECTED_LIB"
+    warn "CUDA toolkit $CUDA_VERSION (untested by this repo; expected 12.x or 13.0/13.1)"
 fi
 
 # -----------------------------------------------------------------------------
-# 3. Persistence patch in .severity/bin/activate
+# 3. NVIDIA driver + nvidia-smi
 # -----------------------------------------------------------------------------
 echo
-echo "## 3. Persistence in .severity/bin/activate"
+echo "## 3. NVIDIA driver / nvidia-smi"
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+    fail "nvidia-smi not in PATH"
+else
+    DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
+    N_GPU=$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l)
+    if [[ -z "$DRIVER" ]]; then
+        fail "nvidia-smi present but returns no GPUs"
+    else
+        ok "driver $DRIVER, $N_GPU GPU(s) visible"
+        nvidia-smi --query-gpu=index,name,compute_cap,memory.total \
+            --format=csv,noheader 2>/dev/null | while IFS= read -r line; do
+            echo "        GPU: $line"
+        done
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 4. LD_LIBRARY_PATH for CUDA runtime libs
+# -----------------------------------------------------------------------------
+echo
+echo "## 4. LD_LIBRARY_PATH"
+EXPECTED_CU13=""
+EXPECTED_CU12=""
+if [[ -n "${VIRTUAL_ENV:-}" ]]; then
+    EXPECTED_CU13="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib"
+    EXPECTED_CU12="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu12/lib"
+fi
+LIBPATH_OK=false
+if [[ -d "$EXPECTED_CU13" ]] \
+   && [[ ":${LD_LIBRARY_PATH:-}:" == *":$EXPECTED_CU13:"* ]]; then
+    ok "LD_LIBRARY_PATH contains $EXPECTED_CU13"
+    LIBPATH_OK=true
+elif [[ -d "$EXPECTED_CU12" ]] \
+   && [[ ":${LD_LIBRARY_PATH:-}:" == *":$EXPECTED_CU12:"* ]]; then
+    ok "LD_LIBRARY_PATH contains $EXPECTED_CU12 (CUDA 12 toolkit)"
+    LIBPATH_OK=true
+fi
+if [[ "$LIBPATH_OK" == "false" ]]; then
+    if [[ -d "$EXPECTED_CU13" ]]; then
+        fail "LD_LIBRARY_PATH missing $EXPECTED_CU13"
+        echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
+    elif [[ -d "$EXPECTED_CU12" ]]; then
+        fail "LD_LIBRARY_PATH missing $EXPECTED_CU12"
+        echo "        current LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
+    else
+        warn "nvidia/cu13 and nvidia/cu12 lib dirs both missing -- pure-pip torch?"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 5. Persistence patch in .severity/bin/activate
+# -----------------------------------------------------------------------------
+echo
+echo "## 5. Persistence in .severity/bin/activate"
 ACTIVATE=".severity/bin/activate"
 if [[ ! -f "$ACTIVATE" ]]; then
     fail "$ACTIVATE missing"
 else
-    if grep -q "nvidia/cu13/lib" "$ACTIVATE"; then
-        ok "activate already exports LD_LIBRARY_PATH for cu13"
+    if grep -q "nvidia/cu13/lib\|nvidia/cu12/lib" "$ACTIVATE"; then
+        ok "activate exports LD_LIBRARY_PATH for nvidia/cuXX libs"
     else
-        warn "activate does NOT export LD_LIBRARY_PATH for cu13"
+        warn "activate does NOT export LD_LIBRARY_PATH for nvidia/cuXX"
         if [[ "$FIX" == "true" ]]; then
             echo "        appending export ..."
             cat <<'PATCH' >> "$ACTIVATE"
@@ -99,6 +176,8 @@ else
 # === added by experiments/check_env.sh --fix ===
 if [ -d "$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib" ]; then
     export LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu13/lib:${LD_LIBRARY_PATH:-}"
+elif [ -d "$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu12/lib" ]; then
+    export LD_LIBRARY_PATH="$VIRTUAL_ENV/lib/python3.11/site-packages/nvidia/cu12/lib:${LD_LIBRARY_PATH:-}"
 fi
 PATCH
             ok "appended. Re-source the venv: deactivate; source .severity/bin/activate"
@@ -109,11 +188,12 @@ PATCH
 fi
 
 # -----------------------------------------------------------------------------
-# 4. severity_eval import
+# 6. severity_eval import
 # -----------------------------------------------------------------------------
 echo
-echo "## 4. severity_eval import"
-if PYTHONPATH=src python3 -c "import severity_eval; print(severity_eval.__version__)" >/tmp/check_env_se.out 2>&1; then
+echo "## 6. severity_eval import"
+if PYTHONPATH=src python3 -c "import severity_eval; print(severity_eval.__version__)" \
+        >/tmp/check_env_se.out 2>&1; then
     ok "severity_eval $(cat /tmp/check_env_se.out)"
 else
     fail "severity_eval import broken:"
@@ -121,13 +201,33 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 5. bitsandbytes native lib
+# 7. torch + CUDA
 # -----------------------------------------------------------------------------
 echo
-echo "## 5. bitsandbytes"
-if python3 -c "import bitsandbytes; print(bitsandbytes.__version__)" >/tmp/check_env_bnb.out 2>&1; then
+echo "## 7. torch + CUDA visibility"
+if python3 -c "
+import torch
+assert torch.cuda.is_available(), 'cuda.is_available() returned False'
+n = torch.cuda.device_count()
+caps = [torch.cuda.get_device_capability(i) for i in range(n)]
+caps_str = ', '.join(f'{a}.{b}' for a, b in caps)
+print(f'{n} GPU(s), torch {torch.__version__}, cuda {torch.version.cuda}, compute_cap=[{caps_str}]')
+" >/tmp/check_env_cuda.out 2>&1; then
+    ok "$(cat /tmp/check_env_cuda.out)"
+else
+    fail "torch.cuda diagnostic failed:"
+    sed 's/^/        /' /tmp/check_env_cuda.out
+fi
+
+# -----------------------------------------------------------------------------
+# 8. bitsandbytes
+# -----------------------------------------------------------------------------
+echo
+echo "## 8. bitsandbytes native lib"
+if python3 -c "import bitsandbytes; print(bitsandbytes.__version__)" \
+        >/tmp/check_env_bnb.out 2>&1; then
     out=$(cat /tmp/check_env_bnb.out)
-    if grep -q "library load error\|libnvJitLink" /tmp/check_env_bnb.out; then
+    if grep -qi "library load error\|libnvJitLink\|libcublas" /tmp/check_env_bnb.out; then
         fail "bitsandbytes failed to load native lib:"
         sed 's/^/        /' /tmp/check_env_bnb.out
     else
@@ -139,52 +239,50 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 6. unsloth + transformers
+# 9. vLLM
 # -----------------------------------------------------------------------------
 echo
-echo "## 6. unsloth + transformers"
-if python3 -c "import unsloth; import transformers; print(f'unsloth {unsloth.__version__}, transformers {transformers.__version__}')" >/tmp/check_env_us.out 2>&1; then
-    ok "$(cat /tmp/check_env_us.out)"
+echo "## 9. vLLM import"
+if python3 -c "from vllm import LLM, SamplingParams; import vllm; print(vllm.__version__)" \
+        >/tmp/check_env_vllm.out 2>&1; then
+    ok "vllm $(cat /tmp/check_env_vllm.out)"
 else
-    warn "unsloth/transformers import had output:"
-    sed 's/^/        /' /tmp/check_env_us.out
+    fail "vllm import broken:"
+    sed 's/^/        /' /tmp/check_env_vllm.out
 fi
 
 # -----------------------------------------------------------------------------
-# 7. CUDA visibility
+# 10. Micro-inference smoke (optional)
 # -----------------------------------------------------------------------------
-echo
-echo "## 7. CUDA / GPU"
-if python3 -c "import torch; assert torch.cuda.is_available(); print(f'{torch.cuda.device_count()} GPU(s), torch {torch.__version__}, cuda {torch.version.cuda}')" >/tmp/check_env_cuda.out 2>&1; then
-    ok "$(cat /tmp/check_env_cuda.out)"
+if [[ "$SKIP_MICRO" == "true" ]]; then
+    echo
+    echo "## 10. End-to-end micro-inference: SKIPPED (--skip-micro)"
+elif [[ $FAIL -gt 0 ]]; then
+    echo
+    echo "## 10. End-to-end micro-inference: SKIPPED (earlier FAIL detected)"
 else
-    fail "torch.cuda not available:"
-    sed 's/^/        /' /tmp/check_env_cuda.out
-fi
-
-# -----------------------------------------------------------------------------
-# 8. End-to-end micro-inference (1 instance, tiny model)
-# -----------------------------------------------------------------------------
-echo
-echo "## 8. End-to-end micro-inference (granite-3.2-8b on medqa --limit 1)"
-echo "        (this exercises the same path as the smoke; <2 min)"
-echo
-if PYTHONPATH=src python3 -m experiments.evaluate_models \
-        --dataset medqa --model granite-3.2-8b \
-        --limit 1 --gpu "$GPU" --force >/tmp/check_env_micro.out 2>&1; then
-    if grep -q "accuracy=" /tmp/check_env_micro.out; then
-        ok "micro-inference ran:"
-        grep -E "accuracy=|batch_error|ERROR" /tmp/check_env_micro.out | head -3 | sed 's/^/        /'
-        if grep -q "batch_error" /tmp/check_env_micro.out; then
-            warn "micro produced batch_error — model loaded but inference crashed"
+    echo
+    echo "## 10. End-to-end micro-inference (granite-3.2-8b on medqa --limit 1)"
+    echo "        (this exercises the full vLLM load path; can take 1-2 min cold)"
+    echo
+    if PYTHONPATH=src python3 -m experiments.evaluate_models \
+            --dataset medqa --model granite-3.2-8b \
+            --limit 1 --gpu "$GPU" --force >/tmp/check_env_micro.out 2>&1; then
+        if grep -q "accuracy=" /tmp/check_env_micro.out; then
+            ok "micro-inference ran:"
+            grep -E "accuracy=|batch_error|ERROR" /tmp/check_env_micro.out \
+                | head -3 | sed 's/^/        /'
+            if grep -q "batch_error" /tmp/check_env_micro.out; then
+                warn "micro produced batch_error -- model loaded but inference failed"
+            fi
+        else
+            warn "micro completed but no accuracy line found:"
+            tail -10 /tmp/check_env_micro.out | sed 's/^/        /'
         fi
     else
-        warn "micro completed but no accuracy line found:"
-        tail -10 /tmp/check_env_micro.out | sed 's/^/        /'
+        fail "micro-inference crashed:"
+        tail -20 /tmp/check_env_micro.out | sed 's/^/        /'
     fi
-else
-    fail "micro-inference crashed:"
-    tail -20 /tmp/check_env_micro.out | sed 's/^/        /'
 fi
 
 # -----------------------------------------------------------------------------
@@ -194,14 +292,14 @@ echo
 echo "============================================================"
 echo "  PASS=$PASS  FAIL=$FAIL  WARN=$WARN"
 if [[ $FAIL -gt 0 ]]; then
-    echo "  Status: NOT READY — fix the FAIL items before running smoke"
+    echo "  Status: NOT READY -- fix the FAIL items before running smoke"
     if [[ "$FIX" != "true" ]]; then
-        echo "  Tip: try re-running with --fix"
+        echo "  Tip: try re-running with --fix (auto-appends LD_LIBRARY_PATH)"
     fi
     exit 1
 elif [[ $WARN -gt 0 ]]; then
     echo "  Status: READY (with warnings)"
 else
-    echo "  Status: READY — smoke should run"
+    echo "  Status: READY -- smoke / full runs should work"
 fi
 echo "============================================================"
