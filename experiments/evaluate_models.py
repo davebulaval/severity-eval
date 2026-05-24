@@ -1248,10 +1248,15 @@ def _evaluate_local(
         log.warning("Could not cap tokenizer.model_max_length: %s", exc)
 
     # Create text-generation pipeline.
-    # use_cache=True (default) is now safe everywhere thanks to the
-    # cache_implementation="dynamic" patch in _load_local_model. KV cache
-    # cuts generation cost from O(n^2) to O(n) per new token, which is
-    # ~5-10x faster on thinking models that emit long chains.
+    # use_cache=False is a hard requirement under unsloth + bnb-4bit:
+    # unsloth installs its own fast inference path (e.g.
+    # Qwen3Attention_fast_forward_inference, _CausalLM_fast_forward) that
+    # bypasses HF's attention layer and has a broadcast bug on the RoPE
+    # cos/sin tensors when KV cache is on:
+    #     RuntimeError: output with shape [1, H, 1, D] doesn't match the
+    #     broadcast shape [1, H, seq, D]
+    # The full KV-cache speedup (~5-10x on thinking models) requires
+    # bypassing unsloth entirely -- see the speedup/vllm-port branch.
     gen_pipeline = pipeline(
         task="text-generation",
         model=model,
@@ -1263,6 +1268,7 @@ def _evaluate_local(
         padding=True,
         truncation=False,
         do_sample=False,
+        use_cache=False,
     )
 
     # Group prompts by token length before batching. Without this, a
