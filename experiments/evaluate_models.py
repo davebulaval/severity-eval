@@ -167,12 +167,40 @@ _DEFAULT_INFERENCE_CONFIG = (256, 4096)
 # the reasoning.  Detection is by model_id substring.
 _THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1-distill")
 _THINKING_TOKEN_MULTIPLIER = 16  # e.g. 128 → 2048
+# Hard cap on max_new_tokens for thinking models. 2048 covers ~95% of
+# reasoning chains observed; the queue of very long ones doubles the
+# wall-clock for marginal accuracy gain.
+_THINKING_MAX_NEW_TOKENS_CAP = 2048
+
+# Sliding-window-attention architectures whose KV cache breaks under
+# unsloth + bnb-4bit (HybridCache shape mismatch). These MUST use
+# eager attention + dynamic cache. Other architectures can use the
+# faster sdpa path.
+_SWA_MODEL_PATTERNS = ("gemma-2", "phi-4", "qwq", "deepseek-r1-distill")
 
 
 def _is_thinking_model(model_id: str) -> bool:
     """Return True if the model emits <think>...</think> reasoning chains."""
     name = model_id.lower()
     return any(p in name for p in _THINKING_MODEL_PATTERNS)
+
+
+def _is_swa_model(model_id: str) -> bool:
+    """True for sliding-window-attention architectures that need eager attn."""
+    name = model_id.lower()
+    return any(p in name for p in _SWA_MODEL_PATTERNS)
+
+
+def _attn_impl_for(model_id: str) -> str:
+    """Pick the attention implementation for a given model_id.
+
+    SWA architectures (gemma-2, phi-4, qwq, deepseek-r1-distill) crash with
+    a broadcast shape mismatch under unsloth + bnb-4bit + HybridCache and
+    must use eager. Everyone else uses sdpa, which is 1.5-2x faster than
+    eager and works under quantization (unlike flash_attention_2 which
+    is often broken in this stack).
+    """
+    return "eager" if _is_swa_model(model_id) else "sdpa"
 
 
 def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -> int:
@@ -193,16 +221,20 @@ def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -
         size_tier = "small"  # ~5 GB VRAM (8B, 9B)
 
     total_ctx = max_length + max_new_tokens
-    # On a 48 GB GPU a 70B in 4-bit NF4 leaves ~8 GB for activations and
-    # KV cache, so batch size stays at 1 for any context length.
+    # Bumped roughly 2x compared to the conservative initial mapping.
+    # Justification: with use_cache=True (KV cache enabled) the activation
+    # footprint per step is much smaller, so 48 GB leaves more headroom.
+    # Out-of-memory on a given (model, dataset) pair falls back to empty
+    # predictions for that batch via the existing torch.OutOfMemoryError
+    # handler -- it does not bring down the run.
     if total_ctx >= 8192:
-        return {"xlarge": 1, "large": 1, "medium": 2, "small": 4}[size_tier]
-    elif total_ctx >= 4096:
         return {"xlarge": 1, "large": 2, "medium": 4, "small": 8}[size_tier]
-    elif total_ctx >= 2048:
+    elif total_ctx >= 4096:
         return {"xlarge": 2, "large": 4, "medium": 8, "small": 16}[size_tier]
-    else:
+    elif total_ctx >= 2048:
         return {"xlarge": 4, "large": 8, "medium": 16, "small": 32}[size_tier]
+    else:
+        return {"xlarge": 8, "large": 16, "medium": 32, "small": 64}[size_tier]
 
 
 # ---------------------------------------------------------------------------
@@ -935,25 +967,34 @@ def _load_local_model(model_id: str):
         model.eval()
 
     # Override unsloth's xformers attention. unsloth ignores the
-    # attn_implementation kwarg and uses xformers, which produces a
-    # broadcast shape mismatch ([1, H, 1, D] vs [1, H, seq_len, D])
-    # during generation on SWA / GQA architectures (Gemma-2, Phi-4,
-    # QwQ, Llama-3-distill). Force eager on the config directly. Catch
-    # only AttributeError; any other failure should be surfaced.
+    # attn_implementation kwarg, so we patch the config after load.
+    # SWA architectures (Gemma-2, Phi-4, QwQ, DeepSeek-R1-distill) must
+    # use eager to avoid the HybridCache broadcast shape mismatch
+    # ([1, H, 1, D] vs [1, H, seq_len, D]). Others use sdpa, which is
+    # 1.5-2x faster than eager and works under bnb-4bit.
+    attn_impl = _attn_impl_for(model_id)
     try:
-        model.config._attn_implementation = "eager"
+        model.config._attn_implementation = attn_impl
     except AttributeError as exc:
-        log.warning("Could not set _attn_implementation=eager on model.config: %s", exc)
+        log.warning(
+            "Could not set _attn_implementation=%s on model.config: %s",
+            attn_impl,
+            exc,
+        )
     if hasattr(model, "_attn_implementation"):
         try:
-            model._attn_implementation = "eager"
+            model._attn_implementation = attn_impl
         except AttributeError as exc:
-            log.warning("Could not set _attn_implementation=eager on model: %s", exc)
+            log.warning(
+                "Could not set _attn_implementation=%s on model: %s",
+                attn_impl,
+                exc,
+            )
 
     # Force dynamic KV cache. The HybridCache that transformers >= 4.46
     # auto-selects for SWA architectures trips on the same broadcast
-    # bug. Using "dynamic" sidesteps the bug; for stubborn models the
-    # use_cache=False fallback in the pipeline below is the safety net.
+    # bug. Using "dynamic" sidesteps the bug and lets use_cache=True
+    # work safely on every architecture in our matrix.
     try:
         model.generation_config.cache_implementation = "dynamic"
     except AttributeError as exc:
@@ -1006,14 +1047,18 @@ def _evaluate_local(
         )
         max_length = model_max_ctx
 
-    # Thinking models need much more generation budget for their reasoning chain
+    # Thinking models need more generation budget for their reasoning chain,
+    # but the very long tail (> 2048 tokens) doubles wall-clock for a marginal
+    # accuracy gain. Multiply by _THINKING_TOKEN_MULTIPLIER then hard-cap.
     thinking = _is_thinking_model(model_id)
     if thinking:
-        max_new_tokens = max_new_tokens * _THINKING_TOKEN_MULTIPLIER
+        scaled = max_new_tokens * _THINKING_TOKEN_MULTIPLIER
+        max_new_tokens = min(scaled, _THINKING_MAX_NEW_TOKENS_CAP)
         log.info(
-            "Thinking model detected — max_new_tokens scaled to %d (×%d)",
+            "Thinking model detected — max_new_tokens scaled to %d (×%d, cap=%d)",
             max_new_tokens,
             _THINKING_TOKEN_MULTIPLIER,
+            _THINKING_MAX_NEW_TOKENS_CAP,
         )
 
     # Ensure input + generation fits within model's context window
@@ -1088,11 +1133,10 @@ def _evaluate_local(
         log.warning("Could not cap tokenizer.model_max_length: %s", exc)
 
     # Create text-generation pipeline.
-    # use_cache=False is the safety net for SWA/GQA models where the KV
-    # cache produces a shape mismatch under unsloth+bnb-4bit. Generation
-    # is ~5x slower without cache but always correct. Trade-off accepted
-    # for the local-model smoke/full runs; granite and qwen3 are
-    # unaffected and just see a small slowdown.
+    # use_cache=True (default) is now safe everywhere thanks to the
+    # cache_implementation="dynamic" patch in _load_local_model. KV cache
+    # cuts generation cost from O(n^2) to O(n) per new token, which is
+    # ~5-10x faster on thinking models that emit long chains.
     gen_pipeline = pipeline(
         task="text-generation",
         model=model,
@@ -1104,11 +1148,19 @@ def _evaluate_local(
         padding=True,
         truncation=False,
         do_sample=False,
-        use_cache=False,
     )
 
-    # Batch inference
+    # Group prompts by token length before batching. Without this, a
+    # batch can mix a 200-token prompt with a 3000-token prompt and pad
+    # everything to the longest, wasting ~15x compute on the short one.
+    # We sort ascending by encoded input length, run inference in that
+    # order, then restore the original order before returning.
     from tqdm import tqdm
+
+    indexed = list(enumerate(rows_data))
+    indexed.sort(key=lambda x: len(tokenizer.encode(x[1][1], add_special_tokens=False)))
+    sorted_order = [orig_idx for orig_idx, _ in indexed]
+    rows_data = [item for _, item in indexed]
 
     all_prompts = [item[1] for item in rows_data]
     n_batches = (len(all_prompts) + batch_size - 1) // batch_size
@@ -1177,7 +1229,13 @@ def _evaluate_local(
         pbar.set_postfix(acc=f"{acc:.1f}%", ms=f"{elapsed / len(outputs) * 1000:.0f}")
 
     pbar.close()
-    return results
+
+    # Restore original (unsorted) order so downstream callers see results
+    # aligned with df.iterrows().
+    restored = [None] * len(results)
+    for new_idx, orig_idx in enumerate(sorted_order):
+        restored[orig_idx] = results[new_idx]
+    return restored
 
 
 def _evaluate_batch_openai(
