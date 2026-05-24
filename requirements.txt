@@ -1,34 +1,39 @@
-# severity-eval — core
+# severity-eval — core scientific stack
 numpy>=1.24
 scipy>=1.10
 matplotlib>=3.7
 pandas>=2.0
+scikit-learn>=1.3       # cohen_kappa_score in validate_severity_llm.py
 
 # HuggingFace
 evaluate>=0.4
 datasets>=2.14
 transformers>=4.45
+huggingface_hub>=0.20
 
 # API clients
-openai>=1.0
+openai>=1.0             # also used for xAI via custom base_url
 anthropic>=0.20
-google-generativeai>=0.3
-google-genai>=1.0
+google-generativeai>=0.3   # single-call path (call_google)
+google-genai>=1.0          # batch API path (_evaluate_batch_google)
 mistralai>=0.1
 cohere>=5.0
-httpx>=0.27
+httpx>=0.27             # xAI batch API HTTP client
 
 # Experiment pipeline
 python-dotenv>=1.0
 wandb>=0.16
 tqdm>=4.60
-huggingface_hub>=0.20
 
-# Local models (unsloth)
+# Local-model HF backend (default)
 torch>=2.1
 unsloth
-bitsandbytes>=0.43
-accelerate>=1.0
+bitsandbytes>=0.43      # used via transformers.BitsAndBytesConfig
+accelerate>=1.0         # required by device_map="auto"
+
+# Local-model vLLM backend (optional; see experiments/VLLM_BACKEND.md)
+# Uncomment or `pip install vllm` separately on machines that need it.
+# vllm>=0.6
 
 # Dev / testing / styling
 pytest>=7.0
