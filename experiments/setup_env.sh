@@ -121,7 +121,11 @@ echo "  done"
 # -----------------------------------------------------------------------------
 echo
 echo "## 5. Install nvidia-cuda-nvcc (CUDA compiler for flashinfer / vLLM JIT)"
-pip install nvidia-cuda-nvcc -q
+# Pin below 13.2: the 13.2 toolkit is known to produce gibberish outputs
+# and silent kernel build failures under unsloth/vLLM (Unsloth-reported
+# bug, NVIDIA WIP). We want a 13.0 / 13.1 nvcc to match the runtime libs
+# that torch ships with cu130.
+pip install "nvidia-cuda-nvcc<13.2" -q
 
 # -----------------------------------------------------------------------------
 # 6. Detect nvcc + cuXX paths

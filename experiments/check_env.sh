@@ -275,11 +275,17 @@ echo "## 9. nvcc + CUDA_HOME (flashinfer JIT)"
 #   /bin/sh: 1: /usr/local/cuda/bin/nvcc: not found
 if command -v nvcc >/dev/null 2>&1; then
     nvcc_v=$(nvcc --version 2>/dev/null | grep -oE "release [0-9]+\.[0-9]+" | awk '{print $2}')
-    ok "nvcc on PATH: $(command -v nvcc) (release $nvcc_v)"
+    if [[ "$nvcc_v" == "13.2"* ]]; then
+        fail "nvcc release $nvcc_v -- 13.2 is known to fail flashinfer JIT"
+        echo "        (gibberish outputs + ninja build crashes; NVIDIA WIP)"
+        echo "        Downgrade: pip install 'nvidia-cuda-nvcc<13.2' --upgrade --force-reinstall"
+    else
+        ok "nvcc on PATH: $(command -v nvcc) (release $nvcc_v)"
+    fi
 else
     fail "nvcc not on PATH -- flashinfer JIT will crash at engine init"
     echo "        Run ./experiments/setup_env.sh, or:"
-    echo "          pip install nvidia-cuda-nvcc"
+    echo "          pip install 'nvidia-cuda-nvcc<13.2'"
     echo "          export CUDA_HOME=\$VIRTUAL_ENV/lib/python3.*/site-packages/nvidia/cuda_nvcc"
     echo "          export PATH=\$CUDA_HOME/bin:\$PATH"
 fi
