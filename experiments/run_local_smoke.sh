@@ -47,6 +47,7 @@ GPU="0"
 LIMIT="5"
 SKIP_70B=false
 SELECTED_MODELS=""
+BACKEND="hf"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -54,6 +55,7 @@ while [[ $# -gt 0 ]]; do
         --limit)     LIMIT="$2"; shift 2 ;;
         --skip-70b)  SKIP_70B=true; shift ;;
         --models)    SELECTED_MODELS="$2"; shift 2 ;;
+        --backend)   BACKEND="$2"; shift 2 ;;
         -h|--help)
             sed -n '2,25p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
@@ -135,7 +137,7 @@ for model in "${MODELS[@]}"; do
 
         if PYTHONPATH=src python3 -m experiments.evaluate_models \
             --dataset "$ds" --model "$model" \
-            --limit "$LIMIT" --gpu "$GPU" --force \
+            --limit "$LIMIT" --gpu "$GPU" --backend "$BACKEND" --force \
             2>&1 | tee -a "$SMOKE_LOG"; then
             T1=$(date +%s)
             echo "[$CURRENT/$TOTAL] OK in $((T1 - T0))s"

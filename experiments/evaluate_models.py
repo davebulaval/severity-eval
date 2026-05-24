@@ -1975,6 +1975,7 @@ def evaluate_model(
     delay: float = 1.0,
     prompt_style: str = "original",
     batch_size: int | None = None,
+    backend: str = "hf",
 ) -> pd.DataFrame:
     """Evaluate a model on a dataset with scoring.
 
@@ -2011,15 +2012,19 @@ def evaluate_model(
     # Batch APIs (50% cost reduction): OpenAI, Anthropic, Google, xAI, Mistral
     # ThreadPoolExecutor fallback: OpenRouter, Cohere, DeepSeek (no batch API)
 
+    def _dispatch_local():
+        if backend == "vllm":
+            from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+            return evaluate_local_vllm(
+                df, model_name, model_id, dataset_name, prompt_style
+            )
+        return _evaluate_local(
+            df, model_name, model_id, dataset_name, prompt_style, batch_size
+        )
+
     _BATCH_DISPATCHERS = {
-        "local": lambda: _evaluate_local(
-            df,
-            model_name,
-            model_id,
-            dataset_name,
-            prompt_style,
-            batch_size,
-        ),
+        "local": _dispatch_local,
         "openai": lambda: _evaluate_batch_openai(
             df,
             model_name,
@@ -2237,6 +2242,14 @@ def main():
         default=None,
         help="Override batch size for local inference / max parallel API workers (auto if omitted)",
     )
+    parser.add_argument(
+        "--backend",
+        choices=("hf", "vllm"),
+        default="hf",
+        help="Local inference backend. 'hf' = unsloth + transformers pipeline "
+        "(default, no extra install). 'vllm' = vLLM engine (continuous batching, "
+        "PagedAttention; requires `pip install vllm`).",
+    )
     args = parser.parse_args()
 
     # Set CUDA_VISIBLE_DEVICES before any GPU library import
@@ -2317,6 +2330,7 @@ def main():
                 delay=args.delay,
                 prompt_style=args.prompt_style,
                 batch_size=args.batch_size,
+                backend=args.backend,
             )
             if results_df.empty:
                 continue

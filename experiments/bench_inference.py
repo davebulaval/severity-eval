@@ -134,38 +134,20 @@ def _model_id_for(model_name: str) -> str:
     return spec["model_id"]
 
 
-def run_benchmark(
-    model_name: str,
-    n_samples: int,
-    max_new_tokens: int,
-) -> dict:
-    """Run the benchmark and return the metrics dict."""
+def _run_hf(
+    model_name: str, prompts: list[str], max_new_tokens: int
+) -> tuple[float, list[float], list[int], str]:
+    """HF + unsloth path. Returns (load_seconds, per_sample_latency,
+    per_sample_out_tokens, attn_impl)."""
     import torch
     from transformers import pipeline
 
-    from experiments.evaluate_models import (
-        _attn_impl_for,
-        _draft_model_id_for,
-        _is_thinking_model,
-        _load_draft_model,
-        _load_local_model,
-    )
+    from experiments.evaluate_models import _attn_impl_for, _load_local_model
 
     model_id = _model_id_for(model_name)
-    prompts = (PROMPTS * ((n_samples // len(PROMPTS)) + 1))[:n_samples]
-
-    log.info("Loading %s (%s)", model_name, model_id)
     t0 = time.perf_counter()
     model, tokenizer = _load_local_model(model_id)
-    load_seconds = time.perf_counter() - t0
-
-    draft_id = _draft_model_id_for(model_name)
-    draft = None
-    if draft_id is not None:
-        try:
-            draft = _load_draft_model(draft_id)
-        except (OSError, RuntimeError, ValueError) as exc:
-            log.warning("Draft %s failed (%s); proceeding without", draft_id, exc)
+    load_s = time.perf_counter() - t0
 
     gen = pipeline(
         task="text-generation",
@@ -178,48 +160,104 @@ def run_benchmark(
         padding=True,
         truncation=False,
         do_sample=False,
+        use_cache=False,
     )
 
-    _reset_vram_peak()
-    per_sample_latency: list[float] = []
-    per_sample_out_tokens: list[int] = []
-    total_start = time.perf_counter()
+    latency: list[float] = []
+    out_tokens: list[int] = []
     for prompt in prompts:
         t_start = time.perf_counter()
-        kwargs = {"assistant_model": draft} if draft is not None else {}
         with torch.no_grad():
-            outputs = gen(prompt, **kwargs)
-        t_elapsed = time.perf_counter() - t_start
-        out_text = outputs[0]["generated_text"] if outputs else ""
-        out_tokens = len(tokenizer.encode(out_text, add_special_tokens=False))
-        per_sample_latency.append(t_elapsed)
-        per_sample_out_tokens.append(out_tokens)
-    total_elapsed = time.perf_counter() - total_start
+            outputs = gen(prompt)
+        latency.append(time.perf_counter() - t_start)
+        text = outputs[0]["generated_text"] if outputs else ""
+        out_tokens.append(len(tokenizer.encode(text, add_special_tokens=False)))
+    return load_s, latency, out_tokens, _attn_impl_for(model_id)
 
-    total_out_tokens = sum(per_sample_out_tokens)
+
+def _run_vllm(
+    model_name: str, prompts: list[str], max_new_tokens: int
+) -> tuple[float, list[float], list[int], str]:
+    """vLLM path. The engine batches internally; we record the batch
+    wall-clock and attribute it evenly across prompts for the latency
+    columns. Tokens are exact per output."""
+    from vllm import SamplingParams
+
+    from experiments.evaluate_local_vllm import _load_local_vllm
+
+    model_id = _model_id_for(model_name)
+    max_model_len = max(max_new_tokens + 2048, 4096)
+    t0 = time.perf_counter()
+    llm = _load_local_vllm(model_id, max_model_len=max_model_len)
+    load_s = time.perf_counter() - t0
+    tokenizer = llm.get_tokenizer()
+
+    sampling = SamplingParams(max_tokens=max_new_tokens, temperature=0.0)
+    t_batch = time.perf_counter()
+    raw = llm.generate(prompts, sampling)
+    batch_elapsed = time.perf_counter() - t_batch
+
+    per_sample = batch_elapsed / max(len(prompts), 1)
+    latency = [per_sample] * len(prompts)
+    out_tokens = [
+        len(tokenizer.encode(o.outputs[0].text, add_special_tokens=False))
+        if o.outputs
+        else 0
+        for o in raw
+    ]
+    return load_s, latency, out_tokens, "vllm-paged"
+
+
+def run_benchmark(
+    model_name: str,
+    n_samples: int,
+    max_new_tokens: int,
+    backend: str = "hf",
+) -> dict:
+    """Run the benchmark and return the metrics dict."""
+    from experiments.evaluate_models import _is_thinking_model
+
+    model_id = _model_id_for(model_name)
+    prompts = (PROMPTS * ((n_samples // len(PROMPTS)) + 1))[:n_samples]
+
+    log.info("Loading %s (%s) [backend=%s]", model_name, model_id, backend)
+    _reset_vram_peak()
+    if backend == "vllm":
+        load_s, latency, out_tokens, attn_impl = _run_vllm(
+            model_name, prompts, max_new_tokens
+        )
+    else:
+        load_s, latency, out_tokens, attn_impl = _run_hf(
+            model_name, prompts, max_new_tokens
+        )
+
+    total_elapsed = sum(latency)
+    total_out_tokens = sum(out_tokens)
     return {
         "model_name": model_name,
         "model_id": model_id,
-        "draft_model": draft_id if draft is not None else None,
-        "attn_impl": _attn_impl_for(model_id),
+        "backend": backend,
+        "attn_impl": attn_impl,
         "thinking": _is_thinking_model(model_id),
         "n_samples": n_samples,
         "max_new_tokens": max_new_tokens,
-        "load_seconds": round(load_seconds, 2),
+        "load_seconds": round(load_s, 2),
         "total_seconds": round(total_elapsed, 2),
-        "mean_latency_seconds": round(statistics.mean(per_sample_latency), 2),
-        "p50_latency_seconds": round(statistics.median(per_sample_latency), 2),
+        "mean_latency_seconds": round(statistics.mean(latency), 2),
+        "p50_latency_seconds": round(statistics.median(latency), 2),
         "p90_latency_seconds": round(
-            statistics.quantiles(per_sample_latency, n=10)[8]
-            if len(per_sample_latency) >= 10
-            else max(per_sample_latency),
+            statistics.quantiles(latency, n=10)[8]
+            if len(latency) >= 10
+            else max(latency),
             2,
         ),
         "total_generated_tokens": total_out_tokens,
-        "tokens_per_second": round(total_out_tokens / total_elapsed, 1),
+        "tokens_per_second": round(total_out_tokens / total_elapsed, 1)
+        if total_elapsed > 0
+        else 0.0,
         "peak_vram_gb": round(_peak_vram_gb(), 2),
-        "per_sample_latency_seconds": [round(s, 2) for s in per_sample_latency],
-        "per_sample_out_tokens": per_sample_out_tokens,
+        "per_sample_latency_seconds": [round(s, 2) for s in latency],
+        "per_sample_out_tokens": out_tokens,
         "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
         "git_commit": _git("rev-parse", "--short=8", "HEAD"),
         "timestamp_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -283,6 +321,13 @@ def main() -> None:
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--gpu", default="0", help="CUDA_VISIBLE_DEVICES value")
     parser.add_argument(
+        "--backend",
+        choices=("hf", "vllm"),
+        default="hf",
+        help="Inference engine. 'hf' = unsloth + transformers pipeline "
+        "(no extra install). 'vllm' = vLLM (pip install vllm).",
+    )
+    parser.add_argument(
         "--compare",
         nargs=2,
         metavar=("BASELINE", "NEW"),
@@ -303,18 +348,20 @@ def main() -> None:
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    metrics = run_benchmark(args.model, args.n_samples, args.max_new_tokens)
+    metrics = run_benchmark(
+        args.model, args.n_samples, args.max_new_tokens, backend=args.backend
+    )
     path = _save(metrics)
     log.info("Saved benchmark to %s", path)
 
     # Pretty print headline numbers
     print(f"\n--- {metrics['model_name']} on commit {metrics['git_commit']} ---")
+    print(f"  backend            : {metrics['backend']}")
     print(f"  load_seconds       : {metrics['load_seconds']}")
     print(f"  total_seconds      : {metrics['total_seconds']}")
     print(f"  mean_latency_s     : {metrics['mean_latency_seconds']}")
     print(f"  tokens_per_second  : {metrics['tokens_per_second']}")
     print(f"  peak_vram_gb       : {metrics['peak_vram_gb']}")
-    print(f"  draft_model        : {metrics['draft_model']}")
     print(f"  attn_impl          : {metrics['attn_impl']}")
 
 
