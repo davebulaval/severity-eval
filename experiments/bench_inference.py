@@ -35,7 +35,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Make sure the experiments package is importable.
@@ -214,7 +214,13 @@ def run_benchmark(
     max_new_tokens: int,
     backend: str = "hf",
 ) -> dict:
-    """Run the benchmark and return the metrics dict."""
+    """Run the benchmark and return the metrics dict.
+
+    Raises ValueError if n_samples < 1 (the latency aggregations and
+    tokens/sec calculations all assume at least one sample).
+    """
+    if n_samples < 1:
+        raise ValueError(f"n_samples must be >= 1, got {n_samples}")
     from experiments.evaluate_models import _is_thinking_model
 
     model_id = _model_id_for(model_name)
@@ -260,7 +266,7 @@ def run_benchmark(
         "per_sample_out_tokens": out_tokens,
         "git_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
         "git_commit": _git("rev-parse", "--short=8", "HEAD"),
-        "timestamp_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "timestamp_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
 
 

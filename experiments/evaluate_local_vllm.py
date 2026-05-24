@@ -200,13 +200,20 @@ def evaluate_local_vllm(
     rows: list[Any] = []
     for _, row in df.iterrows():
         raw_prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
+        # Some tokenizers lack a chat_template and raise ValueError, others
+        # are missing the apply method (older tokenizers). Anything beyond
+        # those two should surface so we don't silently send malformed
+        # prompts.
         try:
             formatted = tokenizer.apply_chat_template(
                 [{"role": "user", "content": raw_prompt}],
                 tokenize=False,
                 add_generation_prompt=True,
             )
-        except Exception:
+        except (AttributeError, ValueError, KeyError, TypeError) as exc:
+            log.warning(
+                "apply_chat_template failed (%s); using raw prompt", type(exc).__name__
+            )
             formatted = raw_prompt
         prompts.append(formatted)
         options_per_row.append(options)
