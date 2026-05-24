@@ -83,6 +83,30 @@ PYTHONPATH=src python -m experiments.bench_inference --compare \
     experiments/benchmarks/speedup_*_qwen3-14b_*.json
 ```
 
+## Troubleshooting: flashinfer `ninja: build stopped`
+
+If `check_env.sh` section 11 fails with
+
+```
+(EngineCore) /bin/sh: 1: /usr/local/cuda/bin/nvcc: not found
+(EngineCore) ninja: build stopped: subcommand failed.
+```
+
+flashinfer is hard-coding the system CUDA path inside its JIT build,
+ignoring `CUDA_HOME`. Run :
+
+```bash
+./experiments/fix_flashinfer_nvcc.sh
+```
+
+The script clears the flashinfer cache, then either:
+- tries `sudo ln -sf $CUDA_HOME /usr/local/cuda` (the clean fix), or
+- builds a per-user shim and persists `CUDA_PATH` + `TORCH_CUDA_HOME`
+  into `$VENV/bin/activate` (no sudo needed).
+
+It re-runs `check_env.sh` automatically. `setup_env.sh` already calls
+this script at the end, so most users won't need to invoke it manually.
+
 ## Known limitations
 
 1. **Engine lifetime**: vLLM claims a fixed fraction of GPU memory at

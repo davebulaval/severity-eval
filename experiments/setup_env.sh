@@ -202,14 +202,14 @@ PATCH
 fi
 
 # -----------------------------------------------------------------------------
-# 8. Re-source + run check_env.sh
+# 8. Re-source + flashinfer fix + check_env.sh
 # -----------------------------------------------------------------------------
 if [[ "$SKIP_CHECK" == "true" ]]; then
     echo
-    echo "## 8. check_env.sh: SKIPPED (--skip-check)"
+    echo "## 8. flashinfer fix + check_env.sh: SKIPPED (--skip-check)"
 else
     echo
-    echo "## 8. Re-source venv + run check_env.sh"
+    echo "## 8. Re-source venv + apply flashinfer fix + run check_env.sh"
     # We have to re-source so the patched exports take effect in this shell.
     deactivate
     # shellcheck source=/dev/null
@@ -217,7 +217,9 @@ else
     echo "  LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
     echo "  CUDA_HOME=${CUDA_HOME:-(unset)}"
     echo
-    ./experiments/check_env.sh
+    # fix_flashinfer_nvcc.sh handles the /usr/local/cuda symlink (or shim)
+    # and runs check_env.sh itself, so we skip a separate check call here.
+    ./experiments/fix_flashinfer_nvcc.sh
 fi
 
 echo
