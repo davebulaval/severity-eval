@@ -1031,6 +1031,26 @@ def _load_local_model(model_id: str):
     except AttributeError as exc:
         log.warning("Could not set cache_implementation=dynamic: %s", exc)
 
+    # torch.compile on non-thinking models. reduce-overhead mode gives
+    # the largest gain on short-generation paths (MCQ, numeric extraction)
+    # without the recompile penalty of max-autotune. Thinking models keep
+    # the eager path because their longer, more variable generation lengths
+    # trigger frequent recompilations that erase the gain. Compile is best
+    # effort: if Dynamo / Inductor stumble on bnb-4bit (which they often
+    # do), fall back silently to the uncompiled model.
+    if not _is_thinking_model(model_id):
+        try:
+            import torch as _torch
+
+            model = _torch.compile(model, mode="reduce-overhead", fullgraph=False)
+            log.info("torch.compile(reduce-overhead) enabled on %s", model_id)
+        except (RuntimeError, ImportError, AttributeError) as exc:
+            log.warning(
+                "torch.compile failed for %s (%s); using eager model",
+                model_id,
+                type(exc).__name__,
+            )
+
     _clients[cache_key] = (model, tokenizer)
     return model, tokenizer
 
