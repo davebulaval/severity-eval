@@ -41,7 +41,7 @@ for _noisy in (
     "datasets",
     "filelock",
     "fsspec",
-    "unsloth",
+    "vllm",
 ):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
@@ -182,69 +182,11 @@ _THINKING_TOKEN_MULTIPLIER = 16  # e.g. 128 → 2048
 # wall-clock for marginal accuracy gain.
 _THINKING_MAX_NEW_TOKENS_CAP = 2048
 
-# Sliding-window-attention architectures whose KV cache breaks under
-# unsloth + bnb-4bit (HybridCache shape mismatch). These MUST use
-# eager attention + dynamic cache. Other architectures can use the
-# faster sdpa path.
-_SWA_MODEL_PATTERNS = ("gemma-2", "phi-4", "qwq", "deepseek-r1-distill")
-
 
 def _is_thinking_model(model_id: str) -> bool:
     """Return True if the model emits <think>...</think> reasoning chains."""
     name = model_id.lower()
     return any(p in name for p in _THINKING_MODEL_PATTERNS)
-
-
-def _is_swa_model(model_id: str) -> bool:
-    """True for sliding-window-attention architectures that need eager attn."""
-    name = model_id.lower()
-    return any(p in name for p in _SWA_MODEL_PATTERNS)
-
-
-def _attn_impl_for(model_id: str) -> str:
-    """Pick the attention implementation for a given model_id.
-
-    SWA architectures (gemma-2, phi-4, qwq, deepseek-r1-distill) crash with
-    a broadcast shape mismatch under unsloth + bnb-4bit + HybridCache and
-    must use eager. Everyone else uses sdpa, which is 1.5-2x faster than
-    eager and works under quantization (unlike flash_attention_2 which
-    is often broken in this stack).
-    """
-    return "eager" if _is_swa_model(model_id) else "sdpa"
-
-
-def _get_local_batch_size(model_id: str, max_length: int, max_new_tokens: int) -> int:
-    """Compute optimal batch size based on model size tier and total token budget.
-
-    The effective context is max_length + max_new_tokens.  Thinking models have
-    much higher max_new_tokens, so the batch size must drop accordingly.
-    """
-    name = model_id.lower()
-    if "70b" in name:
-        size_tier = "xlarge"  # ~40 GB VRAM in 4-bit NF4
-    elif any(s in name for s in ["32b", "30b", "27b", "24b"]):
-        size_tier = "large"  # ~14-18 GB VRAM
-    elif any(s in name for s in ["14b", "phi-4"]):
-        # phi-4 is a 14B model whose published name doesn't include the size.
-        size_tier = "medium"  # ~8 GB VRAM
-    else:
-        size_tier = "small"  # ~5 GB VRAM (8B, 9B)
-
-    total_ctx = max_length + max_new_tokens
-    # Bumped roughly 2x compared to the conservative initial mapping.
-    # Justification: with use_cache=True (KV cache enabled) the activation
-    # footprint per step is much smaller, so 48 GB leaves more headroom.
-    # Out-of-memory on a given (model, dataset) pair falls back to empty
-    # predictions for that batch via the existing torch.OutOfMemoryError
-    # handler -- it does not bring down the run.
-    if total_ctx >= 8192:
-        return {"xlarge": 1, "large": 2, "medium": 4, "small": 8}[size_tier]
-    elif total_ctx >= 4096:
-        return {"xlarge": 2, "large": 4, "medium": 8, "small": 16}[size_tier]
-    elif total_ctx >= 2048:
-        return {"xlarge": 4, "large": 8, "medium": 16, "small": 32}[size_tier]
-    else:
-        return {"xlarge": 8, "large": 16, "medium": 32, "small": 64}[size_tier]
 
 
 # ---------------------------------------------------------------------------
@@ -906,155 +848,6 @@ def _build_prompt_for_row(
     return prompt, options
 
 
-def _load_local_model(model_id: str):
-    """Load a local model with unsloth (bnb-4bit) or HF AutoModel fallback.
-
-    Unsloth models (prefixed 'unsloth/') use FastLanguageModel.
-    Other models use AutoModelForCausalLM with BitsAndBytesConfig.
-    """
-    import torch
-
-    cache_key = f"local_{model_id}"
-    if cache_key in _clients:
-        return _clients[cache_key]
-
-    # Evict any previously loaded local model to free GPU memory
-    for key in list(_clients):
-        if key.startswith("local_") and key != cache_key:
-            log.info("Unloading previous local model: %s", key)
-            del _clients[key]
-            import gc
-
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-    # Use max_memory to keep everything on GPU — avoid CPU offload which breaks bnb 4-bit
-    # CUDA_VISIBLE_DEVICES remaps devices to start at 0, so always use 0 here
-    max_mem = {0: "45GiB"}
-
-    if model_id.startswith("unsloth/"):
-        from unsloth import FastLanguageModel
-
-        # Cap at model's native context length to avoid RoPE issues
-        # gemma-2 maxes at 8K; qwen3/qwq/granite support 32K+
-        if "gemma-2" in model_id.lower():
-            seq_len = 8192
-        else:
-            seq_len = 32768
-
-        def _try_load(repo_id: str):
-            log.info("Loading unsloth model %s ...", repo_id)
-            return FastLanguageModel.from_pretrained(
-                repo_id,
-                max_seq_length=seq_len,
-                device_map="auto",
-                max_memory=max_mem,
-                dtype=None,
-                load_in_4bit=True,
-                trust_remote_code=True,
-                attn_implementation="eager",
-            )
-
-        # Dynamic 2.0 variants (-unsloth-bnb-4bit) upcast sensitive
-        # layers to FP16, gaining ~1-2% accuracy for ~5-10% extra VRAM.
-        # Not every model has a published variant; fall back to the
-        # standard -bnb-4bit on 404.
-        try:
-            model, tokenizer = _try_load(model_id)
-        except (OSError, ValueError) as exc:
-            if "unsloth-bnb-4bit" not in model_id:
-                raise
-            fallback_id = model_id.replace("unsloth-bnb-4bit", "bnb-4bit")
-            log.warning(
-                "Dynamic variant %s unavailable (%s); falling back to %s",
-                model_id,
-                type(exc).__name__,
-                fallback_id,
-            )
-            model, tokenizer = _try_load(fallback_id)
-            model_id = fallback_id  # surface the actual id loaded
-        model.eval()
-    else:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-        log.info("Loading HF model %s with bnb 4-bit ...", model_id)
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
-        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            quantization_config=bnb_config,
-            load_in_8bit=False,
-            device_map="auto",
-            max_memory=max_mem,
-            trust_remote_code=True,
-            attn_implementation="eager",
-        )
-        model.eval()
-
-    # Override unsloth's xformers attention. unsloth ignores the
-    # attn_implementation kwarg, so we patch the config after load.
-    # SWA architectures (Gemma-2, Phi-4, QwQ, DeepSeek-R1-distill) must
-    # use eager to avoid the HybridCache broadcast shape mismatch
-    # ([1, H, 1, D] vs [1, H, seq_len, D]). Others use sdpa, which is
-    # 1.5-2x faster than eager and works under bnb-4bit.
-    attn_impl = _attn_impl_for(model_id)
-    try:
-        model.config._attn_implementation = attn_impl
-    except AttributeError as exc:
-        log.warning(
-            "Could not set _attn_implementation=%s on model.config: %s",
-            attn_impl,
-            exc,
-        )
-    if hasattr(model, "_attn_implementation"):
-        try:
-            model._attn_implementation = attn_impl
-        except AttributeError as exc:
-            log.warning(
-                "Could not set _attn_implementation=%s on model: %s",
-                attn_impl,
-                exc,
-            )
-
-    # Force dynamic KV cache. The HybridCache that transformers >= 4.46
-    # auto-selects for SWA architectures trips on the same broadcast
-    # bug. Using "dynamic" sidesteps the bug and lets use_cache=True
-    # work safely on every architecture in our matrix.
-    try:
-        model.generation_config.cache_implementation = "dynamic"
-    except AttributeError as exc:
-        log.warning("Could not set cache_implementation=dynamic: %s", exc)
-
-    # torch.compile on non-thinking models. reduce-overhead mode gives
-    # the largest gain on short-generation paths (MCQ, numeric extraction)
-    # without the recompile penalty of max-autotune. Thinking models keep
-    # the eager path because their longer, more variable generation lengths
-    # trigger frequent recompilations that erase the gain. Compile is best
-    # effort: if Dynamo / Inductor stumble on bnb-4bit (which they often
-    # do), fall back silently to the uncompiled model.
-    if not _is_thinking_model(model_id):
-        try:
-            import torch as _torch
-
-            model = _torch.compile(model, mode="reduce-overhead", fullgraph=False)
-            log.info("torch.compile(reduce-overhead) enabled on %s", model_id)
-        except (RuntimeError, ImportError, AttributeError) as exc:
-            log.warning(
-                "torch.compile failed for %s (%s); using eager model",
-                model_id,
-                type(exc).__name__,
-            )
-
-    _clients[cache_key] = (model, tokenizer)
-    return model, tokenizer
-
-
 def _strip_think_tags(text: str) -> str:
     """Extract the answer after </think> tags, if present.
 
@@ -1066,233 +859,6 @@ def _strip_think_tags(text: str) -> str:
         return text.split("</think>", 1)[1].strip()
     # No closing tag — reasoning was likely truncated, return as-is
     return text
-
-
-def _evaluate_local(
-    df: pd.DataFrame,
-    model_name: str,
-    model_id: str,
-    dataset_name: str,
-    prompt_style: str,
-    batch_size: int | None = None,
-) -> list[dict]:
-    """Batch inference for local models via unsloth/transformers."""
-    import torch
-    from transformers import pipeline
-
-    # Adaptive inference config
-    max_new_tokens, max_length = DATASET_INFERENCE_CONFIG.get(
-        dataset_name,
-        _DEFAULT_INFERENCE_CONFIG,
-    )
-
-    # Cap max_length at model's native context window to avoid position
-    # embedding overflows (gemma-2 only supports 8K)
-    model_max_ctx = 8192 if "gemma-2" in model_id.lower() else 32768
-    if max_length > model_max_ctx:
-        log.info(
-            "Capping max_length %d → %d for model %s",
-            max_length,
-            model_max_ctx,
-            model_id,
-        )
-        max_length = model_max_ctx
-
-    # Thinking models need more generation budget for their reasoning chain,
-    # but the very long tail (> 2048 tokens) doubles wall-clock for a marginal
-    # accuracy gain. Multiply by _THINKING_TOKEN_MULTIPLIER then hard-cap.
-    thinking = _is_thinking_model(model_id)
-    if thinking:
-        scaled = max_new_tokens * _THINKING_TOKEN_MULTIPLIER
-        max_new_tokens = min(scaled, _THINKING_MAX_NEW_TOKENS_CAP)
-        log.info(
-            "Thinking model detected — max_new_tokens scaled to %d (×%d, cap=%d)",
-            max_new_tokens,
-            _THINKING_TOKEN_MULTIPLIER,
-            _THINKING_MAX_NEW_TOKENS_CAP,
-        )
-
-    # Ensure input + generation fits within model's context window
-    if max_length + max_new_tokens > model_max_ctx:
-        old_max_length = max_length
-        max_length = model_max_ctx - max_new_tokens
-        if max_length < 256:
-            max_length = 256
-            max_new_tokens = model_max_ctx - max_length
-        log.info(
-            "Adjusted max_length %d → %d to fit generation budget (%d) "
-            "within model context (%d)",
-            old_max_length,
-            max_length,
-            max_new_tokens,
-            model_max_ctx,
-        )
-
-    if batch_size is None:
-        batch_size = _get_local_batch_size(model_id, max_length, max_new_tokens)
-    log.info(
-        "Local config: max_new_tokens=%d, max_length=%d, batch_size=%d, thinking=%s",
-        max_new_tokens,
-        max_length,
-        batch_size,
-        thinking,
-    )
-
-    model, tokenizer = _load_local_model(model_id)
-
-    # Build all prompts and pre-truncate to avoid unsloth crash on oversized inputs
-    rows_data = []
-    n_truncated = 0
-    for _, row in df.iterrows():
-        prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
-        # Apply chat template if tokenizer supports it
-        try:
-            formatted = tokenizer.apply_chat_template(
-                [{"role": "user", "content": prompt}],
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-        except Exception:
-            formatted = prompt
-
-        # Pre-truncate: tokenize, check length, decode back if too long.
-        # This prevents unsloth from crashing on inputs > max_length.
-        input_ids = tokenizer.encode(formatted, add_special_tokens=False)
-        if len(input_ids) > max_length:
-            input_ids = input_ids[:max_length]
-            formatted = tokenizer.decode(input_ids, skip_special_tokens=False)
-            n_truncated += 1
-
-        rows_data.append((row, formatted, options))
-
-    if n_truncated:
-        log.warning(
-            "%d/%d prompts truncated to max_length=%d tokens",
-            n_truncated,
-            len(rows_data),
-            max_length,
-        )
-
-    # Cap the tokenizer's reported context to silence the
-    # "Both max_new_tokens and max_length(=131072)" warning that
-    # transformers emits when the tokenizer reports a 128K context
-    # while we only allow `max_length` of input. AttributeError is
-    # the only realistic failure (e.g. tokenizer is a slot class).
-    try:
-        tokenizer.model_max_length = max_length + max_new_tokens
-    except AttributeError as exc:
-        log.warning("Could not cap tokenizer.model_max_length: %s", exc)
-
-    # Create text-generation pipeline.
-    # use_cache=False is a hard requirement under unsloth + bnb-4bit:
-    # unsloth installs its own fast inference path (e.g.
-    # Qwen3Attention_fast_forward_inference, _CausalLM_fast_forward) that
-    # bypasses HF's attention layer and has a broadcast bug on the RoPE
-    # cos/sin tensors when KV cache is on:
-    #     RuntimeError: output with shape [1, H, 1, D] doesn't match the
-    #     broadcast shape [1, H, seq, D]
-    # The full KV-cache speedup (~5-10x on thinking models) requires
-    # bypassing unsloth entirely -- see the speedup/vllm-port branch.
-    gen_pipeline = pipeline(
-        task="text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=batch_size,
-        dtype="float16",
-        return_full_text=False,
-        max_new_tokens=max_new_tokens,
-        padding=True,
-        truncation=False,
-        do_sample=False,
-        use_cache=False,
-    )
-
-    # Group prompts by token length before batching. Without this, a
-    # batch can mix a 200-token prompt with a 3000-token prompt and pad
-    # everything to the longest, wasting ~15x compute on the short one.
-    # We sort ascending by encoded input length, run inference in that
-    # order, then restore the original order before returning.
-    from tqdm import tqdm
-
-    indexed = list(enumerate(rows_data))
-    indexed.sort(key=lambda x: len(tokenizer.encode(x[1][1], add_special_tokens=False)))
-    sorted_order = [orig_idx for orig_idx, _ in indexed]
-    rows_data = [item for _, item in indexed]
-
-    all_prompts = [item[1] for item in rows_data]
-    n_batches = (len(all_prompts) + batch_size - 1) // batch_size
-
-    results = []
-    pbar = tqdm(total=len(rows_data), desc=f"{model_name}", unit="sample")
-    for batch_idx in range(n_batches):
-        batch_start = batch_idx * batch_size
-        batch_end = min(batch_start + batch_size, len(rows_data))
-        batch_prompts = all_prompts[batch_start:batch_end]
-        batch_rows = rows_data[batch_start:batch_end]
-
-        try:
-            start = time.perf_counter()
-            with torch.no_grad():
-                outputs = gen_pipeline(batch_prompts)
-            elapsed = time.perf_counter() - start
-        except (RuntimeError, torch.OutOfMemoryError) as e:
-            log.error(
-                "Batch %d/%d failed: %s — filling with empty predictions",
-                batch_idx + 1,
-                n_batches,
-                e,
-            )
-            # Clear GPU memory and continue with empty predictions for this batch
-            import gc
-
-            gc.collect()
-            torch.cuda.empty_cache()
-            for row, _prompt, options in batch_rows:
-                results.append(
-                    {
-                        **row.to_dict(),
-                        "model": model_name,
-                        "prediction": "",
-                        "correct": False,
-                        "score_method": "batch_error",
-                    }
-                )
-            pbar.update(len(batch_prompts))
-            continue
-
-        for (row, _prompt, options), output in zip(batch_rows, outputs, strict=True):
-            raw_prediction = output[0]["generated_text"].strip() if output else ""
-            prediction = (
-                _strip_think_tags(raw_prediction) if thinking else raw_prediction
-            )
-            scoring = score_prediction(
-                prediction,
-                str(row["answer"]),
-                options=options,
-            )
-            results.append(
-                {
-                    **row.to_dict(),
-                    "model": model_name,
-                    "prediction": prediction,
-                    "correct": scoring["correct"],
-                    "score_method": scoring["score_method"],
-                }
-            )
-
-        n_correct_so_far = sum(1 for r in results if r["correct"])
-        acc = n_correct_so_far / len(results) * 100
-        pbar.update(len(batch_prompts))
-        pbar.set_postfix(acc=f"{acc:.1f}%", ms=f"{elapsed / len(outputs) * 1000:.0f}")
-
-    pbar.close()
-
-    # Restore original (unsorted) order so downstream callers see results
-    # aligned with df.iterrows().
-    restored = [None] * len(results)
-    for new_idx, orig_idx in enumerate(sorted_order):
-        restored[orig_idx] = results[new_idx]
-    return restored
 
 
 def _evaluate_batch_openai(
@@ -1904,7 +1470,6 @@ def evaluate_model(
     delay: float = 1.0,
     prompt_style: str = "original",
     batch_size: int | None = None,
-    backend: str = "hf",
 ) -> pd.DataFrame:
     """Evaluate a model on a dataset with scoring.
 
@@ -1942,15 +1507,9 @@ def evaluate_model(
     # ThreadPoolExecutor fallback: OpenRouter, Cohere, DeepSeek (no batch API)
 
     def _dispatch_local():
-        if backend == "vllm":
-            from experiments.evaluate_local_vllm import evaluate_local_vllm
+        from experiments.evaluate_local_vllm import evaluate_local_vllm
 
-            return evaluate_local_vllm(
-                df, model_name, model_id, dataset_name, prompt_style
-            )
-        return _evaluate_local(
-            df, model_name, model_id, dataset_name, prompt_style, batch_size
-        )
+        return evaluate_local_vllm(df, model_name, model_id, dataset_name, prompt_style)
 
     _BATCH_DISPATCHERS = {
         "local": _dispatch_local,
@@ -2169,15 +1728,8 @@ def main():
         "--batch-size",
         type=int,
         default=None,
-        help="Override batch size for local inference / max parallel API workers (auto if omitted)",
-    )
-    parser.add_argument(
-        "--backend",
-        choices=("hf", "vllm"),
-        default="hf",
-        help="Local inference backend. 'hf' = unsloth + transformers pipeline "
-        "(default, no extra install). 'vllm' = vLLM engine (continuous batching, "
-        "PagedAttention; requires `pip install vllm`).",
+        help="Override max parallel API workers for the API-batch path "
+        "(local models use vLLM continuous batching and ignore this).",
     )
     args = parser.parse_args()
 
@@ -2259,7 +1811,6 @@ def main():
                 delay=args.delay,
                 prompt_style=args.prompt_style,
                 batch_size=args.batch_size,
-                backend=args.backend,
             )
             if results_df.empty:
                 continue

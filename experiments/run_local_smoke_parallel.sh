@@ -27,7 +27,6 @@ cd "$PROJECT_DIR"
 GPUS="0,1,2"
 LIMIT="5"
 SKIP_MODELS=""   # comma-separated
-BACKEND="hf"     # hf | vllm
 
 _require_arg() {
     if [[ $# -lt 2 || -z "${2:-}" || "${2:0:2}" == "--" ]]; then
@@ -41,17 +40,11 @@ while [[ $# -gt 0 ]]; do
         --gpus)    _require_arg "$@"; GPUS="$2"; shift 2 ;;
         --limit)   _require_arg "$@"; LIMIT="$2"; shift 2 ;;
         --skip)    _require_arg "$@"; SKIP_MODELS="$2"; shift 2 ;;
-        --backend) _require_arg "$@"; BACKEND="$2"; shift 2 ;;
         -h|--help)
             sed -n '2,20p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
-
-if [[ "$BACKEND" != "hf" && "$BACKEND" != "vllm" ]]; then
-    echo "[ABORT] --backend must be hf or vllm, got: $BACKEND" >&2
-    exit 1
-fi
 
 IFS=',' read -ra GPU_LIST <<< "$GPUS"
 N_GPU=${#GPU_LIST[@]}
@@ -148,7 +141,6 @@ launch_bucket() {
     (
         ./experiments/run_local_smoke.sh \
             --gpu "$gpu" --limit "$LIMIT" --models "$csv" \
-            --backend "$BACKEND" \
             > "$log" 2>&1
         echo "[GPU $gpu] DONE (exit=$?)"
     ) &
