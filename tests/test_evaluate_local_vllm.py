@@ -179,6 +179,65 @@ def test_load_local_vllm_reads_tp_from_env():
     )
 
 
+def test_load_local_vllm_cache_invalidates_when_tp_differs():
+    """Cache must be invalidated when tensor_parallel_size differs from
+    the cached engine's TP.
+
+    Concrete scenario: phase 1 loads a model with TP=1, then a phase 2
+    script asks for the same model with TP=3. Without checking the TP
+    field the cache would hand back the TP=1 engine and the TP=3 run
+    would silently use the wrong engine.
+    """
+    import types
+    from unittest.mock import patch
+
+    # Pre-populate cache with a TP=1 engine
+    vllm_mod._vllm_engine.clear()
+    stale_llm = object()
+    vllm_mod._vllm_engine["model_id"] = "unsloth/test-model"
+    vllm_mod._vllm_engine["max_model_len"] = 8192
+    vllm_mod._vllm_engine["tensor_parallel_size"] = 1
+    vllm_mod._vllm_engine["llm"] = stale_llm
+
+    new_llm = object()
+    captured: dict = {}
+
+    def fake_llm(**kw):
+        captured.update(kw)
+        return new_llm
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with patch.dict("sys.modules", {"vllm": fake_vllm}):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        result = _load_local_vllm("unsloth/test-model", tensor_parallel_size=3)
+
+    assert result is not stale_llm, "cache must invalidate when TP changes"
+    assert result is new_llm
+    assert captured["tensor_parallel_size"] == 3
+    assert vllm_mod._vllm_engine["tensor_parallel_size"] == 3
+
+
+def test_load_local_vllm_cache_hits_when_tp_matches():
+    """Same model_id, max_model_len fits, and TP matches -> cache hit."""
+    vllm_mod._vllm_engine.clear()
+    cached_llm = object()
+    vllm_mod._vllm_engine["model_id"] = "unsloth/test-model"
+    vllm_mod._vllm_engine["max_model_len"] = 32768
+    vllm_mod._vllm_engine["tensor_parallel_size"] = 2
+    vllm_mod._vllm_engine["llm"] = cached_llm
+
+    from experiments.evaluate_local_vllm import _load_local_vllm
+
+    # Smaller max_len + same TP -> serve cached
+    result = _load_local_vllm(
+        "unsloth/test-model", max_model_len=4096, tensor_parallel_size=2
+    )
+    assert result is cached_llm
+
+
 def test_load_local_vllm_explicit_tp_wins_over_env():
     """Explicit tensor_parallel_size param takes precedence over the env var."""
     import os
