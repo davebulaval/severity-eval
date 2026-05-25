@@ -353,7 +353,6 @@ def evaluate_local_vllm(
     sampling = SamplingParams(
         max_tokens=max_new_tokens,
         temperature=0.0,
-        truncate_prompt_tokens=max(truncate_to, 1),
     )
 
     # Build prompts. We use the tokenizer's chat template when available
@@ -382,15 +381,43 @@ def evaluate_local_vllm(
         options_per_row.append(options)
         rows.append(row)
 
+    # Truncate manually via tokenizer when needed. We used to pass
+    # SamplingParams.truncate_prompt_tokens, but some vLLM versions
+    # reject that kwarg ("Unexpected keyword argument
+    # 'truncate_prompt_tokens'"), so we do the truncation here once.
+    # Only the trailing portion of the prompt is kept; on CUAD this
+    # means the contract body is cut and the question+choices remain
+    # (documented limitation on phi-4 only -- gemma-3 and the others
+    # all support the full 33 K context).
+    prompt_token_budget = max(truncate_to, 1)
+    needs_truncation = False
+    for p in prompts:
+        if len(tokenizer.encode(p, add_special_tokens=False)) > prompt_token_budget:
+            needs_truncation = True
+            break
+
     log.info(
-        "Submitting %d prompts to vLLM (max_new_tokens=%d, max_model_len=%d)",
+        "Submitting %d prompts to vLLM (max_new_tokens=%d, max_model_len=%d, "
+        "needs_truncation=%s)",
         len(prompts),
         max_new_tokens,
         max_model_len,
+        needs_truncation,
     )
 
     t0 = time.perf_counter()
-    raw_outputs = llm.generate(prompts, sampling)
+    if needs_truncation:
+        token_id_lists: list[list[int]] = []
+        for p in prompts:
+            ids = tokenizer.encode(p, add_special_tokens=False)
+            if len(ids) > prompt_token_budget:
+                ids = ids[-prompt_token_budget:]
+            token_id_lists.append(ids)
+        raw_outputs = llm.generate(
+            prompt_token_ids=token_id_lists, sampling_params=sampling
+        )
+    else:
+        raw_outputs = llm.generate(prompts, sampling)
     elapsed = time.perf_counter() - t0
     log.info(
         "vLLM %d prompts in %.1fs (%.1f prompts/s)",
