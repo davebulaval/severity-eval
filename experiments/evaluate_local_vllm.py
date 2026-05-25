@@ -52,18 +52,19 @@ _vllm_engine: dict[str, Any] = {}
 
 
 # Per-model hard caps on max_model_len. These come from the model's
-# `max_position_embeddings` in config.json (or, for llama-3.3-70b AWQ on
-# a 48 GB card, from the KV-cache budget vLLM reports at load time).
-# CUAD asks for ~33 K tokens which exceeds all of these, so the caller
-# must truncate prompts down to (cap - max_new_tokens) on those models.
+# `max_position_embeddings` in config.json -- training-time limits
+# that the model simply has not learned positions beyond. CUAD asks
+# for ~33 K tokens which exceeds gemma-2 (8 K) and phi-4 (16 K), so on
+# those two families the caller truncates prompts down to
+# (cap - max_new_tokens) via SamplingParams.truncate_prompt_tokens.
+#
+# llama-3.3-70b is NOT listed here: with tensor_parallel_size=3 on three
+# 48 GB cards the KV cache budget is large enough for 33 K (each card
+# holds ~12 GB of weights, leaving ~36 GB for KV), so it loads CUAD at
+# full length without truncation.
 _MODEL_MAX_LEN_CAPS: tuple[tuple[str, int], ...] = (
-    ("gemma-2", 8192),  # native cap (max_position_embeddings)
-    ("phi-4", 16384),  # max_position_embeddings=16384
-    # llama-3.3-70b AWQ on a 48 GB card: KV cache OOMs above ~11 K when
-    # gpu_memory_utilization=0.92 leaves ~3.4 GiB for KV. vLLM's own
-    # error report suggests 11072 as the effective ceiling.
-    ("llama-3.3-70b", 11072),
-    ("llama-3.3", 11072),
+    ("gemma-2", 8192),  # native max_position_embeddings
+    ("phi-4", 16384),  # native max_position_embeddings
 )
 
 

@@ -51,7 +51,7 @@ def kill_pattern(cleanup_source: str) -> str:
         "wandb-core",
         # The two evaluator entry points.
         "evaluate_models",
-        "run_local_smoke",
+        "run_local_sequential_tp",
     ],
 )
 def test_kill_pattern_includes_critical_subprocess(

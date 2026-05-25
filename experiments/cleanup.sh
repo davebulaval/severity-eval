@@ -80,7 +80,7 @@ if [[ "$DO_KILL" == "true" ]]; then
     # children they spawn. Without EngineCore + wandb-core, killed runs
     # leave zombie GPU+VRAM allocations -- exactly the failure mode that
     # required manual `pkill -9 -f EngineCore` in past sessions.
-    PATTERN='(run_local_smoke|run_full_pipeline|run_all\.sh|evaluate_models|test_hypotheses|validate_severity_llm|EngineCore|VLLM::EngineCore|wandb-core)'
+    PATTERN='(run_local_sequential_tp|run_full_pipeline|run_all\.sh|evaluate_models|test_hypotheses|validate_severity_llm|EngineCore|VLLM::EngineCore|wandb-core)'
     PIDS=$(pgrep -af "$PATTERN" | grep -v "cleanup.sh" | awk '{print $1}' || true)
     if [[ -z "$PIDS" ]]; then
         echo "(no matching processes)"

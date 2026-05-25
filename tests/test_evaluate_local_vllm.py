@@ -77,14 +77,15 @@ def test_max_model_len_caps_phi_4_at_16k():
     assert _max_model_len_for("unsloth/phi-4-unsloth-bnb-4bit", default=131072) == 16384
 
 
-def test_max_model_len_caps_llama_3_3_70b_at_11k():
-    """llama-3.3-70b AWQ on a 48 GB card runs out of KV cache above 11 K.
-    The cap is enforced regardless of how big a context the caller asks
-    for.
+def test_max_model_len_does_not_cap_llama_3_3_70b():
+    """llama-3.3-70b is NOT in the cap table : with tensor_parallel_size=3
+    on three 48 GB cards the KV cache budget covers CUAD's 33 K context.
+    Verifying the absence of a cap so a future "let's be safe and add
+    11 K back" mutation gets caught.
     """
     assert (
-        _max_model_len_for("casperhansen/llama-3.3-70b-instruct-awq", default=131072)
-        == 11072
+        _max_model_len_for("casperhansen/llama-3.3-70b-instruct-awq", default=33280)
+        == 33280
     )
 
 
