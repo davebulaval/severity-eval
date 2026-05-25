@@ -101,6 +101,7 @@ def _load_local_vllm(
     *,
     max_model_len: int | None = None,
     gpu_memory_utilization: float = 0.92,
+    tensor_parallel_size: int | None = None,
 ):
     """Load (or return cached) vLLM engine for model_id.
 
@@ -108,8 +109,26 @@ def _load_local_vllm(
     cached engine's max_model_len, the previous engine is destroyed and
     a new one is loaded.
 
+    `tensor_parallel_size` defaults to 1 (single-GPU). When None, the
+    env var SEVERITY_EVAL_TP is consulted (so the CLI flag in
+    evaluate_models.py can reach this helper without threading the arg
+    through the public evaluate_local_vllm signature). Pass > 1 to
+    shard the model across that many GPUs.
+
     Raises ValueError if gpu_memory_utilization is outside (0, 1].
     """
+    import os as _os
+
+    if tensor_parallel_size is None:
+        try:
+            tensor_parallel_size = int(_os.environ.get("SEVERITY_EVAL_TP", "1"))
+        except ValueError:
+            tensor_parallel_size = 1
+    if tensor_parallel_size < 1:
+        raise ValueError(
+            f"tensor_parallel_size must be >= 1, got {tensor_parallel_size}"
+        )
+
     if not (0 < gpu_memory_utilization <= 1.0):
         raise ValueError(
             f"gpu_memory_utilization must be in (0, 1], got {gpu_memory_utilization}"
@@ -137,11 +156,13 @@ def _load_local_vllm(
     def _try_load(repo_id: str):
         quantization = _quantization_for(repo_id)
         log.info(
-            "Loading vLLM engine %s (quantization=%s, max_model_len=%d, gpu_util=%.2f) ...",
+            "Loading vLLM engine %s (quantization=%s, max_model_len=%d, "
+            "gpu_util=%.2f, tp=%d) ...",
             repo_id,
             quantization,
             max_model_len,
             gpu_memory_utilization,
+            tensor_parallel_size,
         )
         return LLM(
             model=repo_id,
@@ -149,6 +170,7 @@ def _load_local_vllm(
             dtype="bfloat16",
             max_model_len=max_model_len,
             gpu_memory_utilization=gpu_memory_utilization,
+            tensor_parallel_size=tensor_parallel_size,
             enable_prefix_caching=True,
             enforce_eager=False,
             trust_remote_code=True,
