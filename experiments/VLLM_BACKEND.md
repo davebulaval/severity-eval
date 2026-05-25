@@ -59,7 +59,8 @@ PYTHONPATH=src python -m experiments.evaluate_models \
 ### Run the smoke matrix
 
 ```bash
-./experiments/run_local_smoke_parallel.sh --gpus 0,1,2 --limit 100
+# Run every local model sequentially with tensor parallelism across all GPUs:
+./experiments/run_local_sequential_tp.sh --gpus 0,1,2 --limit 100
 ```
 
 ### Benchmark a single model

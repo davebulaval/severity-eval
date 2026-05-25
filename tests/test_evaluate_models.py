@@ -2,8 +2,8 @@
 
 The API client wrappers (`call_*`) and the batch dispatchers are not unit
 tested here because they exercise external SDKs; they are smoke-tested via
-`experiments/run_local_smoke.sh`. We focus on the deterministic helpers
-that drive scoring and per-model configuration.
+`experiments/run_local_sequential_tp.sh`. We focus on the deterministic
+helpers that drive scoring and per-model configuration.
 """
 
 from __future__ import annotations
