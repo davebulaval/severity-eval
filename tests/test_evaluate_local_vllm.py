@@ -141,19 +141,19 @@ def test_quantization_for_fp16_ibm_granite_returns_none():
     assert _quantization_for("ibm-granite/granite-3.2-8b-instruct") is None
 
 
-def test_quantization_for_fp8_dynamic():
-    """RedHatAI/...FP8-dynamic checkpoints route through fp8 kernels."""
-    assert _quantization_for("RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic") == "fp8"
-    assert _quantization_for("RedHatAI/QwQ-32B-FP8-dynamic") == "fp8"
-
-
-def test_quantization_for_fp8():
-    """FP8 checkpoints (e.g. Qwen/Qwen3-30B-A3B-FP8) need quantization='fp8'
-    so vLLM routes through the fp8 kernels (TP-compatible on Ada+).
+def test_quantization_for_fp8_returns_none_for_autodetect():
+    """FP8 packaging varies by publisher (Qwen ships native fp8, RedHat
+    ships compressed-tensors with fp8 weights). We return None so vLLM
+    reads quant_method from config.json -- otherwise vLLM raises
+    'Quantization method specified in the model config (compressed-tensors)
+    does not match the quantization method specified in the quantization
+    argument (fp8)' for RedHat FP8-dynamic.
     """
-    assert _quantization_for("Qwen/Qwen3-30B-A3B-FP8") == "fp8"
-    assert _quantization_for("some-model-fp8") == "fp8"
-    assert _quantization_for("some-fp8-variant") == "fp8"
+    assert _quantization_for("RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic") is None
+    assert _quantization_for("RedHatAI/QwQ-32B-FP8-dynamic") is None
+    assert _quantization_for("Qwen/Qwen3-30B-A3B-FP8") is None
+    assert _quantization_for("some-model-fp8") is None
+    assert _quantization_for("some-fp8-variant") is None
 
 
 def test_quantization_for_w4a16_compressed_tensors():
