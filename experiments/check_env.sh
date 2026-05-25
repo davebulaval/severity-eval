@@ -109,7 +109,7 @@ if [[ -z "$CUDA_VERSION" || "$CUDA_VERSION" == "None" ]]; then
     fail "CUDA toolkit not detected (torch.version.cuda is None and nvcc missing)"
 elif [[ "$CUDA_VERSION" == "13.2"* ]]; then
     fail "CUDA toolkit is 13.2 -- known to produce gibberish outputs under"
-    echo "        unsloth and vLLM. NVIDIA is working on a fix."
+    echo "        vLLM. NVIDIA is working on a fix."
     echo "        Downgrade to 13.0 or 13.1, or roll back to 12.x."
 elif [[ "$CUDA_VERSION" == "13."* ]]; then
     ok "CUDA toolkit $CUDA_VERSION (13.0 / 13.1 are known-good)"

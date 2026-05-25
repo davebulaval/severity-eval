@@ -1,10 +1,10 @@
 """vLLM backend for local-model evaluation.
 
 vLLM provides continuous batching, PagedAttention KV cache, and prefix
-caching. It is the only local-inference engine in this repo since the
-unsloth + transformers.pipeline path was removed (the unsloth fast
-forward patches forced use_cache=False due to a HybridCache RoPE
-broadcast bug under bnb-4bit).
+caching. It is the only local-inference engine in this repo. An earlier
+HF + transformers.pipeline path existed but was removed -- vLLM is
+faster, more stable, and avoids the cache/JIT bugs we hit on that
+stack.
 
 Public surface:
 
@@ -23,9 +23,12 @@ Known limitations:
     - assisted_decoding / draft models are not wired up here; vLLM has
       its own speculative-decoding stack reachable via the
       --speculative-model server flag.
-    - Some -unsloth-bnb-4bit checkpoints carry config that vLLM's
-      bnb loader rejects; we fall back to the standard -bnb-4bit
-      variant on load failure.
+    - Some Unsloth Dynamic 2.0 (-unsloth-bnb-4bit) checkpoints carry
+      config that vLLM's bnb loader rejects; we fall back to the
+      standard -bnb-4bit HF repo on load failure. The "-unsloth-"
+      suffix only refers to the upstream HF repository name (i.e.
+      Unsloth-published Dynamic 2.0 quants), not to the unsloth
+      Python library, which is not installed in this venv.
 """
 
 from __future__ import annotations
@@ -81,7 +84,7 @@ def _load_local_vllm(
     model_id: str,
     *,
     max_model_len: int | None = None,
-    gpu_memory_utilization: float = 0.85,
+    gpu_memory_utilization: float = 0.92,
 ):
     """Load (or return cached) vLLM engine for model_id.
 

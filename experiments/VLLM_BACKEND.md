@@ -1,16 +1,14 @@
 # Local inference (vLLM)
 
 vLLM is the only inference engine for the local-model bucket. It provides
-continuous batching, PagedAttention KV cache, and prefix caching. It
-replaces an earlier unsloth + transformers pipeline path that was removed
-in commit `refactor/vllm-only-backend` because the unsloth fast forward
-patches had a HybridCache broadcast bug under bnb-4bit on Qwen3 / SWA
-architectures.
+continuous batching, PagedAttention KV cache, and prefix caching.
 
-The checkpoints we load are still the `unsloth/X-unsloth-bnb-4bit`
-Dynamic 2.0 quants (gain ~1-2% accuracy from upcasted sensitive layers),
-but vLLM reads the safetensors directly without going through the
-unsloth Python lib.
+The checkpoints we load are the `unsloth/X-unsloth-bnb-4bit`
+HF repositories -- Unsloth-published Dynamic 2.0 quants that upcast
+sensitive layers (~1-2% accuracy gain). The "-unsloth-" prefix is just
+the publisher namespace on Hugging Face; vLLM reads the safetensors
+directly. The unsloth Python library is **not** installed and not
+required.
 
 ## Install
 
@@ -137,7 +135,7 @@ this script at the end, so most users won't need to invoke it manually.
    Loading 11 datasets x 10 models = 10 engine loads (not 110), since
    the same engine is reused across all datasets of a given model.
 
-2. **bnb-4bit checkpoint compatibility**: some `-unsloth-bnb-4bit`
+2. **bnb-4bit checkpoint compatibility**: some Dynamic 2.0 `-unsloth-bnb-4bit`
    checkpoints carry config fields that vLLM's bnb loader rejects with
    `ValueError`. The loader falls back to the standard `-bnb-4bit`
    variant automatically with a warning.
