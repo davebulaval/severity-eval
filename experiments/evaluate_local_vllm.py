@@ -91,12 +91,17 @@ def _quantization_for(model_id: str) -> str:
     casperhansen/...-awq) need quantization='awq_marlin' or 'awq' so
     vLLM dispatches to the AWQ kernels instead of bnb_loader, which has
     a known shape mismatch on Llama-3.3 70B GQA qkv_proj.
+    Compressed-tensors w4a16 checkpoints (e.g. RedHatAI/...w4a16) need
+    quantization='compressed-tensors' so vLLM uses the marlin kernels
+    that support TP.
     """
     lower = model_id.lower()
     if lower.endswith("-awq") or "-awq-" in lower or lower.endswith("-awq-int4"):
         return "awq_marlin"
     if lower.endswith("-gptq") or "-gptq-" in lower:
         return "gptq_marlin"
+    if "w4a16" in lower or "compressed-tensors" in lower:
+        return "compressed-tensors"
     return "bitsandbytes"
 
 
@@ -154,6 +159,22 @@ def _load_local_vllm(
         raise ValueError(
             f"tensor_parallel_size must be >= 1, got {tensor_parallel_size}"
         )
+
+    # vLLM raises ValueError("Prequant BitsAndBytes models with tensor
+    # parallelism is not supported") at engine init time for any
+    # bitsandbytes checkpoint with TP>1. Cap silently so the wrapper
+    # script can pass the same TP for every model without per-model
+    # conditionals. The 3 models that lack an AWQ/GPTQ/w4a16
+    # equivalent (granite-3.2-8b, gemma-2-27b, qwen3-30b-a3b) will run
+    # single-GPU; vLLM still parallelizes within the single GPU.
+    if _quantization_for(model_id) == "bitsandbytes" and tensor_parallel_size > 1:
+        log.warning(
+            "bitsandbytes checkpoint %s does not support TP>1; "
+            "capping tensor_parallel_size from %d to 1",
+            model_id,
+            tensor_parallel_size,
+        )
+        tensor_parallel_size = 1
 
     if not (0 < gpu_memory_utilization <= 1.0):
         raise ValueError(
