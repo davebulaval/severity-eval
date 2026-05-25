@@ -98,9 +98,13 @@ MODELS = {
         "provider": "local",
         "model_id": "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit",
     },
+    # gemma-2-27b: vLLM's bnb_loader rejects the Unsloth Dynamic 2.0
+    # checkpoint and falls back to -bnb-4bit anyway (observed during the
+    # dry-run on caribou). Skip the failed first load and the ~30 s reload
+    # per dataset by pointing directly at the standard -bnb-4bit repo.
     "gemma-2-27b": {
         "provider": "local",
-        "model_id": "unsloth/gemma-2-27b-it-unsloth-bnb-4bit",
+        "model_id": "unsloth/gemma-2-27b-it-bnb-4bit",
     },
     "mistral-small-3": {
         "provider": "local",
@@ -111,9 +115,10 @@ MODELS = {
         "model_id": "unsloth/Qwen3-14B-unsloth-bnb-4bit",
     },
     "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-unsloth-bnb-4bit"},
+    # Same Dynamic 2.0 incompatibility as gemma-2-27b; skip the dead reload.
     "gemma-2-9b": {
         "provider": "local",
-        "model_id": "unsloth/gemma-2-9b-it-unsloth-bnb-4bit",
+        "model_id": "unsloth/gemma-2-9b-it-bnb-4bit",
     },
     "granite-3.2-8b": {
         "provider": "local",
