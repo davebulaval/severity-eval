@@ -86,20 +86,26 @@ STREAM_A_TP=$((N_GPU - 1))
 STREAM_B_GPU="${GPU_LIST[$((N_GPU - 1))]}"
 
 # Lists must match what _quantization_for in evaluate_local_vllm.py returns.
-# Stream A: anything not "bitsandbytes" (AWQ + w4a16 + FP8).
+# Stream A: anything not "bitsandbytes" (AWQ + w4a16 + FP8 + GPTQ + MXFP4).
+# Order: heavy first so we get partial-data fallback if a SIGINT happens
+# late.
 STREAM_A_MODELS=(
     llama-3.3-70b
     deepseek-r1-distill-70b
+    qwen2.5-72b
+    gpt-oss-120b
     qwq-32b
     qwen3-30b-a3b
+    gemma-3-27b
+    gpt-oss-20b
+    mistral-small-3
+    gemma-3-12b
     qwen3-14b
     phi-4
-    gemma-2-9b
-    mistral-small-3
 )
-# Stream B: the 2 models without a maintained AWQ/w4a16/FP8 checkpoint.
+# Stream B: bnb-only. granite-3.2-8b is the only model in MODELS without
+# a maintained AWQ/w4a16/FP8/GPTQ checkpoint.
 STREAM_B_MODELS=(
-    gemma-2-27b
     granite-3.2-8b
 )
 

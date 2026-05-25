@@ -86,11 +86,9 @@ def test_git_returns_stripped_stdout_on_success():
 
 
 def test_model_id_for_returns_hf_id_for_local_model():
-    # 'gemma-2-9b' is a known local model in the MODELS dict.
-    # The actual repo is hugging-quants/gemma-2-9b-it-AWQ-INT4 (an AWQ
-    # checkpoint, swapped from the original Unsloth bnb-4bit so TP works);
-    # we just check that the resolution returns something gemma-shaped.
-    result = _model_id_for("gemma-2-9b")
+    # 'gemma-3-12b' is a known local model in MODELS (gemma-3 replaced
+    # the gemma-2 entries). Resolver should return something gemma-shaped.
+    result = _model_id_for("gemma-3-12b")
     assert "gemma" in result.lower()
     # Must point at a non-empty HF org/repo with a slash
     assert "/" in result

@@ -101,9 +101,12 @@ MODELS = {
     "qwq-32b": {"provider": "local", "model_id": "Qwen/QwQ-32B-AWQ"},
     "qwen3-14b": {"provider": "local", "model_id": "Qwen/Qwen3-14B-AWQ"},
     "phi-4": {"provider": "local", "model_id": "stelterlab/phi-4-AWQ"},
-    "gemma-2-9b": {
+    # Qwen2.5-72B non-thinking, AWQ official. Complements llama-3.3-70b
+    # in the 70B non-thinking band -- different family, useful for
+    # paper coverage.
+    "qwen2.5-72b": {
         "provider": "local",
-        "model_id": "hugging-quants/gemma-2-9b-it-AWQ-INT4",
+        "model_id": "Qwen/Qwen2.5-72B-Instruct-AWQ",
     },
     # mistral-small-3 has no AWQ; the RedHat compressed-tensors w4a16
     # checkpoint is TP-compatible and uses the "compressed-tensors"
@@ -114,20 +117,37 @@ MODELS = {
     },
     # qwen3-30b-a3b: switched from unsloth bnb-4bit to the official FP8
     # checkpoint so the MoE goes through vLLM's fp8 kernels (TP-compatible
-    # on Ada Lovelace / compute capability 8.9+). This brings it back
-    # onto stream A (TP=2) instead of stream B (bnb TP=1 only).
+    # on Ada Lovelace / compute capability 8.9+).
     "qwen3-30b-a3b": {
         "provider": "local",
         "model_id": "Qwen/Qwen3-30B-A3B-FP8",
     },
-    # No AWQ/w4a16/FP8 available for these two at the time of writing.
-    # They stay on bnb-4bit and are forced to TP=1 inside
-    # _load_local_vllm so vLLM does not raise the "Prequant BitsAndBytes"
-    # error when the wrapper passes TP>1.
-    "gemma-2-27b": {
+    # OpenAI's open-weight models (December 2025). MXFP4-quantized natively;
+    # vLLM auto-detects from config.json (no explicit quantization arg).
+    # Reasoning-style outputs -- treat like a thinking model.
+    "gpt-oss-20b": {
         "provider": "local",
-        "model_id": "unsloth/gemma-2-27b-it-bnb-4bit",
+        "model_id": "openai/gpt-oss-20b",
     },
+    "gpt-oss-120b": {
+        "provider": "local",
+        "model_id": "openai/gpt-oss-120b",
+    },
+    # Gemma-3 replaces gemma-2. Gemma-3 (Dec 2024) has 1/4/12/27B; closest
+    # to gemma-2-9b is the 12B. GPTQ checkpoints from ISTA-DASLab are
+    # TP-compatible (gptq_marlin kernel).
+    "gemma-3-12b": {
+        "provider": "local",
+        "model_id": "ISTA-DASLab/gemma-3-12b-it-GPTQ-4b-128g",
+    },
+    "gemma-3-27b": {
+        "provider": "local",
+        "model_id": "ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g",
+    },
+    # No AWQ/w4a16/FP8 available for granite-3.2-8b at the time of writing.
+    # Stays on bnb-4bit and is forced to TP=1 inside _load_local_vllm so
+    # vLLM does not raise "Prequant BitsAndBytes" when the wrapper passes
+    # TP>1.
     "granite-3.2-8b": {
         "provider": "local",
         "model_id": "unsloth/granite-3.2-8b-instruct-unsloth-bnb-4bit",
@@ -193,7 +213,7 @@ _DEFAULT_INFERENCE_CONFIG = (256, 4096)
 # Thinking models emit <think>...</think> chains that consume most of the
 # token budget.  We multiply max_new_tokens so the actual answer fits after
 # the reasoning.  Detection is by model_id substring.
-_THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1-distill")
+_THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1-distill", "gpt-oss")
 _THINKING_TOKEN_MULTIPLIER = 16  # e.g. 128 → 2048
 # Hard cap on max_new_tokens for thinking models. 2048 covers ~95% of
 # reasoning chains observed; the queue of very long ones doubles the

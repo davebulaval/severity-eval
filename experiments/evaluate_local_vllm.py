@@ -54,16 +54,14 @@ _vllm_engine: dict[str, Any] = {}
 # Per-model hard caps on max_model_len. These come from the model's
 # `max_position_embeddings` in config.json -- training-time limits
 # that the model simply has not learned positions beyond. CUAD asks
-# for ~33 K tokens which exceeds gemma-2 (8 K) and phi-4 (16 K), so on
-# those two families the caller truncates prompts down to
-# (cap - max_new_tokens) via SamplingParams.truncate_prompt_tokens.
+# for ~33 K tokens which exceeds phi-4 (16 K); the caller truncates
+# prompts to (cap - max_new_tokens) via SamplingParams.
 #
-# llama-3.3-70b is NOT listed here: with tensor_parallel_size=3 on three
-# 48 GB cards the KV cache budget is large enough for 33 K (each card
-# holds ~12 GB of weights, leaving ~36 GB for KV), so it loads CUAD at
-# full length without truncation.
+# gemma-3 (12B, 27B) is NOT capped: it natively supports 128 K context
+# (the gemma-2 entries were removed when we swapped to gemma-3).
+# gpt-oss-20b / gpt-oss-120b also handle 128 K natively.
+# llama-3.3-70b at TP=2 has enough KV cache budget for 33 K.
 _MODEL_MAX_LEN_CAPS: tuple[tuple[str, int], ...] = (
-    ("gemma-2", 8192),  # native max_position_embeddings
     ("phi-4", 16384),  # native max_position_embeddings
 )
 
@@ -309,25 +307,29 @@ def evaluate_local_vllm(
             _THINKING_MAX_NEW_TOKENS_CAP,
         )
 
-    # vLLM needs max_model_len >= max_length + max_new_tokens. Some
-    # models can't reach the dataset's requested length (gemma-2 caps
-    # at 8K, phi-4 at 16K). Rather than truncating prompts and
-    # silently producing degraded results (e.g. CUAD's legal contract
-    # body would be cut), we skip the (model, dataset) pair: the JSON
-    # is not produced and the paper reports the limitation explicitly.
+    # vLLM needs max_model_len >= max_length + max_new_tokens. When the
+    # dataset (CUAD ~33 K) exceeds the model's hard cap (gemma-2/3 at 8K,
+    # phi-4 at 16K), we instantiate at the cap and let
+    # SamplingParams.truncate_prompt_tokens drop the leading tokens so
+    # the trailing portion (which holds the question + answer choices)
+    # fits. We keep the largest tail possible, max_model_len -
+    # max_new_tokens. Loss of leading context is documented as a
+    # limitation when reporting CUAD numbers on those models.
     requested_max_len = max(max_length + max_new_tokens, 4096)
     model_cap = _max_model_len_for(model_id, default=requested_max_len)
-    if requested_max_len > model_cap:
+    max_model_len = min(requested_max_len, model_cap)
+    truncate_to = max_model_len - max_new_tokens
+    if max_model_len < requested_max_len:
         log.warning(
-            "Skipping %s on %s: dataset needs %d tokens but model caps at %d "
-            "(no truncation policy). The (model, dataset) JSON will not be saved.",
+            "Capping max_model_len from %d to %d for %s on %s; "
+            "prompts above %d tokens will keep only the last %d.",
+            requested_max_len,
+            max_model_len,
             model_id,
             dataset_name,
-            requested_max_len,
-            model_cap,
+            truncate_to,
+            truncate_to,
         )
-        return []
-    max_model_len = requested_max_len
 
     llm = _load_local_vllm(model_id, max_model_len=max_model_len)
     tokenizer = llm.get_tokenizer()
@@ -342,6 +344,7 @@ def evaluate_local_vllm(
     sampling = SamplingParams(
         max_tokens=max_new_tokens,
         temperature=0.0,
+        truncate_prompt_tokens=max(truncate_to, 1),
     )
 
     # Build prompts. We use the tokenizer's chat template when available
