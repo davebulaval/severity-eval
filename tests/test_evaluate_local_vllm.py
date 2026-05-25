@@ -124,13 +124,27 @@ def test_quantization_for_is_case_insensitive():
 
 
 def test_quantization_for_gpt_oss_returns_none():
-    """gpt-oss-* ships MXFP4 natively; we return None so vLLM auto-detects
-    the quantization from config.json. Passing 'bitsandbytes' (the
-    default fallback) would crash the engine init.
+    """gpt-oss-* ships MXFP4 natively; the default branch returns None so
+    vLLM auto-detects the quantization from config.json. Crashed under
+    the old 'bitsandbytes' default before PR #35.
     """
     assert _quantization_for("openai/gpt-oss-20b") is None
     assert _quantization_for("openai/gpt-oss-120b") is None
     assert _quantization_for("openai/GPT-OSS-20B") is None  # case insensitive
+
+
+def test_quantization_for_fp16_ibm_granite_returns_none():
+    """ibm-granite/granite-3.2-8b-instruct (FP16, no quant suffix) must
+    default to None so vLLM auto-detects -- not bitsandbytes, which
+    would crash the engine.
+    """
+    assert _quantization_for("ibm-granite/granite-3.2-8b-instruct") is None
+
+
+def test_quantization_for_fp8_dynamic():
+    """RedHatAI/...FP8-dynamic checkpoints route through fp8 kernels."""
+    assert _quantization_for("RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic") == "fp8"
+    assert _quantization_for("RedHatAI/QwQ-32B-FP8-dynamic") == "fp8"
 
 
 def test_quantization_for_fp8():

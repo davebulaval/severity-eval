@@ -103,8 +103,10 @@ STREAM_A_MODELS=(
     qwen3-14b
     phi-4
 )
-# Stream B: bnb-only. granite-3.2-8b is the only model in MODELS without
-# a maintained AWQ/w4a16/FP8/GPTQ checkpoint.
+# Stream B: small model that stays single-GPU. granite-3.2-8b is the
+# only model below 12 B and runs in FP16 (~16 GB), so NCCL overhead of
+# TP=2 outweighs the gain at this size. Solo on GPU 2 while stream A
+# handles the heavier models on GPUs 0+1.
 STREAM_B_MODELS=(
     granite-3.2-8b
 )
