@@ -23,51 +23,24 @@ from experiments.evaluate_local_vllm import (
 # ----------------------------------------------------------------------
 
 
-def test_max_model_len_caps_gemma_2_9b_below_default():
-    """gemma-2-9b must be capped at 8K even when caller asks for more.
-
-    Pass an explicit default greater than 8K so this test fails if the
-    'if "gemma-2" in model_id' branch is removed (mutation mental check).
+def test_max_model_len_does_not_cap_gemma_3():
+    """gemma-3 (replacement for gemma-2) natively supports 128K context.
+    Verifying it is NOT in the cap table -- so it loads CUAD 33K
+    without truncation.
     """
     assert (
-        _max_model_len_for("unsloth/gemma-2-9b-it-unsloth-bnb-4bit", default=32768)
-        == 8192
+        _max_model_len_for("ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g", default=131072)
+        == 131072
     )
 
 
-def test_max_model_len_caps_gemma_2_27b_below_default():
-    """gemma-2-27b also matches the gemma-2 pattern and is capped at 8K."""
-    assert (
-        _max_model_len_for("unsloth/gemma-2-27b-it-unsloth-bnb-4bit", default=32768)
-        == 8192
-    )
-
-
-def test_max_model_len_gemma_cap_overrides_higher_default():
-    """Even if the caller asks for 32k, gemma-2 stays at 8k.
-
-    Tests an invariant: gemma-2 must not be allowed to exceed its native
-    8K RoPE window, or generation produces garbled output.
-    """
-    assert _max_model_len_for("gemma-2-anything", default=131072) == 8192
-
-
-def test_max_model_len_non_gemma_uses_default():
-    assert _max_model_len_for("unsloth/Qwen3-14B-unsloth-bnb-4bit") == 8192
-
-
-def test_max_model_len_non_capped_respects_caller_default():
+def test_max_model_len_non_capped_uses_default():
     """A model without an entry in _MODEL_MAX_LEN_CAPS uses the caller's
     default. qwq-32b is not in the cap table.
     """
     assert (
         _max_model_len_for("unsloth/QwQ-32B-unsloth-bnb-4bit", default=32768) == 32768
     )
-
-
-def test_max_model_len_case_insensitive_for_gemma():
-    """Gemma-2 detection is case-insensitive."""
-    assert _max_model_len_for("Unsloth/GEMMA-2-9b-It", default=131072) == 8192
 
 
 def test_max_model_len_caps_phi_4_at_16k():
@@ -90,10 +63,10 @@ def test_max_model_len_does_not_cap_llama_3_3_70b():
 
 
 def test_max_model_len_cap_overrides_higher_default():
-    """A caller asking for 32 K on gemma-2 still gets capped at 8 K
+    """A caller asking for 32 K on phi-4 still gets capped at 16 K
     (the cap is a ceiling, not a default).
     """
-    assert _max_model_len_for("unsloth/gemma-2-27b-it-bnb-4bit", default=32768) == 8192
+    assert _max_model_len_for("stelterlab/phi-4-AWQ", default=32768) == 16384
 
 
 def test_max_model_len_unknown_model_returns_default():
