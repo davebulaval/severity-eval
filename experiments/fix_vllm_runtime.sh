@@ -122,10 +122,12 @@ fi
 # -----------------------------------------------------------------------------
 echo
 echo "## 4. Re-source venv to apply the export"
-VENV_NAME=$(basename "$VIRTUAL_ENV")
-deactivate
+# `deactivate` is a shell function defined inside activate; it does not
+# propagate to scripts launched from the parent shell. Sourcing activate
+# again directly is enough -- the second source picks up our new export
+# (the activate script unsets and re-sets VIRTUAL_ENV-related vars itself).
 # shellcheck source=/dev/null
-source "$VENV_NAME/bin/activate"
+source "$VIRTUAL_ENV/bin/activate"
 echo "  VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-(unset)}"
 
 # -----------------------------------------------------------------------------
@@ -136,19 +138,27 @@ if [[ "$SKIP_SMOKE" == "true" ]]; then
     echo "## 5. Smoke micro-inference: SKIPPED (--skip-smoke)"
 else
     echo
-    echo "## 5. Smoke micro-inference (timeout 300s)"
-    echo "  This loads granite-3.2-8b in vLLM and runs 1 prompt on medqa."
-    echo "  Cold path: 1-3 min for model load + KV cache warmup."
+    echo "## 5. Smoke micro-inference (timeout 600s)"
+    echo "  Loads granite-3.2-8b in vLLM and runs 1 prompt on medqa."
+    echo "  Cold path: 1-3 min for model load + warmup, plus 60-120s of"
+    echo "  wandb teardown after the prediction lands. The timeout is"
+    echo "  generous so the kill does not race the cleanup."
     echo
     LOG=/tmp/fix_vllm_runtime.log
-    if timeout 300 env PYTHONPATH=src python3 -m experiments.evaluate_models \
+    if timeout 600 env PYTHONPATH=src python3 -m experiments.evaluate_models \
             --dataset medqa --model granite-3.2-8b \
             --limit 1 --gpu 0 --force > "$LOG" 2>&1; then
         echo "  micro-inference returned exit 0"
     else
         rc=$?
         if [[ "$rc" -eq 124 ]]; then
-            echo "  TIMEOUT after 300s -- see $LOG"
+            echo "  TIMEOUT after 600s -- see $LOG"
+            # Even if timed out, the inference may have succeeded before
+            # the cleanup was killed. Surface that distinction.
+            if grep -q "accuracy=" "$LOG"; then
+                echo "  (but accuracy was logged -- prediction succeeded;"
+                echo "   wandb / Python shutdown likely got killed mid-cleanup)"
+            fi
         else
             echo "  exit $rc -- see $LOG"
         fi
