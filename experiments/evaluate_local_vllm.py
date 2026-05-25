@@ -136,9 +136,16 @@ def _load_local_vllm(
             trust_remote_code=True,
         )
 
+    # Why catch RuntimeError + AssertionError too: when an Unsloth Dynamic 2.0
+    # checkpoint has tensor shapes vLLM's bnb loader rejects (e.g.
+    # DeepSeek-R1-Distill-Llama-70B-unsloth-bnb-4bit), the failure happens in
+    # the EngineCore sub-process as an AssertionError on
+    # linear.py weight_loader; the parent sees it wrapped as
+    # "Engine core initialization failed" (RuntimeError). We surface both so
+    # the fallback to the non-Dynamic -bnb-4bit repo kicks in.
     try:
         llm = _try_load(model_id)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError, AssertionError) as exc:
         if "unsloth-bnb-4bit" not in model_id:
             raise
         fallback = model_id.replace("unsloth-bnb-4bit", "bnb-4bit")
