@@ -133,6 +133,105 @@ def test_load_local_vllm_cache_invalidates_when_max_len_grows():
     assert vllm_mod._vllm_engine["max_model_len"] == 32768
 
 
+def test_load_local_vllm_falls_back_on_runtime_error():
+    """vLLM raises a RuntimeError ("Engine core initialization failed") in
+    the parent when the EngineCore sub-process dies on an AssertionError
+    inside the bnb weight loader (Unsloth Dynamic 2.0 shape mismatch).
+
+    Concrete case: unsloth/Llama-3.3-70B-Instruct-unsloth-bnb-4bit and
+    unsloth/DeepSeek-R1-Distill-Llama-70B-unsloth-bnb-4bit. The fallback
+    must try the non-Dynamic -bnb-4bit repo before giving up.
+    """
+    import types
+    from unittest.mock import patch
+
+    vllm_mod._vllm_engine.clear()
+
+    fallback_llm = object()
+    call_log: list[str] = []
+
+    def fake_llm(**kw):
+        repo = kw["model"]
+        call_log.append(repo)
+        if repo.endswith("-unsloth-bnb-4bit"):
+            raise RuntimeError(
+                "Engine core initialization failed. See root cause above."
+            )
+        return fallback_llm
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with patch.dict("sys.modules", {"vllm": fake_vllm}):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        llm = _load_local_vllm("unsloth/Llama-3.3-70B-Instruct-unsloth-bnb-4bit")
+
+    assert llm is fallback_llm
+    assert call_log == [
+        "unsloth/Llama-3.3-70B-Instruct-unsloth-bnb-4bit",
+        "unsloth/Llama-3.3-70B-Instruct-bnb-4bit",
+    ]
+    # Cache must record the fallback repo, not the Dynamic one we rejected
+    assert (
+        vllm_mod._vllm_engine["model_id"] == "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
+    )
+
+
+def test_load_local_vllm_falls_back_on_assertion_error():
+    """Direct AssertionError from a synchronous call path also triggers
+    the fallback. Some vLLM versions raise it in-process when the
+    EngineCore is run inline (uniproc executor without subprocess)."""
+    import types
+    from unittest.mock import patch
+
+    vllm_mod._vllm_engine.clear()
+
+    fallback_llm = object()
+    call_log: list[str] = []
+
+    def fake_llm(**kw):
+        repo = kw["model"]
+        call_log.append(repo)
+        if repo.endswith("-unsloth-bnb-4bit"):
+            raise AssertionError()
+        return fallback_llm
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with patch.dict("sys.modules", {"vllm": fake_vllm}):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        llm = _load_local_vllm("unsloth/DeepSeek-R1-Distill-Llama-70B-unsloth-bnb-4bit")
+
+    assert llm is fallback_llm
+    assert call_log[-1] == "unsloth/DeepSeek-R1-Distill-Llama-70B-bnb-4bit"
+
+
+def test_load_local_vllm_runtime_error_propagates_if_no_unsloth_suffix():
+    """If the repo does not have an -unsloth-bnb-4bit suffix, a
+    RuntimeError must propagate -- there is no fallback to try."""
+    import types
+    from unittest.mock import patch
+
+    import pytest
+
+    vllm_mod._vllm_engine.clear()
+
+    def fake_llm(**kw):
+        raise RuntimeError("genuine engine failure")
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with patch.dict("sys.modules", {"vllm": fake_vllm}):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        with pytest.raises(RuntimeError, match="genuine engine failure"):
+            _load_local_vllm("meta-llama/Llama-3.3-70B")
+
+
 def test_load_local_vllm_cache_hits_when_max_len_fits():
     """Cache hit: same model_id and the cached engine already supports the
     requested context (or more) -- return the existing engine."""
