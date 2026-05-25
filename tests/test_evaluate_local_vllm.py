@@ -118,6 +118,96 @@ def test_quantization_for_is_case_insensitive():
 
 
 # ----------------------------------------------------------------------
+# _load_local_vllm : tensor_parallel_size propagation
+# ----------------------------------------------------------------------
+
+
+def test_load_local_vllm_rejects_tp_zero():
+    """tensor_parallel_size must be >= 1."""
+    import pytest
+
+    from experiments.evaluate_local_vllm import _load_local_vllm
+
+    with pytest.raises(ValueError, match="tensor_parallel_size"):
+        _load_local_vllm("unsloth/whatever", tensor_parallel_size=0)
+
+
+def test_load_local_vllm_rejects_tp_negative():
+    """Negative tensor_parallel_size is nonsense."""
+    import pytest
+
+    from experiments.evaluate_local_vllm import _load_local_vllm
+
+    with pytest.raises(ValueError, match="tensor_parallel_size"):
+        _load_local_vllm("unsloth/whatever", tensor_parallel_size=-2)
+
+
+def test_load_local_vllm_reads_tp_from_env():
+    """SEVERITY_EVAL_TP env var sets tensor_parallel_size when caller
+    leaves it at the default (None).
+
+    This is how evaluate_models.py --tensor-parallel-size threads the
+    setting down to the LLM constructor without changing the public
+    evaluate_local_vllm signature.
+    """
+    import os
+    import types
+    from unittest.mock import patch
+
+    vllm_mod._vllm_engine.clear()
+
+    captured: dict = {}
+
+    def fake_llm(**kw):
+        captured.update(kw)
+        return object()
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with (
+        patch.dict("sys.modules", {"vllm": fake_vllm}),
+        patch.dict(os.environ, {"SEVERITY_EVAL_TP": "3"}, clear=False),
+    ):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        _load_local_vllm("foo/test-model-awq")
+
+    assert captured["tensor_parallel_size"] == 3, (
+        "SEVERITY_EVAL_TP=3 should land in the LLM(...) call as "
+        f"tensor_parallel_size=3, got {captured.get('tensor_parallel_size')!r}"
+    )
+
+
+def test_load_local_vllm_explicit_tp_wins_over_env():
+    """Explicit tensor_parallel_size param takes precedence over the env var."""
+    import os
+    import types
+    from unittest.mock import patch
+
+    vllm_mod._vllm_engine.clear()
+
+    captured: dict = {}
+
+    def fake_llm(**kw):
+        captured.update(kw)
+        return object()
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with (
+        patch.dict("sys.modules", {"vllm": fake_vllm}),
+        patch.dict(os.environ, {"SEVERITY_EVAL_TP": "3"}, clear=False),
+    ):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        _load_local_vllm("foo/test-model-awq", tensor_parallel_size=2)
+
+    assert captured["tensor_parallel_size"] == 2
+
+
+# ----------------------------------------------------------------------
 # _load_local_vllm — argument validation + cache invalidation
 # ----------------------------------------------------------------------
 

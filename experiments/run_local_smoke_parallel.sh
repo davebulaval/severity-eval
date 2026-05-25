@@ -26,7 +26,15 @@ cd "$PROJECT_DIR"
 # ---- defaults ---------------------------------------------------------------
 GPUS="0,1,2"
 LIMIT="5"
-SKIP_MODELS=""   # comma-separated
+SKIP_MODELS=""       # comma-separated
+SKIP_THINKING=false  # --skip-thinking : drop qwen3 / qwq / deepseek-r1-distill
+                     # so phase 1 only runs the non-thinking models, then phase
+                     # 2 runs the thinking ones with tensor parallelism via
+                     # run_thinking_tp.sh.
+
+# Names that match _THINKING_MODEL_PATTERNS in evaluate_models.py. Kept in
+# sync manually -- the patterns are stable.
+THINKING_MODELS="qwen3-14b,qwen3-30b-a3b,qwq-32b,deepseek-r1-distill-70b"
 
 _require_arg() {
     if [[ $# -lt 2 || -z "${2:-}" || "${2:0:2}" == "--" ]]; then
@@ -37,14 +45,23 @@ _require_arg() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --gpus)    _require_arg "$@"; GPUS="$2"; shift 2 ;;
-        --limit)   _require_arg "$@"; LIMIT="$2"; shift 2 ;;
-        --skip)    _require_arg "$@"; SKIP_MODELS="$2"; shift 2 ;;
+        --gpus)           _require_arg "$@"; GPUS="$2"; shift 2 ;;
+        --limit)          _require_arg "$@"; LIMIT="$2"; shift 2 ;;
+        --skip)           _require_arg "$@"; SKIP_MODELS="$2"; shift 2 ;;
+        --skip-thinking)  SKIP_THINKING=true; shift ;;
         -h|--help)
             sed -n '2,20p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+
+if [[ "$SKIP_THINKING" == "true" ]]; then
+    if [[ -n "$SKIP_MODELS" ]]; then
+        SKIP_MODELS="${SKIP_MODELS},${THINKING_MODELS}"
+    else
+        SKIP_MODELS="$THINKING_MODELS"
+    fi
+fi
 
 IFS=',' read -ra GPU_LIST <<< "$GPUS"
 N_GPU=${#GPU_LIST[@]}
@@ -70,10 +87,20 @@ fi
 #   GPU B: deepseek-r1-distill-70b + phi-4
 #   GPU C: qwq-32b + qwen3-30b-a3b + mistral-small-3 + gemma-2-27b + granite-3.2-8b
 
-# bucket index → space-separated model list
-BUCKET_0=(llama-3.3-70b qwen3-14b gemma-2-9b)
-BUCKET_1=(deepseek-r1-distill-70b phi-4)
-BUCKET_2=(qwq-32b qwen3-30b-a3b mistral-small-3 gemma-2-27b granite-3.2-8b)
+# bucket index → space-separated model list.
+# With --skip-thinking we rebalance so the 6 non-thinking models split
+# evenly across 3 GPUs (otherwise dropping the thinking models leaves
+# bucket 2 with just granite + gemma-27b + mistral, ~1 h, while gpu0
+# stays at 3 h on llama-3.3-70b alone).
+if [[ "$SKIP_THINKING" == "true" ]]; then
+    BUCKET_0=(llama-3.3-70b gemma-2-9b)            # heavy non-think + small
+    BUCKET_1=(phi-4 granite-3.2-8b)                # medium + small
+    BUCKET_2=(mistral-small-3 gemma-2-27b)         # medium x 2
+else
+    BUCKET_0=(llama-3.3-70b qwen3-14b gemma-2-9b)
+    BUCKET_1=(deepseek-r1-distill-70b phi-4)
+    BUCKET_2=(qwq-32b qwen3-30b-a3b mistral-small-3 gemma-2-27b granite-3.2-8b)
+fi
 
 # Fallback for fewer GPUs: collapse buckets.
 if [[ $N_GPU -eq 1 ]]; then

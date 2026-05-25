@@ -1736,12 +1736,27 @@ def main():
         help="Override max parallel API workers for the API-batch path "
         "(local models use vLLM continuous batching and ignore this).",
     )
+    parser.add_argument(
+        "--tensor-parallel-size",
+        type=int,
+        default=1,
+        help="vLLM tensor parallel degree for local models. Use N > 1 to "
+        "shard a single model across N GPUs (e.g. --gpu 0,1,2 "
+        "--tensor-parallel-size 3 for qwq-32b across 3 GPUs).",
+    )
     args = parser.parse_args()
 
     # Set CUDA_VISIBLE_DEVICES before any GPU library import
     if args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
         log.info("CUDA_VISIBLE_DEVICES=%s", args.gpu)
+
+    # _load_local_vllm picks up tensor_parallel_size from SEVERITY_EVAL_TP
+    # so we don't have to thread the CLI flag through the evaluate_local_vllm
+    # public signature.
+    if args.tensor_parallel_size != 1:
+        os.environ["SEVERITY_EVAL_TP"] = str(args.tensor_parallel_size)
+        log.info("SEVERITY_EVAL_TP=%d (tensor parallel)", args.tensor_parallel_size)
 
     datasets_to_eval = (
         list(DATASETS.keys()) if args.dataset == "all" else [args.dataset]
