@@ -150,6 +150,80 @@ def test_quantization_for_is_case_insensitive():
     assert _quantization_for("Some/Llama-GPTQ") == "gptq_marlin"
 
 
+def test_quantization_for_w4a16_compressed_tensors():
+    """RedHatAI ...w4a16 checkpoints route through compressed-tensors so
+    vLLM uses the marlin kernels that support TP. bitsandbytes does not.
+    """
+    assert (
+        _quantization_for(
+            "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w4a16"
+        )
+        == "compressed-tensors"
+    )
+
+
+def test_load_local_vllm_caps_tp_to_1_for_bitsandbytes():
+    """vLLM refuses TP>1 on bitsandbytes checkpoints. The wrapper must
+    silently drop to TP=1 so an aggressive --tensor-parallel-size on
+    the CLI does not crash the 3 bnb-only models (granite-3.2-8b,
+    gemma-2-27b, qwen3-30b-a3b)."""
+    import types
+    from unittest.mock import patch
+
+    vllm_mod._vllm_engine.clear()
+
+    captured: dict = {}
+
+    def fake_llm(**kw):
+        captured.update(kw)
+        return object()
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with patch.dict("sys.modules", {"vllm": fake_vllm}):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        _load_local_vllm(
+            "unsloth/granite-3.2-8b-instruct-unsloth-bnb-4bit",
+            tensor_parallel_size=3,
+        )
+
+    assert captured["tensor_parallel_size"] == 1, (
+        "bnb checkpoint must be auto-capped to TP=1 to avoid "
+        "'Prequant BitsAndBytes models with tensor parallelism is "
+        "not supported' from vLLM"
+    )
+
+
+def test_load_local_vllm_keeps_tp_for_awq():
+    """AWQ checkpoints support TP>1 -- the cap must NOT trigger."""
+    import types
+    from unittest.mock import patch
+
+    vllm_mod._vllm_engine.clear()
+
+    captured: dict = {}
+
+    def fake_llm(**kw):
+        captured.update(kw)
+        return object()
+
+    fake_vllm = types.ModuleType("vllm")
+    fake_vllm.LLM = fake_llm
+
+    with patch.dict("sys.modules", {"vllm": fake_vllm}):
+        from experiments.evaluate_local_vllm import _load_local_vllm
+
+        _load_local_vllm(
+            "casperhansen/llama-3.3-70b-instruct-awq",
+            tensor_parallel_size=2,
+        )
+
+    assert captured["tensor_parallel_size"] == 2
+    assert captured["quantization"] == "awq_marlin"
+
+
 # ----------------------------------------------------------------------
 # _load_local_vllm : tensor_parallel_size propagation
 # ----------------------------------------------------------------------
@@ -220,6 +294,9 @@ def test_load_local_vllm_cache_invalidates_when_tp_differs():
     script asks for the same model with TP=3. Without checking the TP
     field the cache would hand back the TP=1 engine and the TP=3 run
     would silently use the wrong engine.
+
+    Use an AWQ-suffixed model_id so the bnb-only TP=1 cap does not
+    fire and TP=3 actually reaches the LLM constructor.
     """
     import types
     from unittest.mock import patch
@@ -227,7 +304,7 @@ def test_load_local_vllm_cache_invalidates_when_tp_differs():
     # Pre-populate cache with a TP=1 engine
     vllm_mod._vllm_engine.clear()
     stale_llm = object()
-    vllm_mod._vllm_engine["model_id"] = "unsloth/test-model"
+    vllm_mod._vllm_engine["model_id"] = "casperhansen/test-model-awq"
     vllm_mod._vllm_engine["max_model_len"] = 8192
     vllm_mod._vllm_engine["tensor_parallel_size"] = 1
     vllm_mod._vllm_engine["llm"] = stale_llm
@@ -245,7 +322,7 @@ def test_load_local_vllm_cache_invalidates_when_tp_differs():
     with patch.dict("sys.modules", {"vllm": fake_vllm}):
         from experiments.evaluate_local_vllm import _load_local_vllm
 
-        result = _load_local_vllm("unsloth/test-model", tensor_parallel_size=3)
+        result = _load_local_vllm("casperhansen/test-model-awq", tensor_parallel_size=3)
 
     assert result is not stale_llm, "cache must invalidate when TP changes"
     assert result is new_llm
@@ -254,10 +331,13 @@ def test_load_local_vllm_cache_invalidates_when_tp_differs():
 
 
 def test_load_local_vllm_cache_hits_when_tp_matches():
-    """Same model_id, max_model_len fits, and TP matches -> cache hit."""
+    """Same model_id, max_model_len fits, and TP matches -> cache hit.
+
+    Use AWQ so the bnb TP=1 cap does not interfere.
+    """
     vllm_mod._vllm_engine.clear()
     cached_llm = object()
-    vllm_mod._vllm_engine["model_id"] = "unsloth/test-model"
+    vllm_mod._vllm_engine["model_id"] = "casperhansen/test-model-awq"
     vllm_mod._vllm_engine["max_model_len"] = 32768
     vllm_mod._vllm_engine["tensor_parallel_size"] = 2
     vllm_mod._vllm_engine["llm"] = cached_llm
@@ -266,7 +346,7 @@ def test_load_local_vllm_cache_hits_when_tp_matches():
 
     # Smaller max_len + same TP -> serve cached
     result = _load_local_vllm(
-        "unsloth/test-model", max_model_len=4096, tensor_parallel_size=2
+        "casperhansen/test-model-awq", max_model_len=4096, tensor_parallel_size=2
     )
     assert result is cached_llm
 

@@ -93,32 +93,36 @@ MODELS = {
         "provider": "local",
         "model_id": "casperhansen/deepseek-r1-distill-llama-70b-awq",
     },
-    "qwq-32b": {"provider": "local", "model_id": "unsloth/QwQ-32B-unsloth-bnb-4bit"},
+    # AWQ across the board where a maintained AWQ checkpoint exists: vLLM
+    # cannot do tensor parallelism with pre-quantized bitsandbytes
+    # (raises "Prequant BitsAndBytes models with tensor parallelism is
+    # not supported"). AWQ + awq_marlin routes through TP-friendly
+    # kernels and lets each model use all available GPUs.
+    "qwq-32b": {"provider": "local", "model_id": "Qwen/QwQ-32B-AWQ"},
+    "qwen3-14b": {"provider": "local", "model_id": "Qwen/Qwen3-14B-AWQ"},
+    "phi-4": {"provider": "local", "model_id": "stelterlab/phi-4-AWQ"},
+    "gemma-2-9b": {
+        "provider": "local",
+        "model_id": "hugging-quants/gemma-2-9b-it-AWQ-INT4",
+    },
+    # mistral-small-3 has no AWQ; the RedHat compressed-tensors w4a16
+    # checkpoint is TP-compatible and uses the "compressed-tensors"
+    # quantization path in vLLM (auto-detected from config.json).
+    "mistral-small-3": {
+        "provider": "local",
+        "model_id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w4a16",
+    },
+    # No AWQ available for these three (granite + gemma-2-27b + the MoE
+    # qwen3-30b-a3b) at the time of writing; they stay on bnb-4bit and
+    # are forced to TP=1 inside _load_local_vllm so vLLM does not raise
+    # the "Prequant BitsAndBytes" error when the wrapper passes TP>1.
     "qwen3-30b-a3b": {
         "provider": "local",
         "model_id": "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit",
     },
-    # gemma-2-27b: vLLM's bnb_loader rejects the Unsloth Dynamic 2.0
-    # checkpoint and falls back to -bnb-4bit anyway (observed during the
-    # dry-run on caribou). Skip the failed first load and the ~30 s reload
-    # per dataset by pointing directly at the standard -bnb-4bit repo.
     "gemma-2-27b": {
         "provider": "local",
         "model_id": "unsloth/gemma-2-27b-it-bnb-4bit",
-    },
-    "mistral-small-3": {
-        "provider": "local",
-        "model_id": "unsloth/Mistral-Small-3.1-24B-Instruct-2503-unsloth-bnb-4bit",
-    },
-    "qwen3-14b": {
-        "provider": "local",
-        "model_id": "unsloth/Qwen3-14B-unsloth-bnb-4bit",
-    },
-    "phi-4": {"provider": "local", "model_id": "unsloth/phi-4-unsloth-bnb-4bit"},
-    # Same Dynamic 2.0 incompatibility as gemma-2-27b; skip the dead reload.
-    "gemma-2-9b": {
-        "provider": "local",
-        "model_id": "unsloth/gemma-2-9b-it-bnb-4bit",
     },
     "granite-3.2-8b": {
         "provider": "local",
