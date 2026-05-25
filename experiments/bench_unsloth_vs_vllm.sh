@@ -23,7 +23,7 @@
 #   --max-new-tokens N     generation cap (default: 256; auto-scaled x16 for
 #                          thinking models inside the bench scripts)
 #   --gpu N                CUDA device (default: 0)
-#   --unsloth-venv DIR     venv for the unsloth path (default: .severity_unsloth)
+#   --unsloth-venv DIR     venv for the unsloth path (default: .severity)
 #   --vllm-venv DIR        venv for the vLLM path    (default: .severity_2)
 #   --skip-unsloth         only run the vLLM side (e.g. if unsloth is broken)
 #   --skip-vllm            only run the unsloth side
@@ -40,7 +40,7 @@ MODEL="qwen3-14b"
 N_SAMPLES=8
 MAX_NEW_TOKENS=256
 GPU="0"
-UNSLOTH_VENV=".severity_unsloth"
+UNSLOTH_VENV=".severity"
 VLLM_VENV=".severity_2"
 SKIP_UNSLOTH=false
 SKIP_VLLM=false
@@ -103,36 +103,25 @@ else
     echo
     echo "## 1. UNSLOTH side ($UNSLOTH_VENV)"
     if [[ ! -d "$UNSLOTH_VENV" ]]; then
-        echo "  $UNSLOTH_VENV missing -- creating + installing deps"
-        python3 -m venv "$UNSLOTH_VENV"
-        # shellcheck source=/dev/null
-        source "$UNSLOTH_VENV/bin/activate"
-        pip install --upgrade pip -q
-        # Minimal stack for the unsloth path. unsloth pulls its own torch
-        # pin and bitsandbytes; we add transformers + accelerate explicitly
-        # so versions match.
-        pip install -q \
-            "torch>=2.4,<2.13" \
-            "transformers>=4.45" \
-            "accelerate>=1.0" \
-            "bitsandbytes>=0.43" \
-            unsloth \
-            "pandas>=2.0" "numpy>=1.24" "python-dotenv>=1.0" "tqdm>=4.60"
-        # Persist LD_LIBRARY_PATH for cu13 libs (same idea as setup_env.sh)
-        cat >> "$UNSLOTH_VENV/bin/activate" << 'PATCH'
-
-# === bench_unsloth_vs_vllm.sh patch ===
-for _cudir in "$VIRTUAL_ENV"/lib/python3.*/site-packages/nvidia/cu13/lib \
-              "$VIRTUAL_ENV"/lib/python3.*/site-packages/nvidia/cu12/lib; do
-    if [ -d "$_cudir" ]; then
-        export LD_LIBRARY_PATH="$_cudir:${LD_LIBRARY_PATH:-}"
-        break
+        echo "[ABORT] unsloth venv '$UNSLOTH_VENV' does not exist."
+        echo "        Either pass --unsloth-venv <existing-dir>, or create it"
+        echo "        beforehand with the unsloth stack:"
+        echo "          python3 -m venv $UNSLOTH_VENV"
+        echo "          source $UNSLOTH_VENV/bin/activate"
+        echo "          pip install torch transformers accelerate bitsandbytes unsloth"
+        exit 1
     fi
-done
-unset _cudir
-PATCH
-        deactivate 2>/dev/null || true
+    # Sanity: make sure unsloth is actually importable inside the venv.
+    set +e
+    run_in_venv "$UNSLOTH_VENV" python3 -c "import unsloth" 2>/dev/null
+    has_unsloth=$?
+    set -e
+    if [[ "$has_unsloth" -ne 0 ]]; then
+        echo "[ABORT] unsloth is not importable inside $UNSLOTH_VENV."
+        echo "        Install it: source $UNSLOTH_VENV/bin/activate && pip install unsloth"
+        exit 1
     fi
+    echo "  using existing venv $UNSLOTH_VENV (unsloth ok)"
 
     LOG=/tmp/bench_unsloth.log
     echo "  running bench_inference_unsloth.py (log: $LOG)"
@@ -167,6 +156,16 @@ else
         echo "[ABORT] $VLLM_VENV does not exist. Run ./experiments/setup_env.sh first."
         exit 1
     fi
+    set +e
+    run_in_venv "$VLLM_VENV" python3 -c "import vllm" 2>/dev/null
+    has_vllm=$?
+    set -e
+    if [[ "$has_vllm" -ne 0 ]]; then
+        echo "[ABORT] vllm is not importable inside $VLLM_VENV."
+        echo "        Re-run ./experiments/setup_env.sh --venv $VLLM_VENV"
+        exit 1
+    fi
+    echo "  using existing venv $VLLM_VENV (vllm ok)"
 
     LOG=/tmp/bench_vllm.log
     echo "  running bench_inference.py (log: $LOG)"
