@@ -105,8 +105,11 @@ def _quantization_for(model_id: str) -> str | None:
         return "gptq_marlin"
     if "w4a16" in lower or "compressed-tensors" in lower:
         return "compressed-tensors"
+    # FP8 packaging varies by publisher: Qwen ships native fp8, RedHat
+    # ships compressed-tensors with fp8 weights. Returning None lets
+    # vLLM read quant_method from config.json and pick the right kernel.
     if lower.endswith("-fp8") or "-fp8-" in lower or "-fp8-dynamic" in lower:
-        return "fp8"
+        return None
     return None
 
 
