@@ -139,7 +139,11 @@ launch_bucket() {
     local log="$LOG_DIR/parallel_${TS}_gpu${gpu}.log"
     echo "[GPU $gpu] launching: $csv  (log: $log)"
     (
-        ./experiments/run_local_smoke.sh \
+        # stdbuf -oL -eL : force line-buffered stdout/stderr on the child
+        # bash. Without this the outer `> "$log"` redirect makes child
+        # processes block-buffer their output, so `tail -f` on the log
+        # lags by megabytes and looks like a stall.
+        stdbuf -oL -eL ./experiments/run_local_smoke.sh \
             --gpu "$gpu" --limit "$LIMIT" --models "$csv" \
             > "$log" 2>&1
         echo "[GPU $gpu] DONE (exit=$?)"

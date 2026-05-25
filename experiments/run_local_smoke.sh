@@ -133,10 +133,15 @@ for model in "${MODELS[@]}"; do
         echo "[$CURRENT/$TOTAL] $model x $ds (limit=$LIMIT)"
         T0=$(date +%s)
 
-        if PYTHONPATH=src python3 -m experiments.evaluate_models \
+        # `-u` (unbuffered): Python defaults to block-buffered stdout when
+        # writing to a file/pipe (8 KB chunks). With buffering, tail -f on
+        # the parallel-smoke logs lags by minutes and looks like a stall.
+        # `stdbuf -oL tee` flushes the tee buffer line-by-line for the
+        # same reason.
+        if PYTHONPATH=src PYTHONUNBUFFERED=1 python3 -u -m experiments.evaluate_models \
             --dataset "$ds" --model "$model" \
             --limit "$LIMIT" --gpu "$GPU" --force \
-            2>&1 | tee -a "$SMOKE_LOG"; then
+            2>&1 | stdbuf -oL tee -a "$SMOKE_LOG"; then
             T1=$(date +%s)
             echo "[$CURRENT/$TOTAL] OK in $((T1 - T0))s"
             PASSED=$((PASSED + 1))
