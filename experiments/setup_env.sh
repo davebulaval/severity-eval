@@ -202,24 +202,38 @@ PATCH
 fi
 
 # -----------------------------------------------------------------------------
-# 8. Re-source + flashinfer fix + check_env.sh
+# 8. Re-source + apply CUDA path + flashinfer sampler fixes + check_env
 # -----------------------------------------------------------------------------
 if [[ "$SKIP_CHECK" == "true" ]]; then
     echo
-    echo "## 8. flashinfer fix + check_env.sh: SKIPPED (--skip-check)"
+    echo "## 8. CUDA path + flashinfer fixes + check_env: SKIPPED (--skip-check)"
 else
     echo
-    echo "## 8. Re-source venv + apply flashinfer fix + run check_env.sh"
+    echo "## 8. Re-source venv + apply CUDA path + flashinfer fixes"
     # We have to re-source so the patched exports take effect in this shell.
     deactivate
     # shellcheck source=/dev/null
     source "$VENV/bin/activate"
     echo "  LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-(unset)}"
     echo "  CUDA_HOME=${CUDA_HOME:-(unset)}"
+
+    # 8a. fix_flashinfer_nvcc.sh -- sudo symlink /usr/local/cuda or
+    # sed-patch flashinfer .py files so the JIT compile can find nvcc.
     echo
-    # fix_flashinfer_nvcc.sh handles the /usr/local/cuda symlink (or shim)
-    # and runs check_env.sh itself, so we skip a separate check call here.
-    ./experiments/fix_flashinfer_nvcc.sh
+    echo "  -- 8a. fix_flashinfer_nvcc.sh"
+    ./experiments/fix_flashinfer_nvcc.sh --skip-check
+
+    # 8b. fix_vllm_runtime.sh -- export VLLM_USE_FLASHINFER_SAMPLER=0
+    # so vLLM uses the native PyTorch sampler (no JIT, no PTX mismatch).
+    # Skips its own smoke; we run a single check_env.sh at the end below.
+    echo
+    echo "  -- 8b. fix_vllm_runtime.sh"
+    ./experiments/fix_vllm_runtime.sh --skip-smoke
+
+    # 8c. Final validation
+    echo
+    echo "  -- 8c. check_env.sh"
+    ./experiments/check_env.sh
 fi
 
 echo

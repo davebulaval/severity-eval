@@ -83,6 +83,29 @@ PYTHONPATH=src python -m experiments.bench_inference --compare \
     experiments/benchmarks/speedup_*_qwen3-14b_*.json
 ```
 
+## Troubleshooting: flashinfer JIT crash at EngineCore init
+
+If the micro-inference fails with one of these symptoms:
+
+```
+ptxas fatal : Unsupported .version 9.2; current version is '9.1'
+fatal error: nv/target: No such file or directory
+ninja: build stopped: subcommand failed
+```
+
+flashinfer is JIT-compiling its sampler kernels at first run and hitting
+a PTX-version mismatch in the venv-only CUDA toolkit. Fix by disabling
+flashinfer's sampler and using vLLM's native PyTorch sampler:
+
+```bash
+./experiments/fix_vllm_runtime.sh
+```
+
+This kills zombies, clears the flashinfer cache, exports
+`VLLM_USE_FLASHINFER_SAMPLER=0` into the venv's activate, and runs a
+smoke test to confirm. `setup_env.sh` calls it automatically at the end
+of install, so most users won't invoke it manually.
+
 ## Troubleshooting: flashinfer `ninja: build stopped`
 
 If `check_env.sh` section 11 fails with

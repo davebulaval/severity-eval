@@ -186,10 +186,16 @@ def evaluate_local_vllm(
     llm = _load_local_vllm(model_id, max_model_len=max_model_len)
     tokenizer = llm.get_tokenizer()
 
+    # NOTE on top_p: we used to pass top_p=1.0 but vLLM's
+    # topk_topp_sampler.forward_cuda routes to flashinfer_sample whenever
+    # k or p is set, regardless of value. flashinfer's JIT compile path
+    # is broken on this venv's CUDA toolkit (nvcc/ptxas PTX-version
+    # mismatch), so we explicitly leave top_p unset to force the native
+    # PyTorch sampler. Combined with VLLM_USE_FLASHINFER_SAMPLER=0, this
+    # is belt-and-braces against the same crash.
     sampling = SamplingParams(
         max_tokens=max_new_tokens,
         temperature=0.0,
-        top_p=1.0,
     )
 
     # Build prompts. We use the tokenizer's chat template when available
