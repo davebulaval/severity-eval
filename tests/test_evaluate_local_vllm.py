@@ -56,16 +56,48 @@ def test_max_model_len_non_gemma_uses_default():
     assert _max_model_len_for("unsloth/Qwen3-14B-unsloth-bnb-4bit") == 8192
 
 
-def test_max_model_len_non_gemma_respects_caller_default():
+def test_max_model_len_non_capped_respects_caller_default():
+    """A model without an entry in _MODEL_MAX_LEN_CAPS uses the caller's
+    default. qwq-32b is not in the cap table.
+    """
     assert (
-        _max_model_len_for("unsloth/Llama-3.3-70B-Instruct-bnb-4bit", default=32768)
-        == 32768
+        _max_model_len_for("unsloth/QwQ-32B-unsloth-bnb-4bit", default=32768) == 32768
     )
 
 
 def test_max_model_len_case_insensitive_for_gemma():
     """Gemma-2 detection is case-insensitive."""
     assert _max_model_len_for("Unsloth/GEMMA-2-9b-It", default=131072) == 8192
+
+
+def test_max_model_len_caps_phi_4_at_16k():
+    """phi-4's max_position_embeddings is 16384; CUAD at 33 K would OOM the
+    model config.
+    """
+    assert _max_model_len_for("unsloth/phi-4-unsloth-bnb-4bit", default=131072) == 16384
+
+
+def test_max_model_len_caps_llama_3_3_70b_at_11k():
+    """llama-3.3-70b AWQ on a 48 GB card runs out of KV cache above 11 K.
+    The cap is enforced regardless of how big a context the caller asks
+    for.
+    """
+    assert (
+        _max_model_len_for("casperhansen/llama-3.3-70b-instruct-awq", default=131072)
+        == 11072
+    )
+
+
+def test_max_model_len_cap_overrides_higher_default():
+    """A caller asking for 32 K on gemma-2 still gets capped at 8 K
+    (the cap is a ceiling, not a default).
+    """
+    assert _max_model_len_for("unsloth/gemma-2-27b-it-bnb-4bit", default=32768) == 8192
+
+
+def test_max_model_len_unknown_model_returns_default():
+    """No cap match -> caller's default wins."""
+    assert _max_model_len_for("unknown/some-model", default=12345) == 12345
 
 
 # ----------------------------------------------------------------------
