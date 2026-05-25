@@ -88,17 +88,35 @@ def _load_local_vllm(
 ):
     """Load (or return cached) vLLM engine for model_id.
 
-    On a fresh model_id this destroys the previous engine first.
+    On a fresh model_id, or when the requested max_model_len exceeds the
+    cached engine's max_model_len, the previous engine is destroyed and
+    a new one is loaded.
+
+    Raises ValueError if gpu_memory_utilization is outside (0, 1].
     """
-    cache_key = model_id
-    if _vllm_engine.get("model_id") == cache_key:
+    if not (0 < gpu_memory_utilization <= 1.0):
+        raise ValueError(
+            f"gpu_memory_utilization must be in (0, 1], got {gpu_memory_utilization}"
+        )
+
+    requested_max_len = max_model_len or _max_model_len_for(model_id)
+
+    # Reuse the cached engine only if it matches both model_id AND has
+    # at least the requested context length. CUAD asks for ~33 K while
+    # MedQA needs 4 K; without this check the smaller engine would
+    # crash on the long prompt.
+    cached_model_id = _vllm_engine.get("model_id")
+    cached_max_len = _vllm_engine.get("max_model_len", 0)
+    if cached_model_id == model_id and cached_max_len >= requested_max_len:
         return _vllm_engine["llm"]
 
     _destroy_engine()
+    max_model_len = requested_max_len
 
+    # Defer the vllm import until we actually need to construct an engine.
+    # Validation + cache lookup above must run even in environments where
+    # vllm is not installed (e.g. unit tests).
     from vllm import LLM
-
-    max_model_len = max_model_len or _max_model_len_for(model_id)
 
     def _try_load(repo_id: str):
         log.info(
@@ -134,6 +152,7 @@ def _load_local_vllm(
         model_id = fallback
 
     _vllm_engine["model_id"] = model_id
+    _vllm_engine["max_model_len"] = max_model_len
     _vllm_engine["llm"] = llm
     return llm
 
