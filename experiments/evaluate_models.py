@@ -112,14 +112,18 @@ MODELS = {
         "provider": "local",
         "model_id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w4a16",
     },
-    # No AWQ available for these three (granite + gemma-2-27b + the MoE
-    # qwen3-30b-a3b) at the time of writing; they stay on bnb-4bit and
-    # are forced to TP=1 inside _load_local_vllm so vLLM does not raise
-    # the "Prequant BitsAndBytes" error when the wrapper passes TP>1.
+    # qwen3-30b-a3b: switched from unsloth bnb-4bit to the official FP8
+    # checkpoint so the MoE goes through vLLM's fp8 kernels (TP-compatible
+    # on Ada Lovelace / compute capability 8.9+). This brings it back
+    # onto stream A (TP=2) instead of stream B (bnb TP=1 only).
     "qwen3-30b-a3b": {
         "provider": "local",
-        "model_id": "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit",
+        "model_id": "Qwen/Qwen3-30B-A3B-FP8",
     },
+    # No AWQ/w4a16/FP8 available for these two at the time of writing.
+    # They stay on bnb-4bit and are forced to TP=1 inside
+    # _load_local_vllm so vLLM does not raise the "Prequant BitsAndBytes"
+    # error when the wrapper passes TP>1.
     "gemma-2-27b": {
         "provider": "local",
         "model_id": "unsloth/gemma-2-27b-it-bnb-4bit",

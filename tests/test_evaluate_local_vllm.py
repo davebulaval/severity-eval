@@ -150,6 +150,15 @@ def test_quantization_for_is_case_insensitive():
     assert _quantization_for("Some/Llama-GPTQ") == "gptq_marlin"
 
 
+def test_quantization_for_fp8():
+    """FP8 checkpoints (e.g. Qwen/Qwen3-30B-A3B-FP8) need quantization='fp8'
+    so vLLM routes through the fp8 kernels (TP-compatible on Ada+).
+    """
+    assert _quantization_for("Qwen/Qwen3-30B-A3B-FP8") == "fp8"
+    assert _quantization_for("some-model-fp8") == "fp8"
+    assert _quantization_for("some-fp8-variant") == "fp8"
+
+
 def test_quantization_for_w4a16_compressed_tensors():
     """RedHatAI ...w4a16 checkpoints route through compressed-tensors so
     vLLM uses the marlin kernels that support TP. bitsandbytes does not.
