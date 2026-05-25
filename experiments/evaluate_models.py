@@ -12,6 +12,7 @@ import importlib
 import json as json_mod
 import logging
 import os
+import sys
 import re
 import tempfile
 import time
@@ -1824,6 +1825,22 @@ def main():
     if wandb_run is not None:
         wandb_run.finish()
         log.info("wandb run finished")
+
+    # vLLM's EngineCore subprocess + shared-memory queue can block the
+    # Python parent's shutdown indefinitely (the script hangs after
+    # "wandb run finished" with the EngineCore still occupying GPU
+    # memory). Explicitly drop the engine before exiting, then force
+    # os._exit so atexit handlers can't re-trigger the deadlock.
+    try:
+        from experiments.evaluate_local_vllm import _destroy_engine
+
+        _destroy_engine()
+    except Exception as exc:
+        log.warning("Engine cleanup before exit failed: %s", exc)
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":
