@@ -136,13 +136,22 @@ def _load_local_vllm(
 
     requested_max_len = max_model_len or _max_model_len_for(model_id)
 
-    # Reuse the cached engine only if it matches both model_id AND has
-    # at least the requested context length. CUAD asks for ~33 K while
-    # MedQA needs 4 K; without this check the smaller engine would
-    # crash on the long prompt.
+    # Reuse the cached engine only if it matches model_id AND has at
+    # least the requested context length AND was built with the same
+    # tensor_parallel_size. CUAD asks for ~33 K while MedQA needs 4 K;
+    # without the max_len check the smaller engine would crash on the
+    # long prompt. The TP check matters when phase 1 (TP=1, per-model
+    # parallel) and phase 2 (TP=3, sharded) are interleaved in the same
+    # Python process -- without it the cache would hand back a TP=1
+    # engine for a TP=3 request.
     cached_model_id = _vllm_engine.get("model_id")
     cached_max_len = _vllm_engine.get("max_model_len", 0)
-    if cached_model_id == model_id and cached_max_len >= requested_max_len:
+    cached_tp = _vllm_engine.get("tensor_parallel_size", 1)
+    if (
+        cached_model_id == model_id
+        and cached_max_len >= requested_max_len
+        and cached_tp == tensor_parallel_size
+    ):
         return _vllm_engine["llm"]
 
     _destroy_engine()
@@ -200,6 +209,7 @@ def _load_local_vllm(
 
     _vllm_engine["model_id"] = model_id
     _vllm_engine["max_model_len"] = max_model_len
+    _vllm_engine["tensor_parallel_size"] = tensor_parallel_size
     _vllm_engine["llm"] = llm
     return llm
 
