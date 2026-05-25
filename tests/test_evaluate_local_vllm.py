@@ -11,7 +11,11 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import experiments.evaluate_local_vllm as vllm_mod
-from experiments.evaluate_local_vllm import _destroy_engine, _max_model_len_for
+from experiments.evaluate_local_vllm import (
+    _destroy_engine,
+    _max_model_len_for,
+    _quantization_for,
+)
 
 
 # ----------------------------------------------------------------------
@@ -62,6 +66,55 @@ def test_max_model_len_non_gemma_respects_caller_default():
 def test_max_model_len_case_insensitive_for_gemma():
     """Gemma-2 detection is case-insensitive."""
     assert _max_model_len_for("Unsloth/GEMMA-2-9b-It", default=131072) == 8192
+
+
+# ----------------------------------------------------------------------
+# _quantization_for : pick the right vLLM quantization arg from model_id
+# ----------------------------------------------------------------------
+
+
+def test_quantization_for_bnb_default():
+    """Default path: Unsloth Dynamic 2.0 bnb checkpoints -> bitsandbytes."""
+    assert _quantization_for("unsloth/Qwen3-14B-unsloth-bnb-4bit") == "bitsandbytes"
+    assert (
+        _quantization_for("unsloth/granite-3.2-8b-instruct-unsloth-bnb-4bit")
+        == "bitsandbytes"
+    )
+
+
+def test_quantization_for_awq_suffix():
+    """AWQ checkpoints must use awq_marlin so vLLM avoids the broken bnb_loader.
+
+    Concrete case: casperhansen/llama-3.3-70b-instruct-awq -- the bnb_loader
+    has a known shape mismatch on Llama-3.3 70B GQA qkv_proj, so we have to
+    route these through the AWQ kernels instead.
+    """
+    assert _quantization_for("casperhansen/llama-3.3-70b-instruct-awq") == "awq_marlin"
+    assert (
+        _quantization_for("casperhansen/deepseek-r1-distill-llama-70b-awq")
+        == "awq_marlin"
+    )
+
+
+def test_quantization_for_awq_int4_variant():
+    """Some publishers use the -awq-int4 suffix."""
+    assert _quantization_for("some/Model-AWQ-int4") == "awq_marlin"
+
+
+def test_quantization_for_awq_in_middle_of_name():
+    """The substring '-awq-' anywhere in the id should still route to AWQ."""
+    assert _quantization_for("foo/bar-awq-quantized") == "awq_marlin"
+
+
+def test_quantization_for_gptq_suffix():
+    """GPTQ uses gptq_marlin (faster than the legacy gptq kernel)."""
+    assert _quantization_for("TheBloke/Llama-2-7B-GPTQ") == "gptq_marlin"
+
+
+def test_quantization_for_is_case_insensitive():
+    """Suffix detection must not depend on the publisher's casing."""
+    assert _quantization_for("Some/Llama-AWQ") == "awq_marlin"
+    assert _quantization_for("Some/Llama-GPTQ") == "gptq_marlin"
 
 
 # ----------------------------------------------------------------------

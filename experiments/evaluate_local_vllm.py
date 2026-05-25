@@ -58,6 +58,22 @@ def _max_model_len_for(model_id: str, default: int = 8192) -> int:
     return default
 
 
+def _quantization_for(model_id: str) -> str:
+    """Pick vLLM's quantization arg from the model_id suffix.
+
+    Default is bitsandbytes (4-bit NF4). AWQ checkpoints (e.g.
+    casperhansen/...-awq) need quantization='awq_marlin' or 'awq' so
+    vLLM dispatches to the AWQ kernels instead of bnb_loader, which has
+    a known shape mismatch on Llama-3.3 70B GQA qkv_proj.
+    """
+    lower = model_id.lower()
+    if lower.endswith("-awq") or "-awq-" in lower or lower.endswith("-awq-int4"):
+        return "awq_marlin"
+    if lower.endswith("-gptq") or "-gptq-" in lower:
+        return "gptq_marlin"
+    return "bitsandbytes"
+
+
 def _destroy_engine() -> None:
     """Drop the cached engine and free its GPU memory."""
     if "llm" not in _vllm_engine:
@@ -119,15 +135,17 @@ def _load_local_vllm(
     from vllm import LLM
 
     def _try_load(repo_id: str):
+        quantization = _quantization_for(repo_id)
         log.info(
-            "Loading vLLM engine %s (max_model_len=%d, gpu_util=%.2f) ...",
+            "Loading vLLM engine %s (quantization=%s, max_model_len=%d, gpu_util=%.2f) ...",
             repo_id,
+            quantization,
             max_model_len,
             gpu_memory_utilization,
         )
         return LLM(
             model=repo_id,
-            quantization="bitsandbytes",
+            quantization=quantization,
             dtype="bfloat16",
             max_model_len=max_model_len,
             gpu_memory_utilization=gpu_memory_utilization,

@@ -80,13 +80,17 @@ MODELS = {
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
     # --- Local (Unsloth Dynamic 2.0 bnb-4bit; falls back to standard
     #          bnb-4bit at load time if the dynamic variant is 404 on HF) ---
+    # The two Llama-70B variants are exceptions: vLLM's bnb_loader has a
+    # known shape mismatch with GQA-packed qkv_proj on 70B Llama-3.3 and
+    # its derivatives, so we use AWQ for those two (loaded with
+    # quantization="awq_marlin").
     "llama-3.3-70b": {
         "provider": "local",
-        "model_id": "unsloth/Llama-3.3-70B-Instruct-unsloth-bnb-4bit",
+        "model_id": "casperhansen/llama-3.3-70b-instruct-awq",
     },
     "deepseek-r1-distill-70b": {
         "provider": "local",
-        "model_id": "unsloth/DeepSeek-R1-Distill-Llama-70B-unsloth-bnb-4bit",
+        "model_id": "casperhansen/deepseek-r1-distill-llama-70b-awq",
     },
     "qwq-32b": {"provider": "local", "model_id": "unsloth/QwQ-32B-unsloth-bnb-4bit"},
     "qwen3-30b-a3b": {
