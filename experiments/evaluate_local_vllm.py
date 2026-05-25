@@ -102,6 +102,8 @@ def _quantization_for(model_id: str) -> str:
         return "gptq_marlin"
     if "w4a16" in lower or "compressed-tensors" in lower:
         return "compressed-tensors"
+    if lower.endswith("-fp8") or "-fp8-" in lower:
+        return "fp8"
     return "bitsandbytes"
 
 
@@ -307,27 +309,25 @@ def evaluate_local_vllm(
             _THINKING_MAX_NEW_TOKENS_CAP,
         )
 
-    # vLLM needs max_model_len >= max_length + max_new_tokens, but some
-    # models can't go that high (gemma-2 caps at 8K, phi-4 at 16K,
-    # llama-3.3-70b AWQ on 48 GB OOMs above ~11 K). Cap the requested
-    # length to the per-model ceiling. Prompts that exceed
-    # (cap - max_new_tokens) will be truncated via
-    # SamplingParams.truncate_prompt_tokens below; without that, vLLM
-    # raises a ValueError mid-batch and we'd lose the whole dataset
-    # (observed at the dry-run: 4 of 6 models lost their CUAD JSON
-    # because vLLM refused to instantiate at max_model_len=33280).
+    # vLLM needs max_model_len >= max_length + max_new_tokens. Some
+    # models can't reach the dataset's requested length (gemma-2 caps
+    # at 8K, phi-4 at 16K). Rather than truncating prompts and
+    # silently producing degraded results (e.g. CUAD's legal contract
+    # body would be cut), we skip the (model, dataset) pair: the JSON
+    # is not produced and the paper reports the limitation explicitly.
     requested_max_len = max(max_length + max_new_tokens, 4096)
     model_cap = _max_model_len_for(model_id, default=requested_max_len)
-    max_model_len = min(requested_max_len, model_cap)
-    if max_model_len < requested_max_len:
+    if requested_max_len > model_cap:
         log.warning(
-            "Capping max_model_len from %d to %d for %s; prompts longer than "
-            "%d tokens will be truncated.",
-            requested_max_len,
-            max_model_len,
+            "Skipping %s on %s: dataset needs %d tokens but model caps at %d "
+            "(no truncation policy). The (model, dataset) JSON will not be saved.",
             model_id,
-            max_model_len - max_new_tokens,
+            dataset_name,
+            requested_max_len,
+            model_cap,
         )
+        return []
+    max_model_len = requested_max_len
 
     llm = _load_local_vllm(model_id, max_model_len=max_model_len)
     tokenizer = llm.get_tokenizer()
@@ -339,17 +339,9 @@ def evaluate_local_vllm(
     # mismatch), so we explicitly leave top_p unset to force the native
     # PyTorch sampler. Combined with VLLM_USE_FLASHINFER_SAMPLER=0, this
     # is belt-and-braces against the same crash.
-    #
-    # truncate_prompt_tokens: keep only the last (max_model_len -
-    # max_new_tokens) tokens. CUAD prompts are ~33 K (legal contracts);
-    # on gemma-2 / phi-4 / llama-3.3-70b we lose the beginning, which
-    # contains the contract text. The trailing portion holds the actual
-    # question + answer choices, so the model still has a chance. This
-    # is documented as a known limitation when reporting CUAD numbers.
     sampling = SamplingParams(
         max_tokens=max_new_tokens,
         temperature=0.0,
-        truncate_prompt_tokens=max(max_model_len - max_new_tokens, 1),
     )
 
     # Build prompts. We use the tokenizer's chat template when available
