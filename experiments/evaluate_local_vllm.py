@@ -51,10 +51,35 @@ _vllm_engine: dict[str, Any] = {}
 # ---------------------------------------------------------------------------
 
 
+# Per-model hard caps on max_model_len. These come from the model's
+# `max_position_embeddings` in config.json (or, for llama-3.3-70b AWQ on
+# a 48 GB card, from the KV-cache budget vLLM reports at load time).
+# CUAD asks for ~33 K tokens which exceeds all of these, so the caller
+# must truncate prompts down to (cap - max_new_tokens) on those models.
+_MODEL_MAX_LEN_CAPS: tuple[tuple[str, int], ...] = (
+    ("gemma-2", 8192),  # native cap (max_position_embeddings)
+    ("phi-4", 16384),  # max_position_embeddings=16384
+    # llama-3.3-70b AWQ on a 48 GB card: KV cache OOMs above ~11 K when
+    # gpu_memory_utilization=0.92 leaves ~3.4 GiB for KV. vLLM's own
+    # error report suggests 11072 as the effective ceiling.
+    ("llama-3.3-70b", 11072),
+    ("llama-3.3", 11072),
+)
+
+
 def _max_model_len_for(model_id: str, default: int = 8192) -> int:
-    """Pick a sensible max_model_len. gemma-2 caps at 8K natively."""
-    if "gemma-2" in model_id.lower():
-        return 8192
+    """Pick the max sequence length vLLM is allowed to instantiate for
+    this model.
+
+    Returns the per-model cap from `_MODEL_MAX_LEN_CAPS` (matched on a
+    substring of `model_id`, case-insensitive) if there is one, else
+    `default`. Callers should always pass this through min(requested,
+    cap) -- the cap is a hard ceiling, not a default.
+    """
+    lower = model_id.lower()
+    for pattern, cap in _MODEL_MAX_LEN_CAPS:
+        if pattern in lower:
+            return cap
     return default
 
 
@@ -260,8 +285,28 @@ def evaluate_local_vllm(
             _THINKING_MAX_NEW_TOKENS_CAP,
         )
 
-    # vLLM needs max_model_len >= max_length + max_new_tokens
-    max_model_len = max(max_length + max_new_tokens, 4096)
+    # vLLM needs max_model_len >= max_length + max_new_tokens, but some
+    # models can't go that high (gemma-2 caps at 8K, phi-4 at 16K,
+    # llama-3.3-70b AWQ on 48 GB OOMs above ~11 K). Cap the requested
+    # length to the per-model ceiling. Prompts that exceed
+    # (cap - max_new_tokens) will be truncated via
+    # SamplingParams.truncate_prompt_tokens below; without that, vLLM
+    # raises a ValueError mid-batch and we'd lose the whole dataset
+    # (observed at the dry-run: 4 of 6 models lost their CUAD JSON
+    # because vLLM refused to instantiate at max_model_len=33280).
+    requested_max_len = max(max_length + max_new_tokens, 4096)
+    model_cap = _max_model_len_for(model_id, default=requested_max_len)
+    max_model_len = min(requested_max_len, model_cap)
+    if max_model_len < requested_max_len:
+        log.warning(
+            "Capping max_model_len from %d to %d for %s; prompts longer than "
+            "%d tokens will be truncated.",
+            requested_max_len,
+            max_model_len,
+            model_id,
+            max_model_len - max_new_tokens,
+        )
+
     llm = _load_local_vllm(model_id, max_model_len=max_model_len)
     tokenizer = llm.get_tokenizer()
 
@@ -272,9 +317,17 @@ def evaluate_local_vllm(
     # mismatch), so we explicitly leave top_p unset to force the native
     # PyTorch sampler. Combined with VLLM_USE_FLASHINFER_SAMPLER=0, this
     # is belt-and-braces against the same crash.
+    #
+    # truncate_prompt_tokens: keep only the last (max_model_len -
+    # max_new_tokens) tokens. CUAD prompts are ~33 K (legal contracts);
+    # on gemma-2 / phi-4 / llama-3.3-70b we lose the beginning, which
+    # contains the contract text. The trailing portion holds the actual
+    # question + answer choices, so the model still has a chance. This
+    # is documented as a known limitation when reporting CUAD numbers.
     sampling = SamplingParams(
         max_tokens=max_new_tokens,
         temperature=0.0,
+        truncate_prompt_tokens=max(max_model_len - max_new_tokens, 1),
     )
 
     # Build prompts. We use the tokenizer's chat template when available
