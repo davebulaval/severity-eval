@@ -76,8 +76,11 @@ if [[ "$DO_KILL" == "true" ]]; then
     echo ""
     echo "## Running smoke/eval/python processes"
     echo ""
-    # Match the wrappers and the python evaluators specifically.
-    PATTERN='(run_local_smoke|run_local_smoke_parallel|run_full_pipeline|run_all\.sh|evaluate_models|test_hypotheses|validate_severity_llm)'
+    # Match the wrappers, the python evaluators AND the vLLM/wandb
+    # children they spawn. Without EngineCore + wandb-core, killed runs
+    # leave zombie GPU+VRAM allocations -- exactly the failure mode that
+    # required manual `pkill -9 -f EngineCore` in past sessions.
+    PATTERN='(run_local_smoke|run_full_pipeline|run_all\.sh|evaluate_models|test_hypotheses|validate_severity_llm|EngineCore|VLLM::EngineCore|wandb-core)'
     PIDS=$(pgrep -af "$PATTERN" | grep -v "cleanup.sh" | awk '{print $1}' || true)
     if [[ -z "$PIDS" ]]; then
         echo "(no matching processes)"
