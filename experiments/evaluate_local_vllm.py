@@ -86,29 +86,28 @@ def _quantization_for(model_id: str) -> str | None:
     """Pick vLLM's quantization arg from the model_id suffix.
 
     Returns:
+      - "bitsandbytes" for Unsloth bnb checkpoints (matched on
+        "-bnb-4bit" in the id). These cannot do TP -- _load_local_vllm
+        force-caps TP=1 when this branch fires.
       - "awq_marlin" / "gptq_marlin" / "compressed-tensors" / "fp8"
-        for ids whose suffix matches the corresponding pattern.
-      - None for models that ship their own non-standard quantization
-        in config.json (gpt-oss-* uses MXFP4 natively); we pass
-        quantization=None and let vLLM auto-detect.
-      - "bitsandbytes" as a fallback for Unsloth checkpoints whose
-        repo name contains "-bnb-4bit" but no other quant suffix.
+        for ids whose suffix matches the corresponding quantization.
+      - None as the default. vLLM 0.9+ reads quant_config from the
+        model's config.json when quantization=None and picks the
+        right kernel (covers FP16, MXFP4 native, and anything else
+        without a recognizable suffix).
     """
     lower = model_id.lower()
+    if "-bnb-4bit" in lower:
+        return "bitsandbytes"
     if lower.endswith("-awq") or "-awq-" in lower or lower.endswith("-awq-int4"):
         return "awq_marlin"
     if lower.endswith("-gptq") or "-gptq-" in lower:
         return "gptq_marlin"
     if "w4a16" in lower or "compressed-tensors" in lower:
         return "compressed-tensors"
-    if lower.endswith("-fp8") or "-fp8-" in lower:
+    if lower.endswith("-fp8") or "-fp8-" in lower or "-fp8-dynamic" in lower:
         return "fp8"
-    if "gpt-oss" in lower:
-        # OpenAI gpt-oss-* ships MXFP4. vLLM 0.9+ reads the quant_config
-        # from config.json when quantization=None, so we leave it
-        # unset and let the engine pick the right kernel.
-        return None
-    return "bitsandbytes"
+    return None
 
 
 def _destroy_engine() -> None:

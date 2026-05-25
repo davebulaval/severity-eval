@@ -79,52 +79,61 @@ MODELS = {
         "model_id": "qwen/qwen3-235b-a22b-thinking-2507",
     },
     "qwen3-235b": {"provider": "openrouter", "model_id": "qwen/qwen3-235b-a22b-2507"},
-    # --- Local (Unsloth Dynamic 2.0 bnb-4bit; falls back to standard
-    #          bnb-4bit at load time if the dynamic variant is 404 on HF) ---
-    # The two Llama-70B variants are exceptions: vLLM's bnb_loader has a
-    # known shape mismatch with GQA-packed qkv_proj on 70B Llama-3.3 and
-    # its derivatives, so we use AWQ for those two (loaded with
-    # quantization="awq_marlin").
+    # --- Local checkpoints (FP8 where available, FP16 fallback for granite) ---
+    # FP8 gives strictly better inference than AWQ/GPTQ INT4 on Ada
+    # Lovelace+ (RTX 6000 Ada compute 8.9 has native FP8 tensor cores):
+    # 8 bits of precision instead of 4 (~3% accuracy uplift on
+    # reasoning benchmarks in literature) AND faster matmul kernel
+    # paths. VRAM doubles vs INT4 but every model below still fits in
+    # TP=2 on 2x48 GB.
     "llama-3.3-70b": {
         "provider": "local",
-        "model_id": "casperhansen/llama-3.3-70b-instruct-awq",
+        "model_id": "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic",
     },
     "deepseek-r1-distill-70b": {
         "provider": "local",
-        "model_id": "casperhansen/deepseek-r1-distill-llama-70b-awq",
+        "model_id": "RedHatAI/DeepSeek-R1-Distill-Llama-70B-FP8-dynamic",
     },
-    # AWQ across the board where a maintained AWQ checkpoint exists: vLLM
-    # cannot do tensor parallelism with pre-quantized bitsandbytes
-    # (raises "Prequant BitsAndBytes models with tensor parallelism is
-    # not supported"). AWQ + awq_marlin routes through TP-friendly
-    # kernels and lets each model use all available GPUs.
-    "qwq-32b": {"provider": "local", "model_id": "Qwen/QwQ-32B-AWQ"},
-    "qwen3-14b": {"provider": "local", "model_id": "Qwen/Qwen3-14B-AWQ"},
-    "phi-4": {"provider": "local", "model_id": "stelterlab/phi-4-AWQ"},
-    # Qwen2.5-72B non-thinking, AWQ official. Complements llama-3.3-70b
-    # in the 70B non-thinking band -- different family, useful for
-    # paper coverage.
     "qwen2.5-72b": {
         "provider": "local",
-        "model_id": "Qwen/Qwen2.5-72B-Instruct-AWQ",
+        "model_id": "RedHatAI/Qwen2.5-72B-Instruct-FP8-dynamic",
     },
-    # mistral-small-3 has no AWQ; the RedHat compressed-tensors w4a16
-    # checkpoint is TP-compatible and uses the "compressed-tensors"
-    # quantization path in vLLM (auto-detected from config.json).
-    "mistral-small-3": {
+    "qwq-32b": {
         "provider": "local",
-        "model_id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w4a16",
+        "model_id": "RedHatAI/QwQ-32B-FP8-dynamic",
     },
-    # qwen3-30b-a3b: switched from unsloth bnb-4bit to the official FP8
-    # checkpoint so the MoE goes through vLLM's fp8 kernels (TP-compatible
-    # on Ada Lovelace / compute capability 8.9+).
+    # qwen3-30b-a3b: official Qwen FP8 MoE -- TP-compatible.
     "qwen3-30b-a3b": {
         "provider": "local",
         "model_id": "Qwen/Qwen3-30B-A3B-FP8",
     },
-    # OpenAI's open-weight models (December 2025). MXFP4-quantized natively;
-    # vLLM auto-detects from config.json (no explicit quantization arg).
-    # Reasoning-style outputs -- treat like a thinking model.
+    "mistral-small-3": {
+        "provider": "local",
+        "model_id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-FP8-dynamic",
+    },
+    # Gemma-3 (Dec 2024) replaces gemma-2. RedHatAI FP8-dynamic: better
+    # quality and faster than the GPTQ INT4 community variants.
+    "gemma-3-27b": {
+        "provider": "local",
+        "model_id": "RedHatAI/gemma-3-27b-it-FP8-dynamic",
+    },
+    "gemma-3-12b": {
+        "provider": "local",
+        "model_id": "RedHatAI/gemma-3-12b-it-FP8-dynamic",
+    },
+    # qwen3-14b: official Qwen FP8 ships directly, preferred over the
+    # RedHat dynamic-quant variant when the upstream maintainer covers it.
+    "qwen3-14b": {
+        "provider": "local",
+        "model_id": "Qwen/Qwen3-14B-FP8",
+    },
+    "phi-4": {
+        "provider": "local",
+        "model_id": "RedHatAI/phi-4-FP8-dynamic",
+    },
+    # OpenAI's open-weight models (Dec 2025). MXFP4-quantized natively;
+    # vLLM auto-detects from config.json. Reasoning-style outputs --
+    # treat like a thinking model.
     "gpt-oss-20b": {
         "provider": "local",
         "model_id": "openai/gpt-oss-20b",
@@ -133,24 +142,15 @@ MODELS = {
         "provider": "local",
         "model_id": "openai/gpt-oss-120b",
     },
-    # Gemma-3 replaces gemma-2. Gemma-3 (Dec 2024) has 1/4/12/27B; closest
-    # to gemma-2-9b is the 12B. GPTQ checkpoints from ISTA-DASLab are
-    # TP-compatible (gptq_marlin kernel).
-    "gemma-3-12b": {
-        "provider": "local",
-        "model_id": "ISTA-DASLab/gemma-3-12b-it-GPTQ-4b-128g",
-    },
-    "gemma-3-27b": {
-        "provider": "local",
-        "model_id": "ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g",
-    },
-    # No AWQ/w4a16/FP8 available for granite-3.2-8b at the time of writing.
-    # Stays on bnb-4bit and is forced to TP=1 inside _load_local_vllm so
-    # vLLM does not raise "Prequant BitsAndBytes" when the wrapper passes
-    # TP>1.
+    # No FP8/AWQ/GPTQ/w4a16 for granite-3.2-8b on HF. The IBM official
+    # FP16 checkpoint (~16 GB) gives reference quality and loads
+    # single-GPU; small enough that the NCCL overhead of TP=2 is not
+    # worth it. _quantization_for returns None for this id (no quant
+    # suffix) so vLLM auto-detects from config.json and the bnb TP=1
+    # cap does NOT trigger.
     "granite-3.2-8b": {
         "provider": "local",
-        "model_id": "unsloth/granite-3.2-8b-instruct-unsloth-bnb-4bit",
+        "model_id": "ibm-granite/granite-3.2-8b-instruct",
     },
 }
 
