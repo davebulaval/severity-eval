@@ -89,13 +89,22 @@ fi
 
 # bucket index → space-separated model list.
 # With --skip-thinking we rebalance so the 6 non-thinking models split
-# evenly across 3 GPUs (otherwise dropping the thinking models leaves
-# bucket 2 with just granite + gemma-27b + mistral, ~1 h, while gpu0
-# stays at 3 h on llama-3.3-70b alone).
+# evenly across 3 GPUs. Wall-time per (model, dataset @ limit=10), measured
+# on caribou (RTX 6000 Ada 48 GB):
+#     gemma-2-27b   : ~240 s  -> 11 datasets = ~44 min  (bottleneck)
+#     phi-4         : ~100 s  -> ~18 min
+#     llama-3.3-70b : ~70 s   -> ~13 min
+#     gemma-2-9b    : ~70 s   -> ~13 min
+#     mistral-small-3: ~66 s  -> ~12 min
+#     granite-3.2-8b: ~40 s   -> ~7 min
+# gemma-2-27b is isolated on its own GPU (no way to pair it without
+# pushing that bucket over 50 min). The other 5 are greedily packed
+# onto the two remaining GPUs to land near ~30 min each. Total wall
+# clock at limit=10 is ~44 min (vs ~56 min with the previous balance).
 if [[ "$SKIP_THINKING" == "true" ]]; then
-    BUCKET_0=(llama-3.3-70b gemma-2-9b)            # heavy non-think + small
-    BUCKET_1=(phi-4 granite-3.2-8b)                # medium + small
-    BUCKET_2=(mistral-small-3 gemma-2-27b)         # medium x 2
+    BUCKET_0=(llama-3.3-70b phi-4)                                    # ~31 min
+    BUCKET_1=(gemma-2-9b mistral-small-3 granite-3.2-8b)              # ~32 min
+    BUCKET_2=(gemma-2-27b)                                             # ~44 min (bottleneck)
 else
     BUCKET_0=(llama-3.3-70b qwen3-14b gemma-2-9b)
     BUCKET_1=(deepseek-r1-distill-70b phi-4)
