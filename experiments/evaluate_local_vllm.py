@@ -82,16 +82,17 @@ def _max_model_len_for(model_id: str, default: int = 8192) -> int:
     return default
 
 
-def _quantization_for(model_id: str) -> str:
+def _quantization_for(model_id: str) -> str | None:
     """Pick vLLM's quantization arg from the model_id suffix.
 
-    Default is bitsandbytes (4-bit NF4). AWQ checkpoints (e.g.
-    casperhansen/...-awq) need quantization='awq_marlin' or 'awq' so
-    vLLM dispatches to the AWQ kernels instead of bnb_loader, which has
-    a known shape mismatch on Llama-3.3 70B GQA qkv_proj.
-    Compressed-tensors w4a16 checkpoints (e.g. RedHatAI/...w4a16) need
-    quantization='compressed-tensors' so vLLM uses the marlin kernels
-    that support TP.
+    Returns:
+      - "awq_marlin" / "gptq_marlin" / "compressed-tensors" / "fp8"
+        for ids whose suffix matches the corresponding pattern.
+      - None for models that ship their own non-standard quantization
+        in config.json (gpt-oss-* uses MXFP4 natively); we pass
+        quantization=None and let vLLM auto-detect.
+      - "bitsandbytes" as a fallback for Unsloth checkpoints whose
+        repo name contains "-bnb-4bit" but no other quant suffix.
     """
     lower = model_id.lower()
     if lower.endswith("-awq") or "-awq-" in lower or lower.endswith("-awq-int4"):
@@ -102,6 +103,11 @@ def _quantization_for(model_id: str) -> str:
         return "compressed-tensors"
     if lower.endswith("-fp8") or "-fp8-" in lower:
         return "fp8"
+    if "gpt-oss" in lower:
+        # OpenAI gpt-oss-* ships MXFP4. vLLM 0.9+ reads the quant_config
+        # from config.json when quantization=None, so we leave it
+        # unset and let the engine pick the right kernel.
+        return None
     return "bitsandbytes"
 
 
@@ -164,9 +170,9 @@ def _load_local_vllm(
     # parallelism is not supported") at engine init time for any
     # bitsandbytes checkpoint with TP>1. Cap silently so the wrapper
     # script can pass the same TP for every model without per-model
-    # conditionals. The 3 models that lack an AWQ/GPTQ/w4a16
-    # equivalent (granite-3.2-8b, gemma-2-27b, qwen3-30b-a3b) will run
-    # single-GPU; vLLM still parallelizes within the single GPU.
+    # conditionals. In the current MODELS table only granite-3.2-8b
+    # lacks an AWQ/GPTQ/FP8/w4a16 equivalent; it will run single-GPU
+    # and vLLM still parallelizes within the single GPU.
     if _quantization_for(model_id) == "bitsandbytes" and tensor_parallel_size > 1:
         log.warning(
             "bitsandbytes checkpoint %s does not support TP>1; "
@@ -308,13 +314,14 @@ def evaluate_local_vllm(
         )
 
     # vLLM needs max_model_len >= max_length + max_new_tokens. When the
-    # dataset (CUAD ~33 K) exceeds the model's hard cap (gemma-2/3 at 8K,
-    # phi-4 at 16K), we instantiate at the cap and let
+    # dataset (CUAD ~33 K) exceeds the model's hard cap (only phi-4 at
+    # 16 K in the current MODELS table -- gemma-3 has 128 K native),
+    # we instantiate at the cap and let
     # SamplingParams.truncate_prompt_tokens drop the leading tokens so
     # the trailing portion (which holds the question + answer choices)
     # fits. We keep the largest tail possible, max_model_len -
     # max_new_tokens. Loss of leading context is documented as a
-    # limitation when reporting CUAD numbers on those models.
+    # limitation when reporting CUAD numbers on phi-4.
     requested_max_len = max(max_length + max_new_tokens, 4096)
     model_cap = _max_model_len_for(model_id, default=requested_max_len)
     max_model_len = min(requested_max_len, model_cap)

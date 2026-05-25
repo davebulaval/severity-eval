@@ -123,6 +123,16 @@ def test_quantization_for_is_case_insensitive():
     assert _quantization_for("Some/Llama-GPTQ") == "gptq_marlin"
 
 
+def test_quantization_for_gpt_oss_returns_none():
+    """gpt-oss-* ships MXFP4 natively; we return None so vLLM auto-detects
+    the quantization from config.json. Passing 'bitsandbytes' (the
+    default fallback) would crash the engine init.
+    """
+    assert _quantization_for("openai/gpt-oss-20b") is None
+    assert _quantization_for("openai/gpt-oss-120b") is None
+    assert _quantization_for("openai/GPT-OSS-20B") is None  # case insensitive
+
+
 def test_quantization_for_fp8():
     """FP8 checkpoints (e.g. Qwen/Qwen3-30B-A3B-FP8) need quantization='fp8'
     so vLLM routes through the fp8 kernels (TP-compatible on Ada+).
@@ -147,8 +157,9 @@ def test_quantization_for_w4a16_compressed_tensors():
 def test_load_local_vllm_caps_tp_to_1_for_bitsandbytes():
     """vLLM refuses TP>1 on bitsandbytes checkpoints. The wrapper must
     silently drop to TP=1 so an aggressive --tensor-parallel-size on
-    the CLI does not crash the 3 bnb-only models (granite-3.2-8b,
-    gemma-2-27b, qwen3-30b-a3b)."""
+    the CLI does not crash granite-3.2-8b (the only bnb-only model
+    left after PR #34 swaps gemma-2 -> gemma-3 GPTQ and qwen3-30b-a3b
+    -> FP8)."""
     import types
     from unittest.mock import patch
 
