@@ -51,7 +51,16 @@ DEFAULT_MODELS=(
     deepseek-r1-distill-70b
 )
 
-GPUS="0,1,2"
+# Default to 2 GPUs because vLLM requires
+#   num_attention_heads % tensor_parallel_size == 0
+# and every local model we run has num_heads in {16, 32, 40, 64} --
+# none of which is divisible by 3. TP=3 fails fast with
+#   "Total number of attention heads (N) must be divisible by tensor
+#   parallel size (3)"
+# from VllmConfig validation. TP=2 covers all four head counts (16/2=8,
+# 32/2=16, 40/2=20, 64/2=32). The third card stays idle on a 3-GPU
+# machine; use --gpus 0,1,2,3 once a 4th GPU is available.
+GPUS="0,1"
 LIMIT="5"
 SKIP_MODELS=""
 SELECTED_MODELS=""
