@@ -57,12 +57,17 @@ _vllm_engine: dict[str, Any] = {}
 # for ~33 K tokens which exceeds phi-4 (16 K); the caller truncates
 # prompts to (cap - max_new_tokens) via SamplingParams.
 #
-# gemma-3 (12B, 27B) is NOT capped: it natively supports 128 K context
-# (the gemma-2 entries were removed when we swapped to gemma-3).
-# gpt-oss-20b / gpt-oss-120b also handle 128 K natively.
-# llama-3.3-70b at TP=2 has enough KV cache budget for 33 K.
+# Caps reflect each checkpoint's native max_position_embeddings. CUAD
+# asks for ~33 K -- families capped below that (Qwen2.5, Qwen3, QwQ at
+# 32 K; phi-4 at 16 K) need this entry so vLLM does not reject the init,
+# and prompts get tail-truncated by the caller. gemma-3 (12B/27B), the
+# gpt-oss models, mistral-small-3, llama-3.3-70b, deepseek-r1-distill,
+# and granite-3.2-8b all handle >= 33 K natively.
 _MODEL_MAX_LEN_CAPS: tuple[tuple[str, int], ...] = (
-    ("phi-4", 16384),  # native max_position_embeddings
+    ("phi-4", 16384),
+    ("qwen2.5", 32768),
+    ("qwen3", 32768),
+    ("qwq", 32768),
 )
 
 

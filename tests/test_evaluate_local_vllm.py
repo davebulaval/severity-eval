@@ -36,11 +36,33 @@ def test_max_model_len_does_not_cap_gemma_3():
 
 def test_max_model_len_non_capped_uses_default():
     """A model without an entry in _MODEL_MAX_LEN_CAPS uses the caller's
-    default. qwq-32b is not in the cap table.
+    default. granite-3.2-8b is not in the cap table.
     """
     assert (
-        _max_model_len_for("unsloth/QwQ-32B-unsloth-bnb-4bit", default=32768) == 32768
+        _max_model_len_for("ibm-granite/granite-3.2-8b-instruct", default=33280)
+        == 33280
     )
+
+
+def test_max_model_len_caps_qwen25_72b_at_32k():
+    """Qwen2.5-72B-Instruct has max_position_embeddings=32768. CUAD asks
+    for ~33 K, so vLLM rejects unless we pass max_model_len <= 32768.
+    """
+    assert (
+        _max_model_len_for("RedHatAI/Qwen2.5-72B-Instruct-FP8-dynamic", default=131072)
+        == 32768
+    )
+
+
+def test_max_model_len_caps_qwen3_at_32k():
+    """Qwen3 family (Qwen3-14B, Qwen3-30B-A3B) tops out at 32 K natively."""
+    assert _max_model_len_for("Qwen/Qwen3-14B-FP8", default=131072) == 32768
+    assert _max_model_len_for("Qwen/Qwen3-30B-A3B-FP8", default=131072) == 32768
+
+
+def test_max_model_len_caps_qwq_at_32k():
+    """QwQ-32B inherits Qwen2's 32 K cap."""
+    assert _max_model_len_for("RedHatAI/QwQ-32B-FP8-dynamic", default=131072) == 32768
 
 
 def test_max_model_len_caps_phi_4_at_16k():
