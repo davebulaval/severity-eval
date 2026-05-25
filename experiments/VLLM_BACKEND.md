@@ -59,8 +59,8 @@ PYTHONPATH=src python -m experiments.evaluate_models \
 ### Run the smoke matrix
 
 ```bash
-# Run every local model sequentially with tensor parallelism across all GPUs:
-./experiments/run_local_sequential_tp.sh --gpus 0,1,2 --limit 100
+# Two-stream mixed run: AWQ/w4a16 in TP=2 on GPUs 0+1, bnb in TP=1 on GPU 2:
+./experiments/run_local_mixed.sh --gpus 0,1,2 --limit 100
 ```
 
 ### Benchmark a single model
