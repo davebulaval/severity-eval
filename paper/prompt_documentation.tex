@@ -8,7 +8,7 @@
 % \section{Evaluation Prompts and Methodology}
 % \label{sec:prompts}
 
-We evaluate 22 LLMs across 11 datasets spanning three domains (finance, medical, legal) and two private insurance datasets.
+We evaluate up to 29 LLMs across eight datasets spanning four domains (finance, medical, legal, insurance) after dropping three benchmarks (MedQA, MedCalc-Bench, RAG Insurance) whose keyword-based severity labels could not be defended at the critical-vs-major boundary in inter-annotator validation.
 For each dataset, we use two prompt configurations:
 \begin{enumerate}
     \item \textbf{Original prompts} (primary results): zero-shot prompts from published evaluation protocols, ensuring comparability with prior work.

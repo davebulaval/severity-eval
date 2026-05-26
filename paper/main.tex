@@ -69,12 +69,13 @@ quantifying this distinction, but left open the question of whether
 the theoretical gap between accuracy and economic risk materializes in
 practice across models, domains, and scales.
 
-We report an empirical study applying this framework to up to 23
+We report an empirical study applying this framework to up to 29
 language models---frontier APIs together with locally deployed
-open-weight models in the 8B--235B parameter range---across 11
+open-weight models in the 8B--235B parameter range---across eight
 benchmarks in four high-stakes domains (finance, medicine, law, and
-insurance). Each benchmark instance carries a severity annotation
-grounded in domain-specific regulatory and economic evidence. Using
+insurance). Each benchmark instance carries a severity annotation that
+records the cost of erring on that instance, grounded in
+domain-specific regulatory and economic evidence. Using
 the compound loss model $S = \sum_{i=1}^{N} X_i$ with
 $N \sim \mathrm{Bin}(n, p)$ and $X_i$ drawn from a categorical
 severity distribution, we estimate the expected aggregate loss, the
@@ -139,7 +140,7 @@ accuracy and economic risk is consistent, substantial, and
 reproducible across models, domains, and scales.
 
 This paper provides empirical grounding for the framework. We
-evaluate up to 23 language models on eight benchmarks spanning
+evaluate up to 29 language models on eight benchmarks spanning
 finance, medicine, law, and insurance. For each benchmark, we
 define a four-level severity taxonomy calibrated against publicly
 available regulatory penalties, litigation data, and operational
@@ -324,10 +325,12 @@ formal derivations are in the original paper.
 
 \subsection{Frequency-Severity Decomposition}
 
-An AI system produces $n$ outputs per evaluation period, each correct
-(probability $1-p$) or erroneous (probability $p$). Each error falls
-into one of $K$ severity categories with costs $c_1 < \cdots < c_K$
-and probabilities $\bpi = (\pi_1, \ldots, \pi_K)$:
+We follow the standard collective-risk model of actuarial science
+\citep{klugman2012loss}: an AI system produces $n$ outputs per
+evaluation period, each correct (probability $1-p$) or erroneous
+(probability $p$). Each error falls into one of $K$ severity
+categories with costs $c_1 < \cdots < c_K$ and probabilities
+$\bpi = (\pi_1, \ldots, \pi_K)$:
 \begin{align}
   N &\sim \mathrm{Bin}(n, p), \label{eq:frequency} \\
   X_i &\in \{c_1, \ldots, c_K\}, \quad \mathbb{P}(X_i = c_k) = \pi_k. \label{eq:severity}
@@ -591,11 +594,14 @@ prompt, reporting Cohen's $\kappa$ and adjacent agreement
 \subsection{Models}
 \label{sec:models}
 
-We evaluate 23 language models spanning eight provider families and
-four scale tiers. Table~\ref{tab:models} lists the models. Provider
-budgets and pricing led us to select recent flagship and mid-tier
-models from each family rather than running every available
-checkpoint.
+We evaluate up to 29 language models spanning nine provider families
+and four scale tiers (Table~\ref{tab:models}). The 12 local
+open-weight models are run on a 3$\times$RTX 6000 Ada workstation
+(see Section~\ref{sec:protocol}); the 17 frontier API models are
+budget-gated and we report numbers only for the API models that have
+completed their full benchmark sweep by submission. Provider budgets
+and pricing led us to select recent flagship and mid-tier checkpoints
+from each family rather than running every available variant.
 
 \begin{table}[t]
 \centering
@@ -617,32 +623,47 @@ Grok-3, Grok-3-mini     & xAI       & General \\
 Mistral Large, Medium   & Mistral   & General \\
 Qwen3-235B (think./std.) & Alibaba (OpenRouter) & Reasoning/General \\
 \midrule
-\multicolumn{3}{l}{\textit{Open-weight local models (4-bit NF4 quantization)}} \\
-QwQ-32B               & Alibaba     & Reasoning \\
-Qwen3-30B-A3B         & Alibaba     & MoE \\
-Gemma-2-27B           & Google      & General \\
-Qwen3-14B             & Alibaba     & General \\
-Gemma-2-9B            & Google      & General \\
-Granite-3.2-8B        & IBM         & General \\
+\multicolumn{3}{l}{\textit{Open-weight local models (FP8 / MXFP4 via vLLM)}} \\
+Llama-3.3-70B           & Meta        & General \\
+DeepSeek-R1-Distill-70B & DeepSeek    & Reasoning \\
+Qwen2.5-72B             & Alibaba     & General \\
+QwQ-32B                 & Alibaba     & Reasoning \\
+Qwen3-30B-A3B           & Alibaba     & MoE \\
+Gemma-3-27B             & Google      & General \\
+Gemma-3-12B             & Google      & General \\
+Qwen3-14B               & Alibaba     & Reasoning \\
+GPT-OSS-120B            & OpenAI      & General (MXFP4) \\
+GPT-OSS-20B             & OpenAI      & General (MXFP4) \\
+Phi-4                   & Microsoft   & General \\
+Granite-3.2-8B          & IBM         & General (FP16) \\
 \bottomrule
 \end{tabular}
 \caption{Models evaluated. API models are accessed through their
 respective provider endpoints (with the official batch APIs used
-where available for cost reduction). Local models are deployed with
-4-bit NF4 quantization via unsloth/bitsandbytes on a single GPU.}
+where available for cost reduction). Local open-weight models are
+served by vLLM with FP8 (or MXFP4 native, for the gpt-oss family)
+checkpoints from RedHatAI, the Qwen team, and openai/gpt-oss on the
+HuggingFace Hub; the two largest models (70-72\,B and 120\,B) are
+sharded across two GPUs with tensor parallelism, the rest run
+single-GPU.}
 \label{tab:models}
 \end{table}
 
 API models are queried through official endpoints, with batch APIs
 used for OpenAI, Anthropic, Google, xAI and Mistral; Cohere,
 DeepSeek and OpenRouter (Qwen3-235B) calls use a parallel synchronous
-fallback. Local open-weight models are deployed with 4-bit NF4
-quantization \citep{dettmers2023qlora} using unsloth
-\citep{unsloth2024} on single NVIDIA GPUs. We use adaptive inference
-parameters per dataset:
-\texttt{max\_new\_tokens} ranges from 16 (ContractNLI, binary
-answers) to 256 (CUAD, clause extraction), and batch size is scaled
-inversely with model size and context length.
+fallback. Local open-weight models are served by vLLM with FP8
+quantization (RedHatAI compressed-tensors packaging where available,
+Qwen-native FP8 otherwise) and MXFP4 for the gpt-oss family. The
+70-72\,B Llama / DeepSeek / Qwen2.5 checkpoints and gpt-oss-120b run
+with \texttt{tensor\_parallel\_size}=2 on two NVIDIA RTX 6000 Ada
+48\,GB cards; the remaining open-weight models fit on a single card.
+The granite-3.2-8b checkpoint is FP16 (no FP8 variant published).
+We use adaptive inference parameters per dataset: \texttt{max\_new\_tokens}
+ranges from 16 (ContractNLI, binary answers) to 256 (CUAD, clause
+extraction). Each model's vLLM submission is chunked at 100 prompts
+per chunk so the per-dataset output JSON is checkpointed and the
+run can be resumed or extended from a partial file.
 
 \subsection{Evaluation Protocol}
 \label{sec:protocol}
@@ -919,7 +940,7 @@ profile nevertheless drives a majority of inter-model variance in
 $\ES$, and routing analysis suggests sizeable cost reductions when
 high-severity errors are deferred to human review. We frame these
 observations as preliminary: extending coverage across the four
-domains and 23 models in Section~\ref{sec:experiments} is the natural
+domains and 29 models in Section~\ref{sec:experiments} is the natural
 next step, and the released \seveval{} library and
 \texttt{run\_full\_pipeline.sh} script are designed to make that
 extension reproducible. We release the code, severity annotations,
@@ -1137,9 +1158,8 @@ The \texttt{experiments/run\_full\_pipeline.sh} script orchestrates
 the full evaluation matrix: it dispatches API models through the
 official batch endpoints (OpenAI, Anthropic, Google, Mistral, xAI;
 batch APIs reduce cost by approximately $50\%$ at the time of
-writing), evaluates open-weight models locally with $4$-bit NF4
-quantisation via unsloth and bitsandbytes
-\citep{dettmers2023qlora,unsloth2024}, runs the analysis
+writing), evaluates open-weight models locally via vLLM with FP8 (or
+MXFP4-native for the gpt-oss family) checkpoints, runs the analysis
 (\texttt{experiments/analysis.py}) and regenerates all paper
 figures and tables. Stages are idempotent and can be resumed with
 the corresponding \texttt{--skip-*} flag.
