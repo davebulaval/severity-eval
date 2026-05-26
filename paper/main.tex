@@ -674,53 +674,95 @@ organised around the three research questions of
 Section~\ref{sec:protocol}. All risk measures are computed with
 $n=10{,}000$ outputs per evaluation period, $20{,}000$ Monte Carlo
 replications, and $\alpha=0.95$. The complete per-pair table is
-provided in Appendix~\ref{sec:app-full-results}; we highlight here the
-aggregate signals. At the time of writing, only the finance domain
-(FinanceBench) had sufficient model coverage to evaluate
-ranking-based questions with more than three models; the remaining
-domains carry single-model coverage on most datasets, so we report
-the single-domain numbers as preliminary and defer cross-domain
-comparison to future work using the released pipeline.
+provided in Appendix~\ref{sec:app-full-results}; we highlight here
+the aggregate signals. Headline numbers come from
+$13$ open-weight local models evaluated on $1{,}000$ instances per
+dataset ($150$ for FinanceBench, which exhausts the corpus).
 
 \subsection{RQ1: Ranking divergence and inversions}
 \label{sec:rq1}
 
-Across $12$ frontier and open-weight models evaluated on
-FinanceBench, the rankings induced by accuracy and by $\ES$ are
-almost monotonically aligned: Kendall $\tau = 0.96$ ($p = 5\times
-10^{-4}$), and we observe $0$ strict inversions of the form
-$\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$ in
-this subset. In this preliminary snapshot, accuracy is a faithful
-proxy for $\ES$ at the model level. Whether this alignment persists
-in domains with heavier-tailed cost vectors, and whether inversions
-emerge there, is the central open question that the full evaluation
-addresses (Figure~\ref{fig:ranking} shows the per-domain
-$\tau$ once cross-domain coverage is complete).
+Across the $13$ models and four taxonomy domains, accuracy and
+$\ES$ rankings are positively correlated but \emph{not}
+monotonically aligned: per-domain Kendall $\tau$ ranges from
+$\tau=0.64$ on finance ($p=2\times 10^{-3}$) to $\tau=0.90$ on
+insurance ($p=1\times 10^{-3}$), with legal at $\tau=0.74$ and
+medical at $\tau=0.69$ (Table~\ref{tab:h1}). All four are above the
+$\tau=0.5$ ``non-divergent'' threshold, but finance and medical
+sit close enough to the threshold that within-domain rerankings are
+common. Concretely, the analysis surfaces \textbf{$115$ strict
+inversions} of the form $\mathrm{acc}(A) > \mathrm{acc}(B)$
+\emph{and} $\ES(A) > \ES(B)$: e.g.\ on FinanceBench
+granite-3.2-8b has $+9.3$ accuracy points over deepseek-r1-distill-70b
+but \emph{costs} $\$3.86$M more per $n{=}10{,}000$ outputs, and
+qwen3-30b-a3b is $+6.7$ points over llama-3.3-70b yet costs
+$\$1.13$M more. Figure~\ref{fig:ranking_finance} shows the bump
+chart for finance. Accuracy and $\ES$ ordering disagree often
+enough that picking a model on accuracy alone risks substantial
+hidden cost exposure.
+
+\input{../results/table_h1}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig2_ranking_finance.pdf}
+\caption{Accuracy vs $\ES$ ranking on FinanceBench (13 models). The
+crossing lines visualise the $115$ inversions surfaced by RQ1.}
+\label{fig:ranking_finance}
+\end{figure}
 
 \subsection{RQ2: Severity vs.\ frequency variance}
 \label{sec:rq2}
 
-Decomposing inter-model variance in $\ES$ into a severity-only and
-a frequency-only contribution (Section~\ref{sec:protocol}) yields,
-for finance, $\mathrm{Var}_{\bpi} = 1.28\times 10^{14}$ and
-$\mathrm{Var}_p = 8.24 \times 10^{13}$, so the severity share is
-$0.61$. The severity profile $\bpi$ accounts for a larger share of
-inter-model risk variance than the error rate $p$ in this domain.
-This decomposition is sensitive to the cost vector and the model
-mix; we report it as descriptive rather than confirmatory and
-include per-domain profiles in Figure~\ref{fig:profiles}.
+Decomposing inter-model variance in $\ES$ into a severity-only
+($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component
+shows that the severity share varies sharply across domains : it
+is $0.92$ in insurance and $0.52$ in medical, but only $0.37$ in
+finance and $0.27$ in legal. In insurance and medical, the
+severity profile $\bpi$ explains the bulk of model-to-model risk
+variance; in finance and legal, the error rate dominates instead.
+Figure~\ref{fig:profiles_insurance} shows that the insurance
+domain's $\bpi$ varies an order of magnitude across models, which
+explains the high $\sigma^2_{\bpi}/\sigma^2$ ratio. The
+decomposition is sensitive to the cost vector and to the model
+mix; we report it as descriptive rather than confirmatory.
 
 \subsection{RQ3: Routing benefit}
 \label{sec:rq3}
 
 Using a retention threshold of $d = c_3$ (route ``major'' and
-``critical'' errors) and human-review cost $h = \$50$, the
-estimated mean cost reduction is $85.1\%$ in finance, $99.9\%$ in
-insurance (single model), $66.6\%$ in medical and $50.0\%$ in legal
-(Figure~\ref{fig:routing}). The Spearman correlation between the
-coefficient of variation of $\mathbf{c}$ and the mean reduction is
-upward in the snapshot but cannot be tested rigorously with only
-four domains and uneven within-domain coverage.
+``critical'' errors) and a human-review cost $h = \$50$, the mean
+$\ES$ reduction from HITL deferral is large across the board:
+$83.4$\% in finance, $98.8$\% in insurance, $73.5$\% in legal, and
+$97.0$\% in medical (Table~\ref{tab:h4} and
+Figure~\ref{fig:routing}). The two domains where routing saves the
+most ($>97$\%) are also the two with the highest severity share
+in RQ2: when $\bpi$ concentrates mass on the largest cost levels,
+clipping the right tail by deferral has outsized leverage. The
+Spearman correlation between the coefficient of variation of
+$\mathbf{c}$ and the per-(model, domain) reduction is upward
+(median $0.19$ in finance to $1.00$ in medical) but not estimable
+with confidence at only four domains.
+
+\input{../results/table_h4}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig3_profiles_insurance.pdf}
+\caption{Severity profile $\hat{\bpi}$ per model on the insurance
+domain. Wide spread on the critical and major levels explains why
+insurance has the highest severity-share (0.92) in RQ2.}
+\label{fig:profiles_insurance}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig4_routing_impact.pdf}
+\caption{Per-domain mean $\ES$ reduction from HITL routing at
+$d=c_3$, $h{=}\$50$. Domains with higher severity-share (insurance,
+medical) gain the most.}
+\label{fig:routing}
+\end{figure}
 
 % ============================================================================
 % 7. DISCUSSION
