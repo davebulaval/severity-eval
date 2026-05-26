@@ -582,76 +582,33 @@ from each family rather than running every available variant.
 
 The full model roster (12 open-weight checkpoints served by vLLM
 with FP8 or MXFP4 quantization, 17 frontier API models from nine
-providers) is listed in Appendix~\ref{sec:app-models}.
-
-API models are queried through official endpoints, with batch APIs
-used for OpenAI, Anthropic, Google, xAI and Mistral; Cohere,
-DeepSeek and OpenRouter (Qwen3-235B) calls use a parallel synchronous
-fallback. Local open-weight models are served by vLLM with FP8
-quantization (RedHatAI compressed-tensors packaging where available,
-Qwen-native FP8 otherwise) and MXFP4 for the gpt-oss family. The
-70-72\,B Llama / DeepSeek / Qwen2.5 checkpoints and gpt-oss-120b run
-with \texttt{tensor\_parallel\_size}=2 on two NVIDIA RTX 6000 Ada
-48\,GB cards; the remaining open-weight models fit on a single card.
-The granite-3.2-8b checkpoint is FP16 (no FP8 variant published).
-We use adaptive inference parameters per dataset: \texttt{max\_new\_tokens}
-ranges from 16 (ContractNLI, binary answers) to 256 (CUAD, clause
-extraction). Each model's vLLM submission is chunked at 100 prompts
-per chunk so the per-dataset output JSON is checkpointed and the
-run can be resumed or extended from a partial file.
+providers) is listed in Appendix~\ref{sec:app-models}, and the
+inference hardware and quantization details are summarised in
+Appendix~\ref{sec:app-hardware}.
 
 \subsection{Evaluation Protocol}
 \label{sec:protocol}
 
-\paragraph{Prompting.}
-Each dataset is evaluated under two prompting conditions:
-\emph{original}, which reproduces the prompt format from the
-dataset's published evaluation protocol (Appendix~\ref{sec:app-prompts}),
-and \emph{standard}, a uniform zero-shot format modeled after HELM
-\citep{liang2023helm}. The original prompts serve as the primary
-evaluation; the standard prompts serve as an ablation to test whether
-model rankings are robust to prompt variation.
-
-\paragraph{Scoring.}
-We employ a cascaded scoring function that checks, in order:
-(1)~option letter matching for multiple-choice questions;
-(2)~yes/no extraction for binary questions;
-(3)~numeric comparison with 5\% relative tolerance for quantitative
-answers;
-(4)~exact text match after normalization;
-(5)~substring containment (minimum 4 characters); and
-(6)~word-set overlap (minimum 3 reference words).
-Each prediction is assigned a binary correctness label and the
-scoring method that determined it.
-
-\paragraph{Risk computation.}
-For each model--dataset pair, we compute:
-\begin{enumerate}[leftmargin=*]
-  \item The error rate $\hat{p} = 1 - \text{accuracy}$ and severity
-    profile $\hat{\bpi}$ from the empirical distribution of errors
-    across severity categories.
-  \item The expected aggregate loss $\widehat{\ES}$ via
-    Equation~\eqref{eq:expected_loss}.
-  \item The full distribution of $S$ via $10^5$ Monte Carlo
-    replications of the compound model
-    (Equations~\eqref{eq:frequency}--\eqref{eq:expected_loss}), assuming
-    $n = 10{,}000$ outputs per evaluation period.
-  \item $\VaR_{0.95}(S)$ and $\TVaR_{0.95}(S)$ from the empirical
-    distribution of simulated losses.
-  \item The Lundberg adjustment coefficient $R$ and minimum reserve
-    $u^*$ for a ruin tolerance of $\psi^* = 0.01$.
-  \item The routing cost reduction under retention thresholds
-    $d \in \{c_2, c_3\}$ with human review cost $h = \$50$.
-\end{enumerate}
-
-All computations are performed using the \seveval{} library
-(Section~\ref{sec:library}).
-
-\paragraph{Research questions.}
-We organize the analysis around five research questions that probe the
-relationship between accuracy and the actuarial risk measures defined
-in Section~\ref{sec:framework}. For each question, we report a
-quantitative criterion that we use to summarize the empirical signal.
+Each dataset is evaluated under two prompting conditions, an
+\emph{original} format reproducing the dataset's published evaluation
+protocol (Appendix~\ref{sec:app-prompts}) and a \emph{standard}
+zero-shot format modeled after HELM \citep{liang2023helm}; original
+prompts are the primary evaluation, standard prompts an ablation.
+Predictions are scored by a cascaded function: option letter for MCQ,
+yes/no extraction, numeric comparison at 5\% relative tolerance,
+exact text match after normalization, substring containment (4+ chars),
+then word-set overlap (3+ ref words). For each (model, dataset) pair
+we compute $\hat{p}=1-\mathrm{accuracy}$, the severity profile
+$\hat{\bpi}$ from the empirical error distribution, $\widehat{\ES}$ via
+Eq.~\eqref{eq:expected_loss}, the full distribution of $S$ from $10^5$
+Monte Carlo replications at $n=10{,}000$ outputs per period (which
+yields $\VaR_{0.95}$ and $\TVaR_{0.95}$), the Lundberg coefficient $R$
+and reserve $u^*$ at ruin tolerance $\psi^*=0.01$, and the routing
+cost reduction at thresholds $d\in\{c_2, c_3\}$ with human review cost
+$h=\$50$. All computations use the \seveval{} library
+(Section~\ref{sec:library}). The analysis is organised around five
+research questions probing accuracy vs.\ actuarial risk, with a
+quantitative criterion per question summarising the empirical signal.
 We do not commit ex ante to thresholds for ``significance''; the
 criteria below are reporting conventions, not pass/fail tests.
 
@@ -888,70 +845,52 @@ as a complement to accuracy in high-stakes deployments.
 \section*{Limitations}
 \label{sec:limitations}
 
-\paragraph{Cost calibration subjectivity.}
-While our cost vectors are grounded in regulatory and market evidence,
+\textbf{Cost calibration subjectivity.}
+Our cost vectors are grounded in regulatory and market evidence, but
 the mapping from severity labels to dollar amounts is inherently
-approximate. Different organizations, even within the same domain,
-may face different cost structures depending on their size, regulatory
-exposure, and risk tolerance. We include a robustness analysis (RQ5)
-to test whether rankings are stable under moderate perturbation, but
-practitioners should recalibrate cost levels to their specific context.
+approximate; different organisations within the same domain face
+different cost structures depending on size, regulatory exposure,
+and risk tolerance. The RQ5 robustness analysis tests whether
+rankings are stable under moderate perturbation, but practitioners
+should recalibrate cost levels to their specific context.
 
-\paragraph{Binary correctness assumption.}
-Our framework classifies each model output as either correct or
-erroneous, discarding the spectrum of partial correctness that
-characterizes many real-world outputs. A financial answer that reports
-revenue as \$14.0B instead of \$14.2B is ``wrong'' but far less
-consequential than one reporting \$11.6B. Extending the framework to
-continuous severity scoring is a direction for future work.
+\textbf{Binary correctness assumption.}
+The framework classifies each output as correct or erroneous,
+discarding the spectrum of partial correctness in many real outputs:
+a revenue of \$14.0B instead of \$14.2B is ``wrong'' but far less
+consequential than \$11.6B. Continuous severity scoring is a
+direction for future work.
 
-\paragraph{Severity annotation provenance.}
-Our retained benchmarks split into two annotation regimes, and we
-report results for both groups separately so the reader can see how
-much the weaker regime moves headline numbers.
-
-\textbf{Domain-expert-derived (CUAD, MAUD, ContractNLI, HEAD-QA,
-JudgeBERT).} Each instance carries a structured categorical field
-(clause type, MAUD deal-point category, fixed ContractNLI hypothesis,
-HEAD-QA academic category, JudgeBERT simplified-clause category) that
-an expert taxonomy maps deterministically to a severity level. The
-mapping is reproducible, traceable, and does not re-interpret the raw
-question text. These five datasets account for the large majority of
-the annotated rows in our evaluation.
-
-\textbf{Matrix-heuristic (FinanceBench, FinQA, TAT-QA).} Severity is
-inferred from a cross-tabulation over structured axes of the source
-dataset (answer/program type $\times$ metric type), not from raw
-keyword matching. The matrices encode domain priors but were not
-validated against expert annotation on every instance. To bound the
-risk we ran inter-annotator validation on a stratified 100-instance
-sample per finance dataset (Cohen's $\kappa = 0.46$, adjacent
-agreement 94\%): agreement is moderate, with most disagreements
-confined to adjacent severity levels rather than across the
-negligible-vs-critical gap.
-
-We initially considered three additional benchmarks, MedQA,
+\textbf{Severity annotation provenance.}
+The retained benchmarks split into two annotation regimes; we report
+results for both groups separately so the reader can see how much
+the weaker regime moves headline numbers. The \emph{domain-expert-derived}
+group (CUAD, MAUD, ContractNLI, HEAD-QA, JudgeBERT) carries a
+structured categorical field per instance, clause type, deal-point
+category, fixed hypothesis, academic category, or simplified-clause
+category, that an expert taxonomy maps deterministically to severity;
+the mapping does not re-interpret raw question text. The
+\emph{matrix-heuristic} group (FinanceBench, FinQA, TAT-QA) infers
+severity from a cross-tabulation over structured answer/program/metric
+axes; inter-annotator validation on a stratified 100-instance sample
+per finance dataset gave Cohen's $\kappa = 0.46$ and adjacent
+agreement 94\%, moderate but with disagreements confined to adjacent
+levels rather than across the negligible-vs-critical gap. We
+initially considered three additional benchmarks, MedQA,
 MedCalc-Bench, and the RAG Insurance corpus, whose severity labels
-came from keyword matching over the raw question text or calculator
-name. After the same inter-annotator audit failed to defend their
-critical-vs-major boundary, we removed them from the evaluation
-rather than report numbers we could not stand behind. We retain the
-loaders in the released code base for replication of their published
-benchmarks under user-supplied severity rules.
+came from raw keyword matching; the same audit could not defend
+their critical-vs-major boundary, so we removed them rather than
+report numbers we could not stand behind. The loaders remain in the
+released code for replication under user-supplied severity rules.
 
-\paragraph{Dataset scope.}
+\textbf{Dataset scope and staticness.}
 We evaluate on English-language benchmarks across four domains
-(finance, medicine, law, insurance). The framework is domain-agnostic, but the
-specific cost calibrations and severity taxonomies may not transfer
-directly to other domains (e.g., code generation, content moderation)
-without domain-expert input.
-
-\paragraph{Static evaluation.}
-Our evaluation captures model performance at a single point in time.
-Model capabilities evolve through updates and fine-tuning; the
-severity profile of a model may shift between evaluation and
-deployment. Continuous monitoring using the \seveval{} library can
-mitigate this concern.
+(finance, medicine, law, insurance); the framework is domain-agnostic
+but the cost calibrations and taxonomies may not transfer directly to
+other domains (e.g., code generation, content moderation) without
+domain-expert input. The evaluation also captures model performance at
+a single point in time; capabilities drift, so continuous monitoring
+via the \seveval{} library is needed in production.
 
 % ============================================================================
 % ETHICS STATEMENT
@@ -1046,6 +985,26 @@ are sharded across two GPUs with tensor parallelism; the rest run
 single-GPU.}
 \label{tab:models}
 \end{table*}
+
+\section{Inference Hardware and Quantization}
+\label{sec:app-hardware}
+
+API models are queried through official provider endpoints, with batch
+APIs used for OpenAI, Anthropic, Google, xAI and Mistral; Cohere,
+DeepSeek and OpenRouter (Qwen3-235B) calls use a parallel synchronous
+fallback. Local open-weight models are served by vLLM with FP8
+quantization (RedHatAI compressed-tensors packaging where available,
+Qwen-native FP8 otherwise) and MXFP4 for the gpt-oss family. The
+70-72\,B Llama, DeepSeek, and Qwen2.5 checkpoints and gpt-oss-120b
+run with \texttt{tensor\_parallel\_size}=2 on two NVIDIA RTX 6000 Ada
+48\,GB cards; the remaining open-weight models fit on a single card.
+The granite-3.2-8b checkpoint is FP16 (no FP8 variant published). We
+use adaptive inference parameters per dataset, with
+\texttt{max\_new\_tokens} ranging from 16 (ContractNLI, binary
+answers) to 256 (CUAD, clause extraction). Each model's vLLM
+submission is chunked at 100 prompts per chunk so the per-dataset
+output JSON is checkpointed and the run can be resumed or extended
+from a partial file.
 
 \section{Cost Calibration Evidence}
 \label{sec:app-calibration}
