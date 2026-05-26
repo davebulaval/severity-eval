@@ -611,6 +611,38 @@ three research questions, each tied to a concrete reporting criterion;
 a robustness check on the cost calibration is deferred to
 Appendix~\ref{sec:app-robustness}.
 
+\paragraph{Uncertainty quantification.}
+Our benchmarks span three orders of magnitude in size (financebench
+$n=150$, judgebert $n=1{,}483$, headqa $n=12{,}751$, maud
+$n=39{,}231$), so per-dataset confidence intervals on every reported
+quantity are essential to avoid over-reading small-sample noise.
+For each (model, dataset) pair we report:
+
+\begin{itemize}
+  \item Accuracy $\hat{p}$ : Wilson score 95\% interval
+    \citep{wilson1927ci}, which is well-behaved near $\hat{p}=0$ and
+    $\hat{p}=1$ unlike the normal approximation.
+  \item Severity profile $\hat{\bpi}$ : Goodman simultaneous multinomial
+    95\% intervals on each $\hat{\pi}_k$, with the family-wise rate
+    controlled via Bonferroni across $K=4$ categories.
+  \item $\widehat{\ES}$, $\VaR_{0.95}$, $\TVaR_{0.95}$ : non-parametric
+    percentile bootstrap with $B = 1{,}000$ resamples over the
+    $10^5$-replication Monte Carlo loss vector, exposed through
+    \texttt{severity\_eval.bootstrap\_ci}.
+\end{itemize}
+
+For pairwise model comparisons within a dataset we use a paired
+bootstrap on the per-instance loss vector
+$L_i = \mathbb{1}\{\text{wrong}_i\} \cdot c(\text{severity}_i)$, which
+controls for shared difficulty across instances. The two-sample
+$z$-test on accuracy is reported only as a quick sanity check; the
+bootstrap intervals are the primary inferential tool because they
+remain valid under the heavy-tailed cost vector. Per-domain
+aggregates weight datasets by sample size to avoid letting a small
+benchmark (financebench, $n=150$) dominate a large one (maud,
+$n=39{,}231$) when the per-dataset CIs differ by an order of
+magnitude.
+
 \begin{description}[leftmargin=0pt,labelindent=0pt]
   \item[RQ1 (Ranking divergence and inversions).] How closely aligned
     are model rankings by accuracy and by $\ES$ within a domain, and
