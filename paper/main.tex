@@ -90,7 +90,7 @@ whether human-in-the-loop routing modelled as excess-of-loss
 reinsurance yields meaningful cost reductions, and how sensitive
 the resulting rankings are to perturbations of the cost vector. We release \seveval{}, an open-source Python library
 compatible with the HuggingFace \texttt{evaluate} ecosystem, along
-with severity annotations for all 11 benchmarks.
+with severity annotations for the eight benchmarks evaluated here.
 \end{abstract}
 
 % ============================================================================
@@ -139,16 +139,17 @@ accuracy and economic risk is consistent, substantial, and
 reproducible across models, domains, and scales.
 
 This paper provides empirical grounding for the framework. We
-evaluate up to 23 language models on 11 benchmarks spanning finance,
-medicine, law, and insurance. For each benchmark, we define a
-four-level severity taxonomy calibrated against publicly available
-regulatory penalties, litigation data, and operational loss
-references for that domain. Each test instance is annotated with a
-severity level---either derived from structured metadata in the
-dataset (e.g., clinical calculator categories in MedCalc-Bench,
-clause types in CUAD) or via a rule-based system, with the
-rule-based subset spot-checked against an independent LLM
-annotator. We then apply the actuarial framework to estimate, for
+evaluate up to 23 language models on eight benchmarks spanning
+finance, medicine, law, and insurance. For each benchmark, we
+define a four-level severity taxonomy calibrated against publicly
+available regulatory penalties, litigation data, and operational
+loss references for that domain. Each test instance is annotated
+with a severity level derived from a structured categorical field
+in the source dataset (clause type in CUAD, deal-point category in
+MAUD, fixed hypothesis in ContractNLI, academic category in
+HEAD-QA) or, for the three finance benchmarks, from a matrix over
+answer/program/metric type axes; the latter subset is spot-checked
+against an independent LLM annotator (Section~\ref{sec:limitations}). We then apply the actuarial framework to estimate, for
 each model--dataset pair, the expected aggregate loss $\ES$, the
 value-at-risk $\VaR_{0.95}(S)$, the tail value-at-risk
 $\TVaR_{0.95}(S)$, and the Lundberg reserve.
@@ -393,10 +394,15 @@ where $\mu_X^{\mathrm{ret}}$ is the mean severity of retained errors.
 \subsection{Datasets}
 \label{sec:datasets}
 
-We select 11 benchmarks across four high-stakes domains, prioritizing
-datasets where severity annotations can be derived from structured
-metadata or domain-specific rules rather than requiring fully manual
-annotation. Table~\ref{tab:datasets} summarizes the selection.
+We select eight benchmarks across four high-stakes domains for which
+severity can be derived from a structured field of the source dataset
+(clause type, category, fixed hypothesis, simplified-clause type) or
+from a defensible matrix over structured answer/program/metric axes.
+Three benchmarks initially considered---MedQA, MedCalc-Bench, and the
+RAG Insurance corpus---were removed after an inter-annotator audit
+showed their keyword-based severity labels could not be defended at
+the critical-vs-major boundary (see \S\ref{sec:limitations}).
+Table~\ref{tab:datasets} summarizes the retained selection.
 
 \begin{table*}[t]
 \centering
@@ -411,19 +417,16 @@ Domain & Dataset & Inst.\ & Task & Severity source & Reference \\
   & FinQA         & 8,281 & Num.\ reasoning  & Deviation magnitude          & \citet{chen2021finqa} \\
   & TAT-QA        & 4,500 & Table+text QA    & Deviation magnitude          & \citet{zhu2021tatqa} \\
 \midrule
-\multirow{3}{*}{Medical}
-  & MedCalc-Bench & 1,047 & Clin.\ calc.\    & Calculator category          & \citet{kazi2024medcalc} \\
-  & MedQA (USMLE) & 1,273 & MCQ              & Clinical topic               & \citet{jin2021medqa} \\
-  & HEAD-QA       & 2,742 & MCQ              & Topic domain                 & \citet{vilares2019headqa} \\
+Medical
+  & HEAD-QA       & 12,751 & MCQ             & Academic category            & \citet{vilares2019headqa} \\
 \midrule
 \multirow{3}{*}{Legal}
-  & CUAD          & 4,182 & Clause extr.\    & Clause category              & \citet{hendrycks2021cuad} \\
-  & MAUD          & 1,396 & Merger QA        & Deal point type              & \citet{wang2023maud} \\
-  & ContractNLI   & 607   & NLI              & NDA clause type              & \citet{koreeda2021contractnli} \\
+  & CUAD          & 4,182  & Clause extr.\   & Clause category              & \citet{hendrycks2021cuad} \\
+  & MAUD          & 39,231 & Merger QA       & Deal point category          & \citet{wang2023maud} \\
+  & ContractNLI   & 9,788  & NLI             & Fixed hypothesis             & \citet{koreeda2021contractnli} \\
 \midrule
-\multirow{2}{*}{Insurance}
-  & RAG Insurance & 82    & QA (FR)          & Expert annotation            & \citet{beauchemin2024quebec} \\
-  & JudgeBERT     & 807   & Simplification   & Meaning preserv.\            & \citet{beauchemin2025thesis} \\
+Insurance
+  & JudgeBERT     & 1,483  & Simplification  & Meaning preserv.\            & \citet{beauchemin2025thesis} \\
 \bottomrule
 \end{tabular}
 \caption{Datasets used in the evaluation. Inst.\ denotes the number of test-set instances evaluated.}
@@ -441,31 +444,54 @@ metrics, derived ratios, descriptive). The cross-tabulation maps each
 combination to one of four severity levels (Section~\ref{sec:severity-annotation}).
 We validate the rule-based annotations against an independent LLM
 annotator, achieving adjacent agreement of 94\% ($\kappa = 0.46$).
+Severity here is the cost of \emph{erring} on that instance, not a
+property of the question itself: an instance is critical when a wrong
+prediction would materially shift a downstream decision, and negligible
+when even a wrong prediction is unlikely to mislead a reader. For
+example, the gold answer to ``Does Corning have positive working
+capital based on FY2022 data?'' is \$831M positive; a model that
+reports the opposite sign mis-states a yes/no over a core operational
+metric and could flip a credit decision (\emph{critical}). In
+contrast, mis-reporting Amazon's FY2017 DPO of 93.86 (a derived ratio
+over a non-core operational metric) generally produces a smaller
+business consequence (\emph{minor}).
 
 \paragraph{FinQA} \citep{chen2021finqa} and \textbf{TAT-QA}
 \citep{zhu2021tatqa} require numerical reasoning over financial tables
-and text. Severity is derived from the magnitude of the financial
-quantity: questions about core financial items (revenue, net income,
-total assets) in millions or billions are classified as critical,
-operational metrics as major, and ratios or percentages as minor.
+and text. Severity reflects the cost of a wrong answer on each
+instance: erring on arithmetic over core P\&L items at the
+billion-dollar scale moves a balance-sheet readout (critical), while
+erring on a ratio or comparison over non-core items is typically
+recoverable (minor). For example, mis-answering ``by what percentage
+did average borrowings decrease from 2016 to 2017?'' (gold
+\(-8.4\%\)) is a small-magnitude reasoning slip on a derived ratio
+(\emph{minor} in FinQA). Mis-answering ``What does the deferred
+income taxes reflect?'' (gold is a free-form span describing
+temporary differences) typically yields a descriptive paraphrase
+error that does not change a downstream accounting decision
+(\emph{negligible} in TAT-QA).
 
 \subsubsection{Medical}
 
-\paragraph{MedCalc-Bench} \citep{kazi2024medcalc} covers 55 clinical
-calculators, each computing a score used in medical decision-making.
-The calculators span distinct risk categories: dosage adjustments and
-sepsis scores (critical), surgical risk assessments (major),
-cardiovascular risk scores (minor), and unit conversions (negligible).
-We map each calculator to a severity level based on its clinical
-decision impact, following the categorization in the original dataset.
-
-\paragraph{MedQA} \citep{jin2021medqa} contains USMLE-style
-multiple-choice questions. \textbf{HEAD-QA} \citep{vilares2019headqa}
-contains biomedical exam questions from the Spanish healthcare
-system. For both, severity is assigned based on the clinical topic:
-emergency medicine and pharmacology questions are rated as critical,
-surgical and diagnostic questions as major, and basic science
-questions as negligible.
+\paragraph{HEAD-QA} \citep{vilares2019headqa} contains biomedical
+exam questions from the Spanish healthcare system. Each question
+carries a structured \emph{academic category} field (pharmacology,
+medicine, nursing, psychology, biology, chemistry); we map the six
+categories to severity levels by clinical decision impact
+(pharmacology $\to$ critical; medicine and nursing $\to$ major;
+psychology $\to$ minor; biology and chemistry $\to$ negligible).
+A wrong answer on a pharmacology instance defining ``Parameter'' as
+``any descriptive measure related to the variable x in the
+population'' propagates into every downstream biostatistics decision
+(\emph{critical}). In contrast, a wrong answer on a biology instance
+about whether carotid body stimulation decreases arterial PCO2 is a
+fact-recall miss with little clinical-decision exposure
+(\emph{negligible}). We omit
+MedQA \citep{jin2021medqa} and MedCalc-Bench \citep{kazi2024medcalc}
+from the present evaluation: their severity labels rely on keyword
+matching over raw question text or calculator names, which our
+inter-annotator validation could not defend at the critical-vs-major
+boundary (see \S\ref{sec:limitations}).
 
 \subsubsection{Legal}
 
@@ -475,22 +501,36 @@ contractual risk: indemnification and liability limitation clauses are
 critical, non-compete and IP assignment clauses are major, renewal and
 notice clauses are minor, and definitional clauses are negligible.
 This follows the risk stratification in legal due diligence practice
-\citep{guha2023legalbench}.
+\citep{guha2023legalbench}. Failing to extract a ``Termination For Convenience'' clause exposes
+the buyer to unilateral contract cancellation that was hidden by the
+extractor (\emph{critical}). Failing on an ``Audit Rights'' clause
+may delay compliance review but is unlikely to be catastrophic
+(\emph{major}).
 
 \paragraph{MAUD} \citep{wang2023maud} covers merger agreement
 understanding with multiple-choice questions about deal points.
 \textbf{ContractNLI} \citep{koreeda2021contractnli} is a natural
 language inference task over non-disclosure agreements. Severity
-follows clause-type risk as in CUAD.
+follows clause-type risk as in CUAD. An incorrect MAUD answer on whether the target's securities or
+credit rating is subject to a ``disproportionate impact'' modifier in
+the Material Adverse Effect definition directly mis-states a deal
+closing condition (\emph{critical}). An incorrect ContractNLI label
+on the hypothesis ``Receiving Party may independently develop
+information similar to Confidential Information'' generally turns a
+boilerplate provision into another boilerplate provision: the
+business exposure of the error is small (\emph{negligible}).
 
 \subsubsection{Insurance}
 
-\paragraph{RAG Insurance} \citep{beauchemin2024quebec} contains 82
-expert-verified questions about Quebec automobile insurance, with
-severity annotations from domain experts following the taxonomy
-in \citet{beauchemin2026position}. \textbf{JudgeBERT}
-\citep{beauchemin2025thesis} contains 807 domain-specific
-multiple-choice questions on Quebec insurance regulation.
+\paragraph{JudgeBERT} \citep{beauchemin2025thesis} contains
+domain-specific multiple-choice questions on Quebec insurance
+regulation, with severity derived from the simplified-clause
+category and the human evaluation score. The RAG Insurance corpus
+of \citet{beauchemin2024quebec} is omitted from this evaluation:
+the gold answer in that corpus was itself a generated LLM response
+graded against criteria rather than an expert-authored reference,
+so a comparison would be LLM-vs-LLM rather than LLM-vs-expert (see
+\S\ref{sec:limitations}).
 
 % ----------------------------------------------------------------------------
 \subsection{Severity Annotation}
@@ -530,9 +570,17 @@ production \citep{aircanada2024,prosperspark2023}. Detailed
 calibration evidence is provided in Appendix~\ref{sec:app-calibration}.
 
 \paragraph{Annotation protocol.}
-For each dataset, we define deterministic annotation rules that map
-structured metadata (answer type, question topic, clause category,
-calculator type) to a severity level. This rule-based approach ensures
+The severity level we attach to each instance is the cost of
+\emph{erring on that instance}, not a property of the question per
+se. A pharmacology question is labelled critical because a wrong
+prediction propagates into downstream clinical decisions, not because
+pharmacology is intrinsically more important than biology; a CUAD
+extraction is labelled critical when missing the clause exposes the
+buyer to material legal risk, regardless of whether the clause itself
+is verbose or terse. For each dataset, we define deterministic rules
+that map structured metadata (answer type, question topic, clause
+category, fixed hypothesis) to a severity level reflecting this
+error-cost interpretation. The rule-based approach ensures
 reproducibility and eliminates annotator subjectivity on individual
 instances. We validate each rule system against an independent LLM
 annotator (Claude Sonnet~4) using the severity rubric as a one-shot
@@ -902,18 +950,43 @@ revenue as \$14.0B instead of \$14.2B is ``wrong'' but far less
 consequential than one reporting \$11.6B. Extending the framework to
 continuous severity scoring is a direction for future work.
 
-\paragraph{Severity annotation coverage.}
-For datasets where severity is derived from structured metadata (e.g.,
-calculator type in MedCalc-Bench, clause type in CUAD), the annotation
-is deterministic and reproducible. For datasets requiring rule-based
-mapping (FinanceBench, MedQA), the rules introduce a layer of
-judgment. Our inter-annotator validation (Cohen's $\kappa = 0.46$,
-adjacent agreement 94\%) suggests moderate agreement, with most
-disagreements confined to adjacent severity levels.
+\paragraph{Severity annotation provenance.}
+Our retained benchmarks split into two annotation regimes, and we
+report results for both groups separately so the reader can see how
+much the weaker regime moves headline numbers.
+
+\textbf{Domain-expert-derived (CUAD, MAUD, ContractNLI, HEAD-QA,
+JudgeBERT).} Each instance carries a structured categorical field
+(clause type, MAUD deal-point category, fixed ContractNLI hypothesis,
+HEAD-QA academic category, JudgeBERT simplified-clause category) that
+an expert taxonomy maps deterministically to a severity level. The
+mapping is reproducible, traceable, and does not re-interpret the raw
+question text. These five datasets account for the large majority of
+the annotated rows in our evaluation.
+
+\textbf{Matrix-heuristic (FinanceBench, FinQA, TAT-QA).} Severity is
+inferred from a cross-tabulation over structured axes of the source
+dataset (answer/program type $\times$ metric type), not from raw
+keyword matching. The matrices encode domain priors but were not
+validated against expert annotation on every instance. To bound the
+risk we ran inter-annotator validation on a stratified 100-instance
+sample per finance dataset (Cohen's $\kappa = 0.46$, adjacent
+agreement 94\%): agreement is moderate, with most disagreements
+confined to adjacent severity levels rather than across the
+negligible-vs-critical gap.
+
+We initially considered three additional benchmarks---MedQA,
+MedCalc-Bench, and the RAG Insurance corpus---whose severity labels
+came from keyword matching over the raw question text or calculator
+name. After the same inter-annotator audit failed to defend their
+critical-vs-major boundary, we removed them from the evaluation
+rather than report numbers we could not stand behind. We retain the
+loaders in the released code base for replication of their published
+benchmarks under user-supplied severity rules.
 
 \paragraph{Dataset scope.}
-We evaluate on English-language benchmarks (except RAG Insurance, in
-French) across four domains. The framework is domain-agnostic, but the
+We evaluate on English-language benchmarks across four domains
+(finance, medicine, law, insurance). The framework is domain-agnostic, but the
 specific cost calibrations and severity taxonomies may not transfer
 directly to other domains (e.g., code generation, content moderation)
 without domain-expert input.
