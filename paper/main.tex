@@ -60,15 +60,23 @@ An Empirical Study with Actuarial Frequency-Severity Models}
 
 \begin{abstract}
 Accuracy treats every error as equally costly: a \$2~billion revenue
-hallucination is penalised like a rounded decimal. We operationalise
-the actuarial frequency-severity framework of
-\citet{beauchemin2026position} by annotating eight benchmarks
-(finance, medicine, law, insurance) with a per-instance cost of error
-and evaluating up to 29 language models on the resulting compound
-loss $S = \sum_{i=1}^{N} X_i$. For each model-dataset pair we report
-expected loss, $\VaR_{0.95}$, $\TVaR_{0.95}$, the Lundberg reserve,
-and a human-in-the-loop routing analysis. We release \seveval{}, a
-HuggingFace-compatible Python library, alongside the annotations.
+hallucination is penalised like a rounded decimal. The actuarial
+frequency-severity framework of \citet{beauchemin2026position}
+fixes this in theory but was only demonstrated on one insurance
+corpus with one model family. We provide the first multi-domain
+empirical validation by annotating eight benchmarks (finance,
+medicine, law, insurance) with a per-instance cost of error and
+evaluating $13$ open-weight language models spanning 8\,B to
+120\,B parameters across dense, MoE, and reasoning-tuned
+architectures. The framework surfaces $115$ strict
+accuracy-versus-$\ES$ inversions, a variance decomposition that
+isolates severity-dominated from frequency-dominated domains, and
+a human-in-the-loop routing analysis that cuts $\ES$ by
+$74$--$99$\,\% at a fixed review cost. The pattern is consistent
+across the model sample, indicating that the framework, not any
+particular model choice, is what makes the cost picture visible.
+We release \seveval{}, a HuggingFace-compatible Python library,
+alongside the annotations.
 \end{abstract}
 
 % ============================================================================
@@ -116,42 +124,61 @@ leaving open the empirical question of whether the divergence between
 accuracy and economic risk is consistent, substantial, and
 reproducible across models, domains, and scales.
 
-This paper provides empirical grounding for the framework. We
-evaluate up to 29 language models on eight benchmarks spanning
-finance, medicine, law, and insurance. For each benchmark, we
-define a four-level severity taxonomy calibrated against publicly
-available regulatory penalties, litigation data, and operational
-loss references for that domain. Each test instance is annotated
-with a severity level derived from a structured categorical field
-in the source dataset (clause type in CUAD, deal-point category in
-MAUD, fixed hypothesis in ContractNLI, academic category in
-HEAD-QA) or, for the three finance benchmarks, from a matrix over
-answer/program/metric type axes; the latter subset is spot-checked
-against an independent LLM annotator (Section~\ref{sec:limitations}). We then apply the actuarial framework to estimate, for
-each model--dataset pair, the expected aggregate loss $\ES$, the
-value-at-risk $\VaR_{0.95}(S)$, the tail value-at-risk
-$\TVaR_{0.95}(S)$, and the Lundberg reserve.
+This paper provides the missing empirical grounding. The goal is
+\emph{not} to find the best language model on a benchmark, but to
+demonstrate that the actuarial framework yields decision-relevant
+signal across the full diversity of currently deployed LLMs and
+high-stakes domains. We treat the 13 open-weight models we
+evaluate as a representative sample of the LLM design space, from
+8\,B FP16 (granite-3.2-8b) through dense 72\,B FP8
+(qwen2.5-72b) to a 120\,B sparse MXFP4 mixture-of-experts
+(gpt-oss-120b), and from reasoning-tuned thinking models
+(qwq-32b, deepseek-r1-distill-70b) to general-purpose checkpoints
+(gemma-3, phi-4, llama-3.3). The question is whether the
+framework's three outputs, ranking divergence, severity-share
+decomposition, and routing benefit, surface consistent patterns in
+this heterogeneous mix or collapse to the trivial accuracy story
+on most cells. We define a four-level severity taxonomy per
+domain, calibrated against publicly available regulatory
+penalties, litigation data, and operational loss references; each
+test instance is annotated with a severity level derived from a
+structured categorical field in the source dataset (clause type in
+CUAD, deal-point category in MAUD, fixed hypothesis in
+ContractNLI, academic category in HEAD-QA) or, for the three
+finance benchmarks, from a matrix over answer/program/metric type
+axes (the latter subset is spot-checked against an independent
+LLM annotator; Section~\ref{sec:limitations}). We then apply the
+actuarial framework to estimate, for each (model, dataset) pair,
+the expected aggregate loss $\ES$, the value-at-risk
+$\VaR_{0.95}(S)$, the tail value-at-risk $\TVaR_{0.95}(S)$, and
+the Lundberg reserve.
 
 Our contributions are:
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Multi-model, multi-domain evaluation.} We report
-    accuracy and actuarial risk measures for the
-    model$\times$benchmark pairs we evaluate. Where data permit we
-    examine whether the divergence between accuracy and expected
-    loss observed by \citet{beauchemin2026position} on a single
-    domain generalizes to other domains and scales.
-  \item \textbf{Severity-annotated benchmarks.} We release severity
-    annotations for the benchmarks we evaluate, along with the
-    annotation rules, calibration evidence, and validation protocol
-    (\S\ref{sec:severity-annotation}, Appendix~\ref{sec:app-calibration}).
-  \item \textbf{Open-source library.} We release \seveval{}, a Python
-    library compatible with the HuggingFace \texttt{evaluate}
-    ecosystem, implementing the compound loss simulation, the risk
-    measures, ruin-theoretic reserves, and the routing analysis
-    (Appendix~\ref{sec:app-library-overview}).
-  \item \textbf{Reusable evaluation protocol.} We formalise three
-    research questions and the statistical summaries that future
-    severity-aware evaluations can report (\S\ref{sec:protocol}).
+  \item \textbf{First multi-domain empirical validation.} We show
+    that the divergence between accuracy and expected loss
+    observed by \citet{beauchemin2026position} on a single
+    insurance corpus reproduces across four high-stakes domains
+    and a heterogeneous LLM sample, with 115 strict
+    accuracy-versus-$\ES$ inversions and per-domain Kendall $\tau$
+    spanning $0.64$ to $0.90$.
+  \item \textbf{Diagnostic decomposition.} The variance
+    decomposition isolates two distinct regimes empirically:
+    severity-dominated domains (insurance, medical) where models
+    differ chiefly in \emph{which} errors they make, and
+    frequency-dominated domains (finance, legal) where models
+    differ chiefly in \emph{how often}.
+  \item \textbf{Actionable HITL signal.} The routing-as-reinsurance
+    analysis yields per-domain $\ES$ reductions of $74$--$99$\% at
+    a fixed human-review cost, with the magnitude tracking the
+    severity-share decomposition above.
+  \item \textbf{Severity-annotated benchmarks + library.} We
+    release the per-instance severity annotations, the calibration
+    evidence (\S\ref{sec:severity-annotation},
+    Appendix~\ref{sec:app-calibration}), and \seveval{}
+    (Appendix~\ref{sec:app-library-overview}), a HuggingFace-style
+    Python library implementing the full pipeline so any
+    benchmark with a severity field can be re-evaluated.
 \end{enumerate}
 
 % ============================================================================
@@ -771,14 +798,31 @@ medical) gain the most.}
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{What the actuarial framework adds}
+\subsection{The framework, not the model, is what we are evaluating}
+
+The 13 open-weight checkpoints we benchmark span 8\,B to 120\,B
+parameters, dense and MoE, base and reasoning-tuned, FP16 and FP8
+and MXFP4. They are not interchangeable on accuracy, $\ES$, or
+$\bpi$, yet the three framework outputs surface the same kind of
+signal regardless of which model we look at: in every domain
+either ranking divergence (RQ1) or variance decomposition (RQ2)
+exposes a gap that pure accuracy hides, and the HITL routing
+analysis (RQ3) translates that gap into an actionable dollar
+saving. The contribution is therefore not ``model $X$ is best''
+but ``the framework reveals decision-relevant cost structure that
+generalises across the model design space we tested''. This is the
+empirical complement to the conceptual demonstration of
+\citet{beauchemin2026position}, which showed feasibility on a
+single insurance corpus with one model.
+
+\subsection{What the actuarial framework adds over accuracy}
 
 The compound loss model produces three families of quantities that
-accuracy alone does not provide. The expected loss $\ES$ summarizes
-the per-period economic exposure under a given $\mathbf{c}$; the tail
-measures $\VaR_{0.95}$ and $\TVaR_{0.95}$ characterise the loss in
-adverse scenarios; the Lundberg reserve $u^\ast$ translates a
-target ruin tolerance into a dollar budget. These outputs are
+accuracy alone does not provide. The expected loss $\ES$ summarises
+the per-period economic exposure under a given $\mathbf{c}$; the
+tail measures $\VaR_{0.95}$ and $\TVaR_{0.95}$ characterise the
+loss in adverse scenarios; the Lundberg reserve $u^\ast$ translates
+a target ruin tolerance into a dollar budget. These outputs are
 expressed in the same units that risk-management functions
 (Basel~II/III, SOX, COSO) already use, which can lower the
 translation cost between AI evaluation and enterprise risk
@@ -790,16 +834,16 @@ the economic picture.
 \subsection{When does severity matter most?}
 
 The variance decomposition for RQ2 shows that, even when accuracy
-and $\ES$ rankings agree (as in our finance snapshot), severity
-profiles can account for a majority of inter-model variance in
-$\ES$. The mechanism is intuitive: $\ES = n p \mu_X$, and $\mu_X$
-spans three orders of magnitude across severity levels in all four
-of our taxonomies. Two systems with the same $p$ but different
-$\bpi$ produce $\ES$ values that can differ by an order of
-magnitude. The framework adds value primarily in the
-heterogeneous-severity regime; when an entire benchmark collapses
-to one severity level, $\ES$ is proportional to $p$ and accuracy is
-a sufficient summary.
+and $\ES$ rankings agree on a domain, severity profiles can account
+for the majority of inter-model variance in $\ES$. The mechanism is
+intuitive: $\ES = n p \mu_X$, and $\mu_X$ spans three orders of
+magnitude across severity levels in all four of our taxonomies.
+Two systems with the same $p$ but different $\bpi$ produce $\ES$
+values that can differ by an order of magnitude. Empirically this
+manifests as the insurance / medical (severity-dominated) vs
+finance / legal (frequency-dominated) split in our RQ2 numbers;
+practitioners deploying in the former category cannot rely on
+accuracy as a proxy at all.
 
 \subsection{Human-in-the-loop routing}
 
