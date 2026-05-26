@@ -1547,7 +1547,20 @@ def evaluate_model(
     def _dispatch_local():
         from experiments.evaluate_local_vllm import evaluate_local_vllm
 
-        return evaluate_local_vllm(df, model_name, model_id, dataset_name, prompt_style)
+        # output_path is threaded through so vLLM can checkpoint after
+        # every chunk and resume from an existing partial JSON. Pass
+        # force=True to ignore an existing file (the --force CLI flag
+        # has already deleted/overwritten upstream when we get here on
+        # that path, but we pass it explicitly for clarity).
+        return evaluate_local_vllm(
+            df,
+            model_name,
+            model_id,
+            dataset_name,
+            prompt_style,
+            output_path=output_path,
+            force=False,
+        )
 
     _BATCH_DISPATCHERS = {
         "local": _dispatch_local,
@@ -1839,16 +1852,43 @@ def main():
             suffix = f"_{args.prompt_style}" if args.prompt_style != "original" else ""
             output_path = OUTPUT_DIR / f"{ds_name}_{model_name}{suffix}.json"
 
+            # Resume / extend logic: if the output file already covers
+            # every row in the (limit-truncated) df, skip. Otherwise we
+            # fall through to evaluate_model -- the local vLLM path
+            # checkpoints chunk-by-chunk and skips ids already present,
+            # so passing --limit 2000 on a file with 1000 rows runs
+            # just the 1000 new ones.
+            n_requested = len(df)
             if output_path.exists() and not args.force:
-                log.info(
-                    "Results exist at %s, skipping (use --force to overwrite)",
-                    output_path,
-                )
-                if wandb_run is not None:
+                try:
                     existing_df = pd.read_json(output_path)
-                    _log_wandb_results(wandb_run, ds_name, model_name, existing_df)
-                    _upload_wandb_artifact(wandb_run, ds_name, model_name, output_path)
-                continue
+                    n_existing = len(existing_df)
+                except Exception as exc:
+                    log.warning("Could not read %s (%s); will re-run", output_path, exc)
+                    n_existing = 0
+                else:
+                    if n_existing >= n_requested:
+                        log.info(
+                            "Results exist at %s (%d >= %d requested), skipping "
+                            "(use --force to overwrite)",
+                            output_path,
+                            n_existing,
+                            n_requested,
+                        )
+                        if wandb_run is not None:
+                            _log_wandb_results(
+                                wandb_run, ds_name, model_name, existing_df
+                            )
+                            _upload_wandb_artifact(
+                                wandb_run, ds_name, model_name, output_path
+                            )
+                        continue
+                    log.info(
+                        "Extending %s : %d existing -> %d requested",
+                        output_path.name,
+                        n_existing,
+                        n_requested,
+                    )
 
             log.info(
                 "Evaluating %s on %s (prompt=%s)...",

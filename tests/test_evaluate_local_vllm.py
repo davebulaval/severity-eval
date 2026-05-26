@@ -646,6 +646,360 @@ def test_destroy_engine_calls_distributed_cleanup_when_available():
     assert vllm_mod._vllm_engine == {}
 
 
+# ----------------------------------------------------------------------
+# evaluate_local_vllm : checkpoint + resume + extend
+# ----------------------------------------------------------------------
+
+
+class _FakeOutput:
+    """Mimics vllm.RequestOutput just enough for evaluate_local_vllm."""
+
+    class _Choice:
+        def __init__(self, text: str):
+            self.text = text
+
+    def __init__(self, text: str):
+        self.outputs = [self._Choice(text)]
+
+
+class _FakeLLM:
+    """Stand-in for vllm.LLM that records every generate() call."""
+
+    def __init__(self, return_text: str = "ANSWER"):
+        self.calls: list[dict] = []
+        self.return_text = return_text
+
+    def get_tokenizer(self):
+        class _Tok:
+            @staticmethod
+            def apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            ):
+                return messages[0]["content"]
+
+            @staticmethod
+            def encode(text, add_special_tokens=False):
+                # 1 token per character - cheap, deterministic, well below
+                # any model's max_model_len for the test prompts we use.
+                return list(range(min(len(text), 20)))
+
+        return _Tok()
+
+    def generate(self, *args, **kw):
+        self.calls.append({"args": args, "kw": kw})
+        # Figure out batch size from args or kw
+        if args:
+            payload = args[0]
+        elif "prompt_token_ids" in kw:
+            payload = kw["prompt_token_ids"]
+        else:
+            payload = []
+        return [_FakeOutput(self.return_text) for _ in payload]
+
+
+def _make_df(n: int, dataset: str = "medqa"):
+    """Make a tiny DataFrame that evaluate_local_vllm accepts."""
+    import pandas as pd
+
+    rows = []
+    for i in range(n):
+        rows.append(
+            {
+                "id": f"q{i}",
+                "question": f"What is {i}+1?",
+                "answer": str(i + 1),
+                "severity": "minor",
+                "domain": "math",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _patch_eval_deps(monkeypatch, llm: _FakeLLM):
+    """Stub the heavy dependencies of evaluate_local_vllm so the function
+    runs end-to-end in a unit test without vLLM, transformers, or CUDA."""
+    import sys
+    import types
+
+    # Stub vllm.SamplingParams
+    fake_vllm = sys.modules.get("vllm") or types.ModuleType("vllm")
+    fake_vllm.SamplingParams = lambda **kw: ("SAMPLING_PARAMS", kw)
+    sys.modules["vllm"] = fake_vllm
+
+    # Stub the helpers imported lazily from evaluate_models.
+    from experiments import evaluate_models as em_real
+
+    monkeypatch.setattr(
+        em_real, "_is_thinking_model", lambda model_id: False, raising=False
+    )
+    monkeypatch.setattr(
+        em_real,
+        "_build_prompt_for_row",
+        lambda row, ds, style: (row["question"], None),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        em_real,
+        "_strip_think_tags",
+        lambda text: text,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        em_real,
+        "score_prediction",
+        lambda pred, ans, options=None: {
+            "correct": pred.strip() == ans.strip(),
+            "score_method": "exact_match",
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        em_real,
+        "DATASET_INFERENCE_CONFIG",
+        {"medqa": (16, 1024)},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        em_real,
+        "_DEFAULT_INFERENCE_CONFIG",
+        (16, 1024),
+        raising=False,
+    )
+    monkeypatch.setattr(em_real, "_THINKING_TOKEN_MULTIPLIER", 16, raising=False)
+    monkeypatch.setattr(em_real, "_THINKING_MAX_NEW_TOKENS_CAP", 32000, raising=False)
+
+    # Replace _load_local_vllm so we don't touch CUDA
+    monkeypatch.setattr(vllm_mod, "_load_local_vllm", lambda *a, **kw: llm)
+
+
+def test_evaluate_local_vllm_writes_checkpoint_after_each_chunk(tmp_path, monkeypatch):
+    """A 25-row dataset with chunk_size=10 must write the JSON 3 times
+    (one per chunk : 10, 20, 25 rows)."""
+    from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+    llm = _FakeLLM(return_text="x")
+    _patch_eval_deps(monkeypatch, llm)
+
+    out = tmp_path / "medqa_test.json"
+    df = _make_df(25)
+
+    # Record every write to the output file
+    import json
+
+    n_rows_per_write: list[int] = []
+
+    real_write_text = type(out).write_text
+
+    def spy_write_text(self, content, *a, **kw):
+        if str(self).endswith(".tmp"):
+            try:
+                n_rows_per_write.append(len(json.loads(content)))
+            except Exception:
+                pass
+        return real_write_text(self, content, *a, **kw)
+
+    monkeypatch.setattr(type(out), "write_text", spy_write_text)
+
+    results = evaluate_local_vllm(
+        df=df,
+        model_name="test-model",
+        model_id="foo/bar",
+        dataset_name="medqa",
+        prompt_style="original",
+        output_path=out,
+        chunk_size=10,
+    )
+
+    assert len(results) == 25
+    # 3 chunks -> 3 checkpoint saves
+    assert llm.calls and len(llm.calls) == 3, f"expected 3 chunks, got {len(llm.calls)}"
+    assert n_rows_per_write == [10, 20, 25], (
+        f"checkpoints should grow 10 -> 20 -> 25 rows, got {n_rows_per_write}"
+    )
+    # Final file present and complete
+    final = json.loads(out.read_text())
+    assert len(final) == 25
+    assert {r["id"] for r in final} == {f"q{i}" for i in range(25)}
+
+
+def test_evaluate_local_vllm_resumes_from_existing_output(tmp_path, monkeypatch):
+    """When the output_path already has 5 entries and df has 10 rows,
+    only the 5 new ids are sent to vLLM."""
+    import json
+
+    from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+    llm = _FakeLLM(return_text="x")
+    _patch_eval_deps(monkeypatch, llm)
+
+    out = tmp_path / "medqa_test.json"
+    # Seed an existing partial result with the first 5 rows already done
+    seeded = [
+        {
+            "id": f"q{i}",
+            "question": f"What is {i}+1?",
+            "answer": str(i + 1),
+            "severity": "minor",
+            "domain": "math",
+            "model": "test-model",
+            "prediction": "SEEDED",
+            "correct": False,
+            "score_method": "exact_match",
+        }
+        for i in range(5)
+    ]
+    out.write_text(json.dumps(seeded))
+
+    results = evaluate_local_vllm(
+        df=_make_df(10),
+        model_name="test-model",
+        model_id="foo/bar",
+        dataset_name="medqa",
+        prompt_style="original",
+        output_path=out,
+        chunk_size=100,
+    )
+
+    assert len(results) == 10
+    # Only 5 new prompts should have been submitted to vLLM
+    submitted = sum(
+        len(c["args"][0] if c["args"] else c["kw"].get("prompt_token_ids", []))
+        for c in llm.calls
+    )
+    assert submitted == 5, f"expected 5 new prompts, got {submitted}"
+
+    # The seeded predictions must be preserved verbatim (not overwritten)
+    by_id = {r["id"]: r for r in results}
+    assert by_id["q0"]["prediction"] == "SEEDED"
+    assert by_id["q4"]["prediction"] == "SEEDED"
+    # And new rows have the fake LLM output
+    assert by_id["q5"]["prediction"] == "x"
+    assert by_id["q9"]["prediction"] == "x"
+
+
+def test_evaluate_local_vllm_skips_when_all_done(tmp_path, monkeypatch):
+    """If every df id is already in output_path, vLLM must not be called."""
+    import json
+
+    from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+    llm = _FakeLLM(return_text="x")
+    _patch_eval_deps(monkeypatch, llm)
+
+    out = tmp_path / "medqa_test.json"
+    seeded = [
+        {
+            "id": f"q{i}",
+            "question": f"q{i}",
+            "answer": str(i + 1),
+            "severity": "minor",
+            "domain": "math",
+            "model": "test-model",
+            "prediction": "DONE",
+            "correct": True,
+            "score_method": "exact_match",
+        }
+        for i in range(5)
+    ]
+    out.write_text(json.dumps(seeded))
+
+    results = evaluate_local_vllm(
+        df=_make_df(5),
+        model_name="test-model",
+        model_id="foo/bar",
+        dataset_name="medqa",
+        prompt_style="original",
+        output_path=out,
+    )
+
+    assert len(results) == 5
+    assert llm.calls == [], "no vLLM call should be made when all ids done"
+
+
+def test_evaluate_local_vllm_force_ignores_existing(tmp_path, monkeypatch):
+    """force=True must re-run every row even if output_path is fully populated."""
+    import json
+
+    from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+    llm = _FakeLLM(return_text="FRESH")
+    _patch_eval_deps(monkeypatch, llm)
+
+    out = tmp_path / "medqa_test.json"
+    out.write_text(
+        json.dumps(
+            [
+                {
+                    "id": f"q{i}",
+                    "question": "x",
+                    "answer": "y",
+                    "severity": "minor",
+                    "domain": "math",
+                    "model": "m",
+                    "prediction": "STALE",
+                    "correct": False,
+                    "score_method": "exact_match",
+                }
+                for i in range(5)
+            ]
+        )
+    )
+
+    results = evaluate_local_vllm(
+        df=_make_df(5),
+        model_name="test-model",
+        model_id="foo/bar",
+        dataset_name="medqa",
+        prompt_style="original",
+        output_path=out,
+        force=True,
+    )
+
+    assert len(results) == 5
+    assert all(r["prediction"] == "FRESH" for r in results), (
+        "force=True should overwrite STALE seeded predictions"
+    )
+
+
+def test_atomic_write_json_uses_tmp_then_replace(tmp_path):
+    """The helper must write through a .tmp suffix so a half-written file
+    never replaces a good one on crash."""
+    from experiments.evaluate_local_vllm import _atomic_write_json
+
+    target = tmp_path / "out.json"
+    _atomic_write_json(target, [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}])
+    assert target.exists()
+    import json
+
+    assert json.loads(target.read_text()) == [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}]
+    # No leftover tmp file
+    assert not (tmp_path / "out.json.tmp").exists()
+
+
+def test_evaluate_local_vllm_handles_corrupt_existing(tmp_path, monkeypatch):
+    """A garbage output_path should be treated as 'start fresh', not crash."""
+    from experiments.evaluate_local_vllm import evaluate_local_vllm
+
+    llm = _FakeLLM(return_text="x")
+    _patch_eval_deps(monkeypatch, llm)
+
+    out = tmp_path / "medqa_test.json"
+    out.write_text("not valid json {{{")
+
+    results = evaluate_local_vllm(
+        df=_make_df(3),
+        model_name="test-model",
+        model_id="foo/bar",
+        dataset_name="medqa",
+        prompt_style="original",
+        output_path=out,
+        chunk_size=10,
+    )
+    assert len(results) == 3
+    # 1 chunk of 3 prompts
+    assert len(llm.calls) == 1
+
+
 def test_destroy_engine_swallows_runtime_error_from_cleanup():
     """If destroy_distributed_environment raises RuntimeError, we still
     clear the cache (the engine is being torn down anyway)."""
