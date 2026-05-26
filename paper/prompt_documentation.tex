@@ -1,10 +1,10 @@
 % =============================================================================
-% Prompt Documentation for severity-eval — EMNLP 2026
+% Prompt Documentation for severity-eval, EMNLP 2026
 % This file documents all evaluation prompts with academic references.
 % Use as appendix or supplementary material.
 % =============================================================================
 
-% Included from main.tex appendix — section header provided there.
+% Included from main.tex appendix, section header provided there.
 % \section{Evaluation Prompts and Methodology}
 % \label{sec:prompts}
 
@@ -23,7 +23,7 @@ All evaluations use temperature 0.0 (greedy decoding) where supported by the API
 
 \subsubsection{FinanceBench}
 
-\textbf{Source:} Islam et al.~\cite{islam2023financebench}, Table~3 --- Oracle context-first configuration.
+\textbf{Source:} Islam et al.~\cite{islam2023financebench}, Table~3, Oracle context-first configuration.
 The original paper used human evaluation; we add a brief output constraint (``Provide only the answer'') necessary for automated scoring, following standard practice in benchmark evaluation~\cite{liang2023helm}.
 
 \begin{quote}
@@ -71,7 +71,7 @@ The FinBen benchmark uses the same structure with the prefix ``Please answer the
 
 \subsubsection{HEAD-QA}
 
-\textbf{Source:} MedHELM~\cite{bedi2025medhelm}\footnote{\url{https://github.com/stanford-crfm/helm/blob/main/src/helm/benchmark/run_specs/medhelm_run_specs.py}} --- zero-shot biomedical MCQ format.
+\textbf{Source:} MedHELM~\cite{bedi2025medhelm}\footnote{\url{https://github.com/stanford-crfm/helm/blob/main/src/helm/benchmark/run_specs/medhelm_run_specs.py}}, zero-shot biomedical MCQ format.
 
 \begin{quote}
 \texttt{You are a highly knowledgeable AI assistant specializing in biomedical sciences.
@@ -93,7 +93,7 @@ All legal prompts follow LegalBench~\cite{guha2023legalbench}, the standard benc
 
 \subsubsection{CUAD}
 
-\textbf{Source:} LegalBench~\cite{guha2023legalbench} --- zero-shot jargon format.
+\textbf{Source:} LegalBench~\cite{guha2023legalbench}, zero-shot jargon format.
 The original CUAD paper~\cite{hendrycks2021cuad} defines an extractive QA task (SQuAD~2.0 format) where questions are the 41 clause category descriptions from \texttt{category\_descriptions.csv}.
 
 \begin{quote}
@@ -107,7 +107,7 @@ Evidence is the contract paragraph context from the SQuAD-format data, downloade
 
 \subsubsection{MAUD}
 
-\textbf{Source:} LegalBench~\cite{guha2023legalbench} --- MCQ classification format over merger agreement text.
+\textbf{Source:} LegalBench~\cite{guha2023legalbench}, MCQ classification format over merger agreement text.
 MAUD~\cite{wang2023maud} defines 92 deal point questions with 2--5 answer categories per question.
 
 \begin{quote}
@@ -145,7 +145,7 @@ Answer with exactly one word: Entailment, Contradiction, or Neutral.} \\[6pt]
 
 \subsubsection{Quebec Automobile Insurance RAG}
 
-\textbf{Source:} Beauchemin et al.~\cite{beauchemin2024quebec} --- exact prompt from the RAG evaluation pipeline.
+\textbf{Source:} Beauchemin et al.~\cite{beauchemin2024quebec}, exact prompt from the RAG evaluation pipeline.
 
 \begin{quote}
 \texttt{Répondez à la question suivante sur l'assurance automobile au Québec.
@@ -159,7 +159,7 @@ Evaluation follows the manual criterion-based scoring protocol from~\cite{beauch
 
 \subsubsection{Legal Text Simplification (JUDGEBERT)}
 
-\textbf{Source:} JUDGEBERT~\cite{judgebert2025} --- GPT-4 simplification prompt (French).
+\textbf{Source:} JUDGEBERT~\cite{judgebert2025}, GPT-4 simplification prompt (French).
 
 \begin{quote}
 \texttt{Simplifiez le texte juridique suivant en langage clair,
@@ -188,8 +188,8 @@ This minimal template removes all dataset-specific instructions, domain prefixes
 If the Kendall $\tau$ between model rankings under ``original'' and ``standard'' prompts is high ($\tau > 0.8$), this confirms that our severity-weighted findings are robust to prompt engineering choices.
 
 % ---------------------------------------------------------------------------
-\subsection{Severity Annotation}
-\label{sec:severity-annotation}
+\subsection{Severity Annotation Recap}
+\label{sec:app-severity-annotation-recap}
 % ---------------------------------------------------------------------------
 
 Each dataset instance is annotated with a severity level (critical, major, minor, negligible) using domain-specific heuristics:

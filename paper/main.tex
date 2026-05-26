@@ -59,39 +59,16 @@ An Empirical Study with Actuarial Frequency-Severity Models}
 % ============================================================================
 
 \begin{abstract}
-Standard evaluation of large language models treats all errors as
-equally consequential. A model that hallucinates a company's revenue
-by \$2~billion and one that rounds a ratio to one fewer decimal place
-both suffer the same unit penalty under accuracy-based metrics.
-\citet{beauchemin2026position} recently argued that actuarial
-frequency-severity models provide a principled framework for
-quantifying this distinction, but left open the question of whether
-the theoretical gap between accuracy and economic risk materializes in
-practice across models, domains, and scales.
-
-We report an empirical study applying this framework to up to 29
-language models---frontier APIs together with locally deployed
-open-weight models in the 8B--235B parameter range---across eight
-benchmarks in four high-stakes domains (finance, medicine, law, and
-insurance). Each benchmark instance carries a severity annotation that
-records the cost of erring on that instance, grounded in
-domain-specific regulatory and economic evidence. Using
-the compound loss model $S = \sum_{i=1}^{N} X_i$ with
-$N \sim \mathrm{Bin}(n, p)$ and $X_i$ drawn from a categorical
-severity distribution, we estimate the expected aggregate loss, the
-tail risk measures $\VaR_{0.95}$ and $\TVaR_{0.95}$, and the Lundberg
-reserve for each model--dataset pair.
-
-We organize our analysis around five research questions about the
-relationship between accuracy and economic risk: whether model
-rankings by expected loss differ from rankings by accuracy, how
-inter-model variance in $\ES$ decomposes into a severity and a
-frequency component, whether concrete ranking inversions occur,
-whether human-in-the-loop routing modelled as excess-of-loss
-reinsurance yields meaningful cost reductions, and how sensitive
-the resulting rankings are to perturbations of the cost vector. We release \seveval{}, an open-source Python library
-compatible with the HuggingFace \texttt{evaluate} ecosystem, along
-with severity annotations for the eight benchmarks evaluated here.
+Accuracy treats every error as equally costly: a \$2~billion revenue
+hallucination is penalised like a rounded decimal. We operationalise
+the actuarial frequency-severity framework of
+\citet{beauchemin2026position} by annotating eight benchmarks
+(finance, medicine, law, insurance) with a per-instance cost of error
+and evaluating up to 29 language models on the resulting compound
+loss $S = \sum_{i=1}^{N} X_i$. For each model-dataset pair we report
+expected loss, $\VaR_{0.95}$, $\TVaR_{0.95}$, the Lundberg reserve,
+and a human-in-the-loop routing analysis. We release \seveval{}, a
+HuggingFace-compatible Python library, alongside the annotations.
 \end{abstract}
 
 % ============================================================================
@@ -106,9 +83,9 @@ tasks reduces performance to a single scalar: the fraction of correct
 answers. This convention is inherited from the classification
 literature, where accuracy, F1, and related metrics have served as
 standard measures for decades \citep{manning2008ir}. In that setting,
-the assumption that all errors are interchangeable---that a
+the assumption that all errors are interchangeable, that a
 misclassified spam email carries the same weight as a misclassified
-cancer diagnosis---is recognized as unrealistic but tolerated because
+cancer diagnosis, is recognized as unrealistic but tolerated because
 cost-sensitive alternatives require domain-specific calibration that
 generalized benchmarks cannot provide.
 
@@ -197,7 +174,7 @@ BERTScore \citep{zhang2020bertscore} and BLEURT \citep{sellam2020bleurt}
 use neural representations to better align with human judgments.
 MQM-based evaluation in machine translation \citep{lommel2014mqm}
 explicitly distinguishes minor, major, and critical errors, with
-weights of 1, 5, and 25 respectively---the closest precedent to
+weights of 1, 5, and 25 respectively, the closest precedent to
 severity-weighted evaluation in NLP.
 
 However, none of these metrics connect error severity to economic
@@ -262,7 +239,7 @@ empirical companion to that theoretical contribution.
 The application of actuarial loss models to technology risk is not
 new. The Basel~II/III Accords \citep{basel2006} require banks to
 model operational risk using a Loss Distribution Approach (LDA) that
-decomposes aggregate loss into frequency and severity components---the
+decomposes aggregate loss into frequency and severity components, the
 same decomposition we employ. \citet{malavasi2022cyber} apply the LDA
 to cyber risk, modeling claim frequency with Poisson processes and
 severity with log-normal or generalized Pareto distributions.
@@ -309,8 +286,8 @@ Domain-specific benchmarks exist for finance
 
 These efforts share a common limitation: they reduce model performance
 to accuracy or a closely related metric, discarding information about
-the severity distribution of errors. Our work augments---rather than
-replaces---existing benchmarks by annotating each instance with a
+the severity distribution of errors. Our work augments, rather than
+replaces, existing benchmarks by annotating each instance with a
 severity level and computing risk measures that complement accuracy.
 
 % ============================================================================
@@ -401,8 +378,8 @@ We select eight benchmarks across four high-stakes domains for which
 severity can be derived from a structured field of the source dataset
 (clause type, category, fixed hypothesis, simplified-clause type) or
 from a defensible matrix over structured answer/program/metric axes.
-Three benchmarks initially considered---MedQA, MedCalc-Bench, and the
-RAG Insurance corpus---were removed after an inter-annotator audit
+Three benchmarks initially considered, MedQA, MedCalc-Bench, and the
+RAG Insurance corpus, were removed after an inter-annotator audit
 showed their keyword-based severity labels could not be defended at
 the critical-vs-major boundary (see \S\ref{sec:limitations}).
 Table~\ref{tab:datasets} summarizes the retained selection.
@@ -603,51 +580,9 @@ completed their full benchmark sweep by submission. Provider budgets
 and pricing led us to select recent flagship and mid-tier checkpoints
 from each family rather than running every available variant.
 
-\begin{table}[t]
-\centering
-\small
-\begin{tabular}{lll}
-\toprule
-Model & Provider & Type \\
-\midrule
-\multicolumn{3}{l}{\textit{Frontier API models}} \\
-o3, o3-mini             & OpenAI    & Reasoning \\
-GPT-5, GPT-5-mini       & OpenAI    & General \\
-Claude Sonnet~4.6       & Anthropic & General \\
-Claude Haiku~4.5        & Anthropic & General \\
-Command~A, Command~R+   & Cohere    & General \\
-DeepSeek-V3             & DeepSeek  & General \\
-DeepSeek-R1             & DeepSeek  & Reasoning \\
-Gemini~3.1~Pro          & Google    & General \\
-Grok-3, Grok-3-mini     & xAI       & General \\
-Mistral Large, Medium   & Mistral   & General \\
-Qwen3-235B (think./std.) & Alibaba (OpenRouter) & Reasoning/General \\
-\midrule
-\multicolumn{3}{l}{\textit{Open-weight local models (FP8 / MXFP4 via vLLM)}} \\
-Llama-3.3-70B           & Meta        & General \\
-DeepSeek-R1-Distill-70B & DeepSeek    & Reasoning \\
-Qwen2.5-72B             & Alibaba     & General \\
-QwQ-32B                 & Alibaba     & Reasoning \\
-Qwen3-30B-A3B           & Alibaba     & MoE \\
-Gemma-3-27B             & Google      & General \\
-Gemma-3-12B             & Google      & General \\
-Qwen3-14B               & Alibaba     & Reasoning \\
-GPT-OSS-120B            & OpenAI      & General (MXFP4) \\
-GPT-OSS-20B             & OpenAI      & General (MXFP4) \\
-Phi-4                   & Microsoft   & General \\
-Granite-3.2-8B          & IBM         & General (FP16) \\
-\bottomrule
-\end{tabular}
-\caption{Models evaluated. API models are accessed through their
-respective provider endpoints (with the official batch APIs used
-where available for cost reduction). Local open-weight models are
-served by vLLM with FP8 (or MXFP4 native, for the gpt-oss family)
-checkpoints from RedHatAI, the Qwen team, and openai/gpt-oss on the
-HuggingFace Hub; the two largest models (70-72\,B and 120\,B) are
-sharded across two GPUs with tensor parallelism, the rest run
-single-GPU.}
-\label{tab:models}
-\end{table}
+The full model roster (12 open-weight checkpoints served by vLLM
+with FP8 or MXFP4 quantization, 17 frontier API models from nine
+providers) is listed in Appendix~\ref{sec:app-models}.
 
 API models are queried through official endpoints, with batch APIs
 used for OpenAI, Anthropic, Google, xAI and Mistral; Cohere,
@@ -760,9 +695,9 @@ matplotlib loaded lazily only when DataFrame export or plotting is
 requested; and (3)~domain-agnostic design with built-in taxonomies
 for finance, medicine, law and insurance, plus a registration API
 for custom domains. The actuarial pipeline is split across six
-modules---compound loss simulation, risk measures, ruin theory,
+modules, compound loss simulation, risk measures, ruin theory,
 routing analysis, severity taxonomies, and sensitivity
-analysis---documented with usage examples in
+analysis, documented with usage examples in
 Appendix~\ref{sec:app-library}.
 
 % ============================================================================
@@ -831,9 +766,8 @@ domains, or under different prompt styles, remains open.
 
 Using a retention threshold of $d = c_3$ (route ``major'' and
 ``critical'' errors) and human-review cost $h = \$50$, the
-estimated mean cost reduction (Table~\ref{tab:h4}) is $85.1\%$ in
-finance, $99.9\%$ in insurance (single model), $66.6\%$ in medical
-and $50.0\%$ in legal. The Spearman correlation between the
+estimated mean cost reduction is $85.1\%$ in finance, $99.9\%$ in
+insurance (single model), $66.6\%$ in medical and $50.0\%$ in legal. The Spearman correlation between the
 coefficient of variation of $\mathbf{c}$ and the mean reduction is
 upward in the snapshot but cannot be tested rigorously with only
 four domains and uneven within-domain coverage.
@@ -996,8 +930,8 @@ agreement 94\%): agreement is moderate, with most disagreements
 confined to adjacent severity levels rather than across the
 negligible-vs-critical gap.
 
-We initially considered three additional benchmarks---MedQA,
-MedCalc-Bench, and the RAG Insurance corpus---whose severity labels
+We initially considered three additional benchmarks, MedQA,
+MedCalc-Bench, and the RAG Insurance corpus, whose severity labels
 came from keyword matching over the raw question text or calculator
 name. After the same inter-annotator audit failed to defend their
 critical-vs-major boundary, we removed them from the evaluation
@@ -1064,6 +998,54 @@ deployment decisions.
 % ============================================================================
 
 \appendix
+
+\section{Model Roster}
+\label{sec:app-models}
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Model & Provider & Type \\
+\midrule
+\multicolumn{3}{l}{\textit{Frontier API models (17)}} \\
+o3, o3-mini             & OpenAI    & Reasoning \\
+GPT-5, GPT-5-mini       & OpenAI    & General \\
+Claude Sonnet~4.6       & Anthropic & General \\
+Claude Haiku~4.5        & Anthropic & General \\
+Command~A, Command~R+   & Cohere    & General \\
+DeepSeek-V3             & DeepSeek  & General \\
+DeepSeek-R1             & DeepSeek  & Reasoning \\
+Gemini~3.1~Pro          & Google    & General \\
+Grok-3, Grok-3-mini     & xAI       & General \\
+Mistral Large, Medium   & Mistral   & General \\
+Qwen3-235B (think.+std.)& OpenRouter & Reasoning/General \\
+\midrule
+\multicolumn{3}{l}{\textit{Open-weight local models (12, FP8/MXFP4 via vLLM)}} \\
+Llama-3.3-70B           & Meta        & General \\
+DeepSeek-R1-Distill-70B & DeepSeek    & Reasoning \\
+Qwen2.5-72B             & Alibaba     & General \\
+QwQ-32B                 & Alibaba     & Reasoning \\
+Qwen3-30B-A3B           & Alibaba     & MoE \\
+Gemma-3-27B             & Google      & General \\
+Gemma-3-12B             & Google      & General \\
+Qwen3-14B               & Alibaba     & Reasoning \\
+GPT-OSS-120B            & OpenAI      & General (MXFP4) \\
+GPT-OSS-20B             & OpenAI      & General (MXFP4) \\
+Phi-4                   & Microsoft   & General \\
+Granite-3.2-8B          & IBM         & General (FP16) \\
+\bottomrule
+\end{tabular}
+\caption{All 29 models referenced in the evaluation. API models go
+through the official provider endpoints (with batch APIs for cost
+reduction); local open-weight models are served by vLLM with FP8 or
+MXFP4 checkpoints from RedHatAI, the Qwen team, and openai/gpt-oss.
+The 70-72\,B Llama / DeepSeek / Qwen2.5 checkpoints and gpt-oss-120b
+are sharded across two GPUs with tensor parallelism; the rest run
+single-GPU.}
+\label{tab:models}
+\end{table*}
 
 \section{Cost Calibration Evidence}
 \label{sec:app-calibration}
@@ -1143,8 +1125,8 @@ helpers used by the figures in this paper.
 \subsection{HuggingFace Integration}
 
 The module \texttt{severity\_eval.metric} exposes
-\texttt{compute\_severity\_metrics()}---a flat-dict wrapper around
-the core \texttt{evaluate()} call---and \texttt{CompoundLossMetric},
+\texttt{compute\_severity\_metrics()}, a flat-dict wrapper around
+the core \texttt{evaluate()} call, and \texttt{CompoundLossMetric},
 a subclass of \texttt{evaluate.Metric} that can be instantiated
 directly. Both paths return the same payload (accuracy, error rate,
 severity profile, expected loss, VaR, TVaR), so the risk measures
