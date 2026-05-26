@@ -1508,6 +1508,7 @@ def evaluate_model(
     delay: float = 1.0,
     prompt_style: str = "original",
     batch_size: int | None = None,
+    force: bool = False,
 ) -> pd.DataFrame:
     """Evaluate a model on a dataset with scoring.
 
@@ -1548,10 +1549,12 @@ def evaluate_model(
         from experiments.evaluate_local_vllm import evaluate_local_vllm
 
         # output_path is threaded through so vLLM can checkpoint after
-        # every chunk and resume from an existing partial JSON. Pass
-        # force=True to ignore an existing file (the --force CLI flag
-        # has already deleted/overwritten upstream when we get here on
-        # that path, but we pass it explicitly for clarity).
+        # every chunk and resume from an existing partial JSON. The
+        # `force` flag is propagated from the --force CLI flag: when set,
+        # evaluate_local_vllm ignores any existing output file (re-runs
+        # from scratch). Otherwise it resumes from the existing entries
+        # by id, which is what we want for cheap extension of an earlier
+        # smaller --limit.
         return evaluate_local_vllm(
             df,
             model_name,
@@ -1559,7 +1562,7 @@ def evaluate_model(
             dataset_name,
             prompt_style,
             output_path=output_path,
-            force=False,
+            force=force,
         )
 
     _BATCH_DISPATCHERS = {
@@ -1904,6 +1907,7 @@ def main():
                 delay=args.delay,
                 prompt_style=args.prompt_style,
                 batch_size=args.batch_size,
+                force=args.force,
             )
             if results_df.empty:
                 continue

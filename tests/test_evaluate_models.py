@@ -364,3 +364,74 @@ def test_get_prompt_no_evidence_no_filing_block():
     """Without evidence the {context} block is empty and not wrapped."""
     out = get_prompt("Q?", "medqa", options={"A": "x", "B": "y"})
     assert "Document excerpt" not in out
+
+
+# ----------------------------------------------------------------------
+# --force CLI flag must reach evaluate_local_vllm so the resume / id
+# dedup logic does not silently drop rows when the user asks for a
+# clean re-run. Hardcoding force=False at the dispatcher level caused
+# the HEAD-QA / MAUD 960 / 785 row drops in the n=1000 run (the smoke
+# JSON shared ids with the new --limit 1000 expansion, the dedup
+# dropped every row matching those 10 ids).
+# ----------------------------------------------------------------------
+
+
+def test_evaluate_model_force_true_propagates_to_local_dispatcher(monkeypatch):
+    """`evaluate_model(force=True)` must call evaluate_local_vllm with
+    force=True so the resume dedup is bypassed."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    import experiments.evaluate_local_vllm as vllm_mod
+    from experiments.evaluate_models import MODELS, evaluate_model
+
+    local_models = [m for m, cfg in MODELS.items() if cfg["provider"] == "local"]
+    assert local_models, "no local model in MODELS dict -- fixture stale"
+    model_name = local_models[0]
+
+    captured: dict = {}
+
+    def fake_evaluate_local_vllm(
+        df,
+        model_name,
+        model_id,
+        dataset_name,
+        prompt_style,
+        output_path=None,
+        chunk_size=100,
+        force=False,
+    ):
+        captured["force"] = force
+        return [
+            {
+                **df.iloc[0].to_dict(),
+                "model": model_name,
+                "prediction": "x",
+                "correct": True,
+                "score_method": "exact_match",
+            }
+        ]
+
+    monkeypatch.setattr(vllm_mod, "evaluate_local_vllm", fake_evaluate_local_vllm)
+    df = pd.DataFrame(
+        [
+            {
+                "id": "i0",
+                "question": "q",
+                "answer": "a",
+                "severity": "minor",
+                "domain": "math",
+            }
+        ]
+    )
+
+    evaluate_model(df, model_name, "medqa", Path("/tmp/_force_test.json"), force=True)
+    assert captured.get("force") is True, (
+        "evaluate_model(force=True) must propagate force=True to "
+        "evaluate_local_vllm; got force=" + repr(captured.get("force"))
+    )
+
+    captured.clear()
+    evaluate_model(df, model_name, "medqa", Path("/tmp/_force_test.json"), force=False)
+    assert captured.get("force") is False
