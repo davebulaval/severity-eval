@@ -72,14 +72,14 @@ Critical & \$500\,000 & Dosage error; sepsis triage failure \\
     \citep{seymour2017sepsis}. Calibrates \textit{critical}.
 \end{itemize}
 
-\paragraph{Annotation rule for MedCalc-Bench.}
-The dataset categorizes medical calculators into clinical domains
-(dosage, triage, risk assessment, body metrics). The mapping is:
+\paragraph{Annotation rule for HEAD-QA.}
+HEAD-QA tags each question with one of six academic categories.
+The error-cost mapping is:
 \begin{itemize}
-\item Dosage/Sepsis/Triage calculators $\to$ \textit{critical}
-\item Surgical risk / APACHE / ICU scores $\to$ \textit{major}
-\item Framingham / cardiovascular risk scores $\to$ \textit{minor}
-\item BMI / BSA / unit conversions $\to$ \textit{negligible}
+\item Pharmacology $\to$ \textit{critical}
+\item Medicine, Nursing $\to$ \textit{major}
+\item Psychology $\to$ \textit{minor}
+\item Biology, Chemistry $\to$ \textit{negligible}
 \end{itemize}
 
 % ============================================================

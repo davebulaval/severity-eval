@@ -69,39 +69,6 @@ The FinBen benchmark uses the same structure with the prefix ``Please answer the
 \subsection{Medical Domain}
 % ---------------------------------------------------------------------------
 
-\subsubsection{MedCalc-Bench}
-
-\textbf{Source:} NCBI evaluation code\footnote{\url{https://github.com/ncbi-nlp/MedCalc-Bench/blob/main/evaluation/run.py}} --- \texttt{direct\_answer} mode (zero-shot, no chain-of-thought).
-
-\begin{quote}
-\texttt{You are a helpful assistant for calculating a score for a given patient note.
-Please output answer only without any other text.} \\[6pt]
-\texttt{Here is the patient note:} \\
-\texttt{\{question\}} \\[6pt]
-\texttt{Please output the numerical answer:}
-\end{quote}
-
-The original code defines three modes: \texttt{direct\_answer}, \texttt{zero\_shot} (CoT), and \texttt{one\_shot}.
-We use \texttt{direct\_answer} for consistency with our zero-shot evaluation protocol.
-The system prompt instructs the model to output only the numerical value, matching the original evaluation methodology.
-
-\subsubsection{MedQA USMLE}
-
-\textbf{Source:} EleutherAI lm-evaluation-harness\footnote{\url{https://github.com/EleutherAI/lm-evaluation-harness/tree/main/lm_eval/tasks/medqa}} --- zero-shot MCQ format.
-
-\begin{quote}
-\texttt{Question: \{question\}} \\
-\texttt{A. \{option\_A\}} \\
-\texttt{B. \{option\_B\}} \\
-\texttt{C. \{option\_C\}} \\
-\texttt{D. \{option\_D\}} \\
-\texttt{Answer:}
-\end{quote}
-
-This is the canonical format used across major evaluation frameworks.
-HELM~\cite{liang2023helm} uses an identical structure with the prefix ``The following are multiple choice questions (with answers) about medicine'' and 5-shot examples; we omit few-shot examples for consistency.
-The MedPaLM evaluation~\cite{singhal2023medpalm} uses a similar structure with chain-of-thought (``Let's think step by step''), which we exclude from the primary results.
-
 \subsubsection{HEAD-QA}
 
 \textbf{Source:} MedHELM~\cite{bedi2025medhelm}\footnote{\url{https://github.com/stanford-crfm/helm/blob/main/src/helm/benchmark/run_specs/medhelm_run_specs.py}} --- zero-shot biomedical MCQ format.
@@ -233,8 +200,11 @@ Two-axis classification following SEC Staff Accounting Bulletin No.~99 (SAB~99) 
 (2)~metric type (core financials, operational, ratio, descriptive).
 Core financial statement items (revenue, net income, total assets) in absolute dollars are classified as \emph{critical}; operational metrics as \emph{major}; ratios and percentages as \emph{minor}; descriptive text as \emph{negligible}.
 
-\paragraph{Medical (MedCalc, MedQA, HEAD-QA).}
-Based on clinical impact: dosage/triage calculations are \emph{critical}; diagnostic/surgical decisions are \emph{major}; pathophysiology and lab interpretation are \emph{minor}; anatomy and basic science are \emph{negligible}.
+\paragraph{Medical (HEAD-QA).}
+Based on clinical impact of erring on the instance: pharmacology
+questions are \emph{critical}; medicine and nursing are \emph{major};
+psychology is \emph{minor}; biology and chemistry are
+\emph{negligible}.
 
 \paragraph{Legal (CUAD, MAUD, ContractNLI).}
 Based on clause type and legal exposure: indemnification, liability limitation, and termination clauses are \emph{critical}; IP ownership, non-compete, and deal protection are \emph{major}; governing law and closing conditions are \emph{minor}; definitions and boilerplate are \emph{negligible}.
