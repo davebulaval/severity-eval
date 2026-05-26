@@ -462,18 +462,26 @@ def evaluate_local_vllm(
             needs_truncation = True
             break
 
-    # Pre-tokenize and truncate once -- the trailing portion (which holds
-    # the question + answer choices) is what we keep when the prompt
-    # exceeds the engine's max_model_len.
+    # Pre-tokenize, truncate, and decode back to text. We used to pass
+    # the token IDs directly via the `prompt_token_ids=` kwarg, but some
+    # vLLM builds reject that kwarg with "LLM.generate() got an
+    # unexpected keyword argument 'prompt_token_ids'". The round-trip
+    # encode/decode is safe for our use case (instruction-tuned models
+    # whose tokenizers handle decode-then-encode idempotently for normal
+    # text), and lets the chunk loop below use a single uniform call
+    # signature `llm.generate(text_prompts, sampling)`.
     if needs_truncation:
-        token_id_lists: list[list[int]] = []
+        truncated_prompts: list[str] = []
         for p in prompts:
             ids = tokenizer.encode(p, add_special_tokens=False)
             if len(ids) > prompt_token_budget:
                 ids = ids[-prompt_token_budget:]
-            token_id_lists.append(ids)
-    else:
-        token_id_lists = []  # unused; we feed text prompts to vLLM
+                truncated_prompts.append(
+                    tokenizer.decode(ids, skip_special_tokens=False)
+                )
+            else:
+                truncated_prompts.append(p)
+        prompts = truncated_prompts
 
     # ---- Chunked submission with checkpoint saves after every chunk ----
     # vLLM's continuous batching is fastest with a large batch, but a
@@ -502,13 +510,7 @@ def evaluate_local_vllm(
         chunk_options = options_per_row[chunk_start:chunk_end]
 
         t0 = time.perf_counter()
-        if needs_truncation:
-            raw_outputs = llm.generate(
-                prompt_token_ids=token_id_lists[chunk_start:chunk_end],
-                sampling_params=sampling,
-            )
-        else:
-            raw_outputs = llm.generate(prompts[chunk_start:chunk_end], sampling)
+        raw_outputs = llm.generate(prompts[chunk_start:chunk_end], sampling)
         n_chunk = chunk_end - chunk_start
         elapsed = time.perf_counter() - t0
         log.info(
