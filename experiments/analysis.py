@@ -15,7 +15,11 @@ import pandas as pd
 from scipy.stats import kendalltau
 
 from severity_eval.compound_loss import simulate_aggregate_loss
-from severity_eval.risk_measures import bootstrap_ci, compute_risk_measures
+from severity_eval.risk_measures import (
+    bootstrap_ci,
+    compute_risk_measures,
+    wilson_score_interval,
+)
 from severity_eval.routing import analyze_routing
 from severity_eval.taxonomy import get_taxonomy, severity_label_to_index
 
@@ -147,6 +151,10 @@ def compute_metrics(
             counts[idx] += 1
 
         if counts.sum() == 0:
+            # No errors observed -> degenerate severity profile, all
+            # loss-side CIs collapse to 0. Accuracy CI is still
+            # well-defined and reflects n.
+            acc_lo, acc_hi = wilson_score_interval(correct, n)
             records.append(
                 {
                     "model": model,
@@ -156,6 +164,8 @@ def compute_metrics(
                     "n": n,
                     "n_errors": 0,
                     "accuracy": accuracy,
+                    "accuracy_ci_lo": acc_lo,
+                    "accuracy_ci_hi": acc_hi,
                     "error_rate": error_rate,
                     "severity_profile": [0.0] * len(taxonomy.cost_levels),
                     "mu_X": 0.0,
@@ -163,7 +173,11 @@ def compute_metrics(
                     "expected_loss_ci_lo": 0.0,
                     "expected_loss_ci_hi": 0.0,
                     "var": 0.0,
+                    "var_ci_lo": 0.0,
+                    "var_ci_hi": 0.0,
                     "tvar": 0.0,
+                    "tvar_ci_lo": 0.0,
+                    "tvar_ci_hi": 0.0,
                 }
             )
             continue
@@ -179,6 +193,13 @@ def compute_metrics(
         )
         measures = compute_risk_measures(S, alpha=alpha)
         ci_lo, ci_hi = bootstrap_ci(S, statistic="expected_loss", seed=seed)
+        var_lo, var_hi = bootstrap_ci(S, statistic="var", alpha=alpha, seed=seed)
+        tvar_lo, tvar_hi = bootstrap_ci(S, statistic="tvar", alpha=alpha, seed=seed)
+        # Wilson 95% CI on accuracy : robust at p_hat=0 or p_hat=1 unlike
+        # the normal approximation. Critical because several (model,
+        # dataset) cells sit at the extremes (e.g. gpt-oss-20b on maud at
+        # ~0.99, mistral-small-3 at 0 everywhere).
+        acc_lo, acc_hi = wilson_score_interval(correct, n)
         mu_X = float((taxonomy.cost_levels * pi).sum())
 
         records.append(
@@ -190,6 +211,8 @@ def compute_metrics(
                 "n": n,
                 "n_errors": int(counts.sum()),
                 "accuracy": accuracy,
+                "accuracy_ci_lo": acc_lo,
+                "accuracy_ci_hi": acc_hi,
                 "error_rate": error_rate,
                 "severity_profile": pi.tolist(),
                 "mu_X": mu_X,
@@ -197,7 +220,11 @@ def compute_metrics(
                 "expected_loss_ci_lo": ci_lo,
                 "expected_loss_ci_hi": ci_hi,
                 "var": measures["var"],
+                "var_ci_lo": var_lo,
+                "var_ci_hi": var_hi,
                 "tvar": measures["tvar"],
+                "tvar_ci_lo": tvar_lo,
+                "tvar_ci_hi": tvar_hi,
             }
         )
 
