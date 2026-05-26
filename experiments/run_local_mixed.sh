@@ -1,32 +1,27 @@
 #!/usr/bin/env bash
 # =============================================================================
-# run_local_mixed.sh -- Two-stream orchestration:
-#   * Stream A on GPUs 0+1 : the 7 TP-compatible models (AWQ + w4a16),
-#     each run sequentially with tensor_parallel_size=2.
-#   * Stream B on GPU 2    : the 3 bnb-only models (no AWQ/w4a16
-#     equivalent on HF), each run sequentially with tensor_parallel_size=1.
+# run_local_mixed.sh -- Two-stream orchestration on 3 GPUs:
+#   * Stream A on GPUs 0+1 (TP=2) : the 5 models that genuinely benefit
+#     from or require tensor parallelism (gpt-oss-120b needs TP=2 to
+#     fit; the three 70-72 B FP8 checkpoints + qwq-32b get a real KV
+#     cache lift at TP=2).
+#   * Stream B on GPU 2 (TP=1)    : the 7 models that fit comfortably
+#     on one 48 GB card (qwen3-30b-a3b, gemma-3-{12,27}b, qwen3-14b,
+#     gpt-oss-20b, phi-4, granite-3.2-8b). Each is ~30-50% slower at
+#     TP=1 than at TP=2, but Stream B used to sit on a single model
+#     (granite) and idle the rest of the run -- moving the smaller
+#     models there shaves ~30% off wall time at --limit 1000.
 #
 # Streams A and B run in parallel as background bash subshells. Wall
-# clock is max(A, B); on caribou at --limit 100 the projection is
-# ~12.5 h (A dominated by qwq-32b + the two 70Bs).
+# clock is max(A, B); on caribou the projection at --limit 1000 (8
+# datasets, 12 models) is ~4.5 days vs ~6.4 days with the previous
+# single-model Stream B.
 #
-# Compared to the alternatives:
-#   - All sequential TP=2 (PR #31)  : ~10 h but 3 bnb crash without our
-#                                     auto-cap; even with cap, the
-#                                     3 bnb run on TP=1 sequentially
-#                                     stacking onto the AWQ critical
-#                                     path -> ~19 h.
-#   - All parallel TP=1             : ~6-7 h but the 32B/70B thinking
-#                                     models on a single GPU are
-#                                     unusable (qwq-32b -> ~12 h).
-#   - This mixed orchestration       : streams overlap, neither GPU set
-#                                     stalls on the other.
-#
-# The split: model -> stream is decided by _quantization_for in
-# experiments/evaluate_local_vllm.py: bnb -> stream B, anything else
-# -> stream A. If a model's id is moved between bnb and AWQ in
-# experiments/evaluate_models.py, that automatically reshuffles the
-# streams here.
+# The lists are hard-coded above based on per-model size and KV-cache
+# behaviour; if you add a model to MODELS, place it in Stream A if it
+# is >36 GB FP8 or thinking-class, otherwise Stream B. mistral-small-3
+# is deliberately omitted (broken tokenizer on the RedHat FP8
+# checkpoint -- emits raw BPE tokens).
 #
 # Defaults match the run_local_sequential_tp.sh contract:
 #   --gpus     comma list, default "0,1,2"
@@ -85,31 +80,38 @@ STREAM_A_GPUS=$(IFS=','; echo "${GPU_LIST[*]:0:$((N_GPU - 1))}")
 STREAM_A_TP=$((N_GPU - 1))
 STREAM_B_GPU="${GPU_LIST[$((N_GPU - 1))]}"
 
-# Lists must match what _quantization_for in evaluate_local_vllm.py returns.
-# Stream A: anything not "bitsandbytes" (AWQ + w4a16 + FP8 + GPTQ + MXFP4).
-# Order: heavy first so we get partial-data fallback if a SIGINT happens
-# late.
+# Split is by *physical requirement*, not size, to maximise 3-GPU usage:
+#  * Stream A (TP=2, GPUs 0+1) gets the models that genuinely benefit from
+#    or require tensor parallelism -- gpt-oss-120b at 63 GB needs TP=2 to
+#    fit at all, the three 70-72B FP8 checkpoints get a substantial KV
+#    cache lift at TP=2, and qwq-32b's thinking budget pushes the same
+#    way.
+#  * Stream B (TP=1, GPU 2) gets everything that fits comfortably on a
+#    single 48 GB card. Running these single-GPU costs ~30-50% per-prompt
+#    throughput vs TP=2, but freeing the GPU-2-idle slot saves more wall
+#    time than the per-model slowdown costs. Order: heaviest first so a
+#    late SIGINT keeps the small-model JSONs intact.
 STREAM_A_MODELS=(
-    llama-3.3-70b
     deepseek-r1-distill-70b
-    qwen2.5-72b
-    gpt-oss-120b
     qwq-32b
+    qwen2.5-72b
+    llama-3.3-70b
+    gpt-oss-120b
+)
+STREAM_B_MODELS=(
     qwen3-30b-a3b
     gemma-3-27b
-    gpt-oss-20b
-    mistral-small-3
-    gemma-3-12b
     qwen3-14b
+    gemma-3-12b
+    gpt-oss-20b
     phi-4
-)
-# Stream B: small model that stays single-GPU. granite-3.2-8b is the
-# only model below 12 B and runs in FP16 (~16 GB), so NCCL overhead of
-# TP=2 outweighs the gain at this size. Solo on GPU 2 while stream A
-# handles the heavier models on GPUs 0+1.
-STREAM_B_MODELS=(
     granite-3.2-8b
 )
+# mistral-small-3 deliberately omitted from both lists: its
+# RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-FP8-dynamic checkpoint
+# emits raw BPE tokens (e.g. "Ġ;)ĊĊĠterzo...") instead of decoded text,
+# so accuracy is 0% across every dataset in the smoke run. Pass it via
+# --models if you want to re-validate after a checkpoint swap.
 
 # Apply --models filter (only keep names that appear in the selection)
 if [[ -n "$SELECTED_MODELS" ]]; then
