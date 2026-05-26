@@ -728,7 +728,20 @@ chart for finance. Accuracy and $\ES$ ordering disagree often
 enough that picking a model on accuracy alone risks substantial
 hidden cost exposure.
 
-\input{tables/table_h1}
+\begin{table}[t]\centering\small
+\caption{H1 -- Kendall $\tau$ between accuracy and $E[S]$ rankings per
+taxonomy domain.}\label{tab:h1}
+\begin{tabular}{lrrrl}
+\toprule
+Domain & \#Models & $\tau$ & $p$ & Divergent? \\
+\midrule
+  Finance & 13 & 0.641 & 0.002 & No \\
+  Insurance & 13 & 0.899 & 0.001 & No \\
+  Legal & 13 & 0.744 & 0.000 & No \\
+  Medical & 13 & 0.692 & 0.001 & No \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[t]
 \centering
@@ -771,7 +784,20 @@ $\mathbf{c}$ and the per-(model, domain) reduction is upward
 (median $0.19$ in finance to $1.00$ in medical) but not estimable
 with confidence at only four domains.
 
-\input{tables/table_h4}
+\begin{table}[t]\centering\small
+\caption{H4 -- HITL routing benefit by domain (retention threshold $d{=}c_3$,
+human review cost $h{=}\$50$).}\label{tab:h4}
+\begin{tabular}{lrrrr}
+\toprule
+Domain & CV($c$) & \#Models & Median $\rho$ & Mean reduction (\%) \\
+\midrule
+  Finance & 1.51 & 39 & 0.19 & 83.4 \\
+  Insurance & 1.63 & 13 & 0.50 & 98.8 \\
+  Legal & 1.51 & 52 & 0.45 & 73.5 \\
+  Medical & 1.51 & 36 & 1.00 & 97.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[t]
 \centering
