@@ -24,15 +24,22 @@
 # checkpoint -- emits raw BPE tokens).
 #
 # Defaults match the run_local_sequential_tp.sh contract:
-#   --gpus     comma list, default "0,1,2"
-#   --limit    instances per dataset, default 5
-#   --skip     comma list of model names to drop from both streams
-#   --models   restrict to a comma list (then split into streams)
+#   --gpus      comma list, default "0,1,2"
+#   --limit     instances per dataset, default 5
+#   --skip      comma list of model names to drop from both streams
+#   --models    restrict to a comma list (then split into streams)
+#   --datasets  restrict to a comma list (subset of the retained 7+1)
+#   --force     pass --force to evaluate_models so existing output JSONs
+#               are rebuilt from scratch (instead of being extended via
+#               the PR #40 resume-by-id path)
 #
 # Usage:
 #   ./experiments/run_local_mixed.sh                              # default 3 GPUs, limit=5
 #   ./experiments/run_local_mixed.sh --gpus 0,1,2 --limit 100
 #   ./experiments/run_local_mixed.sh --skip qwq-32b               # skip qwq for a fast dry-run
+#   ./experiments/run_local_mixed.sh --datasets headqa,maud --force --limit 1000
+#                                                                 # targeted re-run after the
+#                                                                 # PR #50 unique-id fix
 #
 # Logs (one file per model):
 #   experiments/results/smoke_logs/mixed_<TS>_<model>.log
@@ -47,6 +54,8 @@ GPUS="0,1,2"
 LIMIT="5"
 SKIP_MODELS=""
 SELECTED_MODELS=""
+SELECTED_DATASETS=""
+FORCE=""
 
 _require_arg() {
     if [[ $# -lt 2 || -z "${2:-}" || "${2:0:2}" == "--" ]]; then
@@ -57,11 +66,13 @@ _require_arg() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --gpus)    _require_arg "$@"; GPUS="$2"; shift 2 ;;
-        --limit)   _require_arg "$@"; LIMIT="$2"; shift 2 ;;
-        --skip)    _require_arg "$@"; SKIP_MODELS="$2"; shift 2 ;;
-        --models)  _require_arg "$@"; SELECTED_MODELS="$2"; shift 2 ;;
-        -h|--help) sed -n '2,50p' "$0"; exit 0 ;;
+        --gpus)     _require_arg "$@"; GPUS="$2"; shift 2 ;;
+        --limit)    _require_arg "$@"; LIMIT="$2"; shift 2 ;;
+        --skip)     _require_arg "$@"; SKIP_MODELS="$2"; shift 2 ;;
+        --models)   _require_arg "$@"; SELECTED_MODELS="$2"; shift 2 ;;
+        --datasets) _require_arg "$@"; SELECTED_DATASETS="$2"; shift 2 ;;
+        --force)    FORCE="--force"; shift ;;
+        -h|--help)  sed -n '2,50p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -154,6 +165,22 @@ fi
 DATASETS=(financebench finqa tatqa headqa cuad maud contractnli)
 [[ -f "$PROJECT_DIR/dataset/insurance_text_simplifications_annotated.jsonl" ]] && DATASETS+=(judgebert)
 
+# Apply --datasets filter (only keep names that appear in the selection).
+# Useful for targeted re-runs, e.g. `--datasets headqa,maud --force` after
+# the unique-id loader fix to rebuild only those two datasets.
+if [[ -n "$SELECTED_DATASETS" ]]; then
+    FILTERED_DS=()
+    for d in "${DATASETS[@]}"; do
+        [[ ",$SELECTED_DATASETS," == *",$d,"* ]] && FILTERED_DS+=("$d")
+    done
+    if [[ ${#FILTERED_DS[@]} -eq 0 ]]; then
+        echo "[ABORT] --datasets '$SELECTED_DATASETS' did not match any of:" \
+             "${DATASETS[*]}" >&2
+        exit 1
+    fi
+    DATASETS=("${FILTERED_DS[@]}")
+fi
+
 echo "============================================================"
 echo " LOCAL MIXED RUN  (stream A parallel with stream B)"
 echo "============================================================"
@@ -178,11 +205,16 @@ run_model() {
     for ds in "${DATASETS[@]}"; do
         local t0
         t0=$(date +%s)
+        # $FORCE is "--force" when the script was invoked with --force,
+        # empty otherwise. With --force the per-(model, dataset) output
+        # JSON is rebuilt from scratch; without it, the resume / extend
+        # path in evaluate_local_vllm (PR #40) keeps existing rows and
+        # only runs new ids.
         if stdbuf -oL -eL env PYTHONUNBUFFERED=1 \
                 PYTHONPATH=src python3 -u -m experiments.evaluate_models \
                 --dataset "$ds" --model "$model" \
                 --limit "$LIMIT" --gpu "$gpu" \
-                --tensor-parallel-size "$tp" --force \
+                --tensor-parallel-size "$tp" $FORCE \
                 >> "$log" 2>&1; then
             echo "  [$(date +%H:%M:%S)] $model x $ds OK ($(( $(date +%s) - t0 ))s)"
         else
