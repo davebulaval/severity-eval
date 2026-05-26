@@ -36,6 +36,7 @@ from __future__ import annotations
 import gc
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -285,12 +286,25 @@ def evaluate_local_vllm(
     model_id: str,
     dataset_name: str,
     prompt_style: str,
+    output_path: Path | None = None,
+    chunk_size: int = 100,
+    force: bool = False,
 ) -> list[dict]:
     """Batch inference for local models via vLLM.
 
     Mirrors the contract of experiments.evaluate_models._evaluate_local
     but uses vLLM under the hood. Returns a list of dicts ready to be
     appended to the results JSON.
+
+    Checkpointing behavior (when output_path is not None):
+      * Submits the work in chunks of ``chunk_size`` prompts and rewrites
+        the output JSON after each chunk; a crash at instance 350 of 1000
+        leaves a usable file with the first 300 results.
+      * On startup, if ``output_path`` already contains results, those
+        entries are kept and only the rows with new ``id`` values are
+        run through vLLM. This is how you extend a run from --limit 1000
+        to --limit 2000 without re-doing the first 1000 (pass force=False).
+      * ``force=True`` ignores any existing file and re-runs everything.
     """
     # Import lazily so the HF path does not pay the vLLM import cost
     # (it pulls torch, transformers, multiple CUDA libs).
@@ -306,6 +320,53 @@ def evaluate_local_vllm(
         _strip_think_tags,
         score_prediction,
     )
+
+    # ---- Resume from existing output_path (checkpoint / extend) ----
+    completed_results: list[dict] = []
+    completed_ids: set[str] = set()
+    if output_path is not None and output_path.exists() and not force:
+        try:
+            import json as _json
+
+            completed_results = _json.loads(output_path.read_text())
+            if not isinstance(completed_results, list):
+                raise ValueError("output_path is not a JSON list")
+            completed_ids = {str(r["id"]) for r in completed_results if "id" in r}
+            log.info(
+                "Resuming from %d completed entries in %s",
+                len(completed_results),
+                output_path.name,
+            )
+        except Exception as exc:
+            log.warning(
+                "Could not read existing output_path %s (%s); starting fresh",
+                output_path,
+                exc,
+            )
+            completed_results = []
+            completed_ids = set()
+
+    if completed_ids:
+        df_pending = df[~df["id"].astype(str).isin(completed_ids)].reset_index(
+            drop=True
+        )
+    else:
+        df_pending = df.reset_index(drop=True)
+
+    if len(df_pending) == 0:
+        log.info(
+            "All %d items already complete in %s; nothing to do",
+            len(df),
+            output_path.name if output_path else "<no path>",
+        )
+        return completed_results
+
+    if completed_ids:
+        log.info(
+            "%d new items to evaluate (resuming after %d already done)",
+            len(df_pending),
+            len(completed_ids),
+        )
 
     max_new_tokens, max_length = DATASET_INFERENCE_CONFIG.get(
         dataset_name, _DEFAULT_INFERENCE_CONFIG
@@ -365,7 +426,7 @@ def evaluate_local_vllm(
     prompts: list[str] = []
     options_per_row: list[Any] = []
     rows: list[Any] = []
-    for _, row in df.iterrows():
+    for _, row in df_pending.iterrows():
         raw_prompt, options = _build_prompt_for_row(row, dataset_name, prompt_style)
         # Some tokenizers lack a chat_template and raise ValueError, others
         # are missing the apply method (older tokenizers). Anything beyond
@@ -401,16 +462,9 @@ def evaluate_local_vllm(
             needs_truncation = True
             break
 
-    log.info(
-        "Submitting %d prompts to vLLM (max_new_tokens=%d, max_model_len=%d, "
-        "needs_truncation=%s)",
-        len(prompts),
-        max_new_tokens,
-        max_model_len,
-        needs_truncation,
-    )
-
-    t0 = time.perf_counter()
+    # Pre-tokenize and truncate once -- the trailing portion (which holds
+    # the question + answer choices) is what we keep when the prompt
+    # exceeds the engine's max_model_len.
     if needs_truncation:
         token_id_lists: list[list[int]] = []
         for p in prompts:
@@ -418,37 +472,101 @@ def evaluate_local_vllm(
             if len(ids) > prompt_token_budget:
                 ids = ids[-prompt_token_budget:]
             token_id_lists.append(ids)
-        raw_outputs = llm.generate(
-            prompt_token_ids=token_id_lists, sampling_params=sampling
-        )
     else:
-        raw_outputs = llm.generate(prompts, sampling)
-    elapsed = time.perf_counter() - t0
+        token_id_lists = []  # unused; we feed text prompts to vLLM
+
+    # ---- Chunked submission with checkpoint saves after every chunk ----
+    # vLLM's continuous batching is fastest with a large batch, but a
+    # single crash mid-batch loses everything. We submit `chunk_size`
+    # prompts at a time and rewrite output_path atomically after each
+    # chunk so a SIGINT at instance 350/1000 still leaves the first 300
+    # results on disk. chunk_size=100 keeps the overhead low (one engine
+    # call per 100 prompts) while bounding the worst-case loss.
+    all_results: list[dict] = list(completed_results)
+    n_chunks = (len(prompts) + chunk_size - 1) // chunk_size
     log.info(
-        "vLLM %d prompts in %.1fs (%.1f prompts/s)",
+        "Submitting %d prompts to vLLM in %d chunk(s) of <=%d "
+        "(max_new_tokens=%d, max_model_len=%d, needs_truncation=%s)",
         len(prompts),
-        elapsed,
-        len(prompts) / max(elapsed, 1e-6),
+        n_chunks,
+        chunk_size,
+        max_new_tokens,
+        max_model_len,
+        needs_truncation,
     )
 
-    # vLLM may return outputs in submission order or by completion;
-    # `outputs[i]` corresponds to `prompts[i]` per the API contract.
-    results: list[dict] = []
-    for row, output, options in zip(rows, raw_outputs, options_per_row, strict=True):
-        text = output.outputs[0].text.strip() if output.outputs else ""
-        prediction = _strip_think_tags(text) if thinking else text
-        scoring = score_prediction(
-            prediction,
-            str(row["answer"]),
-            options=options,
+    overall_t0 = time.perf_counter()
+    for chunk_idx, chunk_start in enumerate(range(0, len(prompts), chunk_size)):
+        chunk_end = min(chunk_start + chunk_size, len(prompts))
+        chunk_rows = rows[chunk_start:chunk_end]
+        chunk_options = options_per_row[chunk_start:chunk_end]
+
+        t0 = time.perf_counter()
+        if needs_truncation:
+            raw_outputs = llm.generate(
+                prompt_token_ids=token_id_lists[chunk_start:chunk_end],
+                sampling_params=sampling,
+            )
+        else:
+            raw_outputs = llm.generate(prompts[chunk_start:chunk_end], sampling)
+        n_chunk = chunk_end - chunk_start
+        elapsed = time.perf_counter() - t0
+        log.info(
+            "  chunk %d/%d : %d prompts in %.1fs (%.1f prompts/s)",
+            chunk_idx + 1,
+            n_chunks,
+            n_chunk,
+            elapsed,
+            n_chunk / max(elapsed, 1e-6),
         )
-        results.append(
-            {
-                **row.to_dict(),
-                "model": model_name,
-                "prediction": prediction,
-                "correct": scoring["correct"],
-                "score_method": scoring["score_method"],
-            }
-        )
-    return results
+
+        # `outputs[i]` corresponds to `prompts[i]` per the vLLM API contract.
+        for row, output, options in zip(
+            chunk_rows, raw_outputs, chunk_options, strict=True
+        ):
+            text = output.outputs[0].text.strip() if output.outputs else ""
+            prediction = _strip_think_tags(text) if thinking else text
+            scoring = score_prediction(
+                prediction,
+                str(row["answer"]),
+                options=options,
+            )
+            all_results.append(
+                {
+                    **row.to_dict(),
+                    "model": model_name,
+                    "prediction": prediction,
+                    "correct": scoring["correct"],
+                    "score_method": scoring["score_method"],
+                }
+            )
+
+        if output_path is not None:
+            _atomic_write_json(output_path, all_results)
+            log.info(
+                "  checkpoint: %d/%d total saved to %s",
+                len(all_results),
+                len(completed_results) + len(prompts),
+                output_path.name,
+            )
+
+    overall_elapsed = time.perf_counter() - overall_t0
+    log.info(
+        "vLLM done : %d new prompts in %.1fs (%.1f prompts/s overall)",
+        len(prompts),
+        overall_elapsed,
+        len(prompts) / max(overall_elapsed, 1e-6),
+    )
+    return all_results
+
+
+def _atomic_write_json(path: Path, payload: list[dict]) -> None:
+    """Write JSON via a tmp file + rename so a crash mid-write never leaves
+    a half-written checkpoint that breaks future resumes.
+    """
+    import json as _json
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(_json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+    tmp.replace(path)
