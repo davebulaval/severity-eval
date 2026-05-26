@@ -197,7 +197,15 @@ def load_maud(limit: int | None = None) -> pd.DataFrame:
 
             records.append(
                 {
-                    "id": f"maud_{row_id}",
+                    # MAUD answers ~144 unique deal-point questions over
+                    # many contracts (39 K (question, contract) rows
+                    # total). `row_id` from the source dataset identifies
+                    # the contract, which repeats per question -> collisions
+                    # under the previous f"maud_{row_id}" scheme dropped
+                    # rows in the resume / checkpoint dedup. Compose with
+                    # the global index for row-unique ids while preserving
+                    # contract provenance in the slug.
+                    "id": f"maud_{global_idx:06d}_{row_id}",
                     "question": full_question,
                     "answer": answer,
                     "evidence": text,
