@@ -46,17 +46,43 @@ def _canonical_domain(domain: str) -> str:
     return _DOMAIN_TO_TAXONOMY.get(domain, domain)
 
 
+# Datasets retained for the paper after the severity-annotation audit.
+# medqa, medcalc, and rag_insurance were dropped (keyword-based severity
+# that inter-annotator agreement could not defend) -- see the Limitations
+# section. Their JSON files may still sit in results/ from earlier smoke
+# runs, so load_results filters them out by default to keep the per-domain
+# aggregates (Kendall tau, variance decomposition, routing) clean. Pass
+# include_dropped=True to re-include them for replication of the dropped
+# benchmarks.
+RETAINED_DATASETS = (
+    "financebench",
+    "finqa",
+    "tatqa",
+    "headqa",
+    "cuad",
+    "maud",
+    "contractnli",
+    "judgebert",
+)
+_DROPPED_DATASETS = ("medqa", "medcalc", "rag_insurance")
+
+
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
 
 
-def load_results(results_dir: Path) -> pd.DataFrame:
+def load_results(results_dir: Path, include_dropped: bool = False) -> pd.DataFrame:
     """Load all evaluation results into a single DataFrame.
 
     Filename convention: ``<dataset>_<model>[_<prompt_style>].json``. The
     dataset and prompt style are extracted from the file name; the model
     field is read from each record (and cross-checked against the file).
+
+    By default only the eight retained datasets are loaded; the three
+    dropped datasets (medqa, medcalc, rag_insurance) are skipped so stale
+    smoke-run JSONs cannot contaminate the per-domain aggregates. Set
+    ``include_dropped=True`` to load everything.
     """
     dfs = []
     for f in sorted(results_dir.glob("*.json")):
@@ -90,6 +116,8 @@ def load_results(results_dir: Path) -> pd.DataFrame:
         if ds_match is None:
             # Fall back to the first segment.
             ds_match = stem.split("_", 1)[0]
+        if not include_dropped and ds_match in _DROPPED_DATASETS:
+            continue
         df["dataset"] = ds_match
         df["prompt_style"] = prompt_style
         dfs.append(df)
