@@ -375,21 +375,10 @@
   year      = {2023},
 }
 
-% --- Quantization ---
-
-@inproceedings{dettmers2023qlora,
-  title     = {{QLoRA}: Efficient Finetuning of Quantized {LLMs}},
-  author    = {Dettmers, Tim and Pagnoni, Artidoro and Holtzman, Ari and Zettlemoyer, Luke},
-  booktitle = {Advances in Neural Information Processing Systems},
-  year      = {2023},
-}
-
-@misc{unsloth2024,
-  title     = {Unsloth: Efficient Fine-tuning and Inference for {LLMs}},
-  author    = {{Unsloth AI}},
-  year      = {2024},
-  howpublished = {\url{https://github.com/unslothai/unsloth}},
-}
+% --- Quantization (QLoRA + Unsloth entries removed when the local-
+%     inference path moved from bitsandbytes/unsloth to vLLM with
+%     FP8/MXFP4 checkpoints; re-add if a future revision evaluates a
+%     QLoRA-finetuned model.) ---
 
 % --- Additional references from appendices ---
 
@@ -412,15 +401,6 @@
   author    = {Zhu, Fengbin and Lei, Wenqiang and Feng, Yining and Wang, Chao and Zhang, Bing and Chua, Tat-Seng},
   booktitle = {ICAIF},
   year      = {2024},
-}
-
-@article{singhal2023medpalm,
-  title     = {Large Language Models Encode Clinical Knowledge},
-  author    = {Singhal, Karan and Azizi, Shekoofeh and Tu, Tao and others},
-  journal   = {Nature},
-  volume    = {620},
-  pages     = {172--180},
-  year      = {2023},
 }
 
 @misc{bedi2025medhelm,
