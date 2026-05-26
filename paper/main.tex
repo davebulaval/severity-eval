@@ -148,8 +148,8 @@ Our contributions are:
     library compatible with the HuggingFace \texttt{evaluate}
     ecosystem, implementing the compound loss simulation, the risk
     measures, ruin-theoretic reserves, and the routing analysis
-    (\S\ref{sec:library}).
-  \item \textbf{Reusable evaluation protocol.} We formalize five
+    (Appendix~\ref{sec:app-library-overview}).
+  \item \textbf{Reusable evaluation protocol.} We formalise three
     research questions and the statistical summaries that future
     severity-aware evaluations can report (\S\ref{sec:protocol}).
 \end{enumerate}
@@ -606,95 +606,64 @@ yields $\VaR_{0.95}$ and $\TVaR_{0.95}$), the Lundberg coefficient $R$
 and reserve $u^*$ at ruin tolerance $\psi^*=0.01$, and the routing
 cost reduction at thresholds $d\in\{c_2, c_3\}$ with human review cost
 $h=\$50$. All computations use the \seveval{} library
-(Section~\ref{sec:library}). The analysis is organised around five
-research questions probing accuracy vs.\ actuarial risk, with a
-quantitative criterion per question summarising the empirical signal.
-We do not commit ex ante to thresholds for ``significance''; the
-criteria below are reporting conventions, not pass/fail tests.
+(Appendix~\ref{sec:app-library}). The analysis is organised around
+three research questions, each tied to a concrete reporting criterion;
+a robustness check on the cost calibration is deferred to
+Appendix~\ref{sec:app-robustness}.
 
 \begin{description}[leftmargin=0pt,labelindent=0pt]
-  \item[RQ1 (Ranking divergence).] How closely aligned are model
-    rankings by accuracy and by $\ES$ within a domain? We report
-    Kendall $\tau$ between the two rank orders, together with its
-    $p$-value.
-  \item[RQ2 (Severity vs.\ frequency).] How much of the inter-model
-    variance in $\ES$ is attributable to the severity profile $\bpi$
-    versus the error rate $p$? We report a variance decomposition that
-    holds one factor at the domain mean while letting the other vary.
-  \item[RQ3 (Ranking inversions).] Are there concrete pairs $(A, B)$
-    such that $\mathrm{acc}(A) > \mathrm{acc}(B)$ but
-    $\ES(A) > \ES(B)$? We report the count and dollar magnitude of
-    such inversions per dataset.
-  \item[RQ4 (Routing benefit).] Does the cost reduction from HITL
-    routing covary with the tail heaviness of the domain's cost
-    distribution? We report the per-domain mean cost reduction and
-    the Spearman correlation with the coefficient of variation of
-    $\mathbf{c}$.
-  \item[RQ5 (Robustness).] How sensitive are model rankings to cost
-    calibration? We perturb each $c_k$ by $\pm 20\%$ and report the
-    minimum Spearman $\rho$ between the base and perturbed rankings.
+  \item[RQ1 (Ranking divergence and inversions).] How closely aligned
+    are model rankings by accuracy and by $\ES$ within a domain, and
+    do concrete pairs invert? We report Kendall $\tau$ between the
+    two rank orders together with its $p$-value, plus the count and
+    dollar magnitude of strict inversions where
+    $\mathrm{acc}(A) > \mathrm{acc}(B)$ but $\ES(A) > \ES(B)$.
+  \item[RQ2 (Severity vs.\ frequency variance).] How much of the
+    inter-model variance in $\ES$ is attributable to the severity
+    profile $\bpi$ versus the error rate $p$? We report a variance
+    decomposition that holds one factor at the domain mean while
+    letting the other vary.
+  \item[RQ3 (Routing benefit).] Does the cost reduction from
+    human-in-the-loop routing covary with the tail heaviness of the
+    domain's cost distribution? We report the per-domain mean cost
+    reduction and the Spearman correlation with the coefficient of
+    variation of $\mathbf{c}$.
 \end{description}
 
 % ============================================================================
-% 5. THE SEVERITY-EVAL LIBRARY
-% ============================================================================
-
-\section{The \seveval{} Library}
-\label{sec:library}
-
-We release \seveval{}, an open-source Python library that implements
-the actuarial evaluation pipeline. The library is designed around
-three principles: (1)~a HuggingFace-style \texttt{evaluate.Metric}
-subclass (\texttt{CompoundLossMetric}) so the risk measures can be
-plugged into an existing evaluation pipeline alongside accuracy;
-(2)~minimal core dependencies (NumPy, SciPy), with pandas and
-matplotlib loaded lazily only when DataFrame export or plotting is
-requested; and (3)~domain-agnostic design with built-in taxonomies
-for finance, medicine, law and insurance, plus a registration API
-for custom domains. The actuarial pipeline is split across six
-modules, compound loss simulation, risk measures, ruin theory,
-routing analysis, severity taxonomies, and sensitivity
-analysis, documented with usage examples in
-Appendix~\ref{sec:app-library}.
-
-% ============================================================================
-% 6. RESULTS
+% 5. RESULTS
 % ============================================================================
 
 \section{Results}
 \label{sec:results}
 
 We report results for the model--benchmark pairs we evaluated,
-organised around the five research questions of
+organised around the three research questions of
 Section~\ref{sec:protocol}. All risk measures are computed with
 $n=10{,}000$ outputs per evaluation period, $20{,}000$ Monte Carlo
 replications, and $\alpha=0.95$. The complete per-pair table is
 provided in Appendix~\ref{sec:app-full-results}; we highlight here the
-aggregate signals. The numbers below correspond to the snapshot of
-runs released with the code; the same pipeline can be re-executed at
-the full scale of Section~\ref{sec:experiments} via the
-\texttt{run\_full\_pipeline.sh} script described in
-Appendix~\ref{sec:app-library}.
-
-\paragraph{Sample size caveat.}
-At the time of writing, only the finance domain (FinanceBench) had
-sufficient model coverage to evaluate ranking-based questions (RQ1,
-RQ3, RQ5) with more than three models. The remaining domains carry
-single-model coverage on most datasets, so we report the
-single-domain numbers as preliminary and defer cross-domain
+aggregate signals. At the time of writing, only the finance domain
+(FinanceBench) had sufficient model coverage to evaluate
+ranking-based questions with more than three models; the remaining
+domains carry single-model coverage on most datasets, so we report
+the single-domain numbers as preliminary and defer cross-domain
 comparison to future work using the released pipeline.
 
-\subsection{RQ1: Ranking divergence}
+\subsection{RQ1: Ranking divergence and inversions}
 \label{sec:rq1}
 
 Across $12$ frontier and open-weight models evaluated on
 FinanceBench, the rankings induced by accuracy and by $\ES$ are
 almost monotonically aligned: Kendall $\tau = 0.96$ ($p = 5\times
-10^{-4}$). In this preliminary snapshot, accuracy is a faithful
-proxy for $\ES$ at the model level. Whether this alignment
-persists in domains with heavier-tailed cost vectors (medical,
-insurance) is the central open question that the full evaluation
-addresses.
+10^{-4}$), and we observe $0$ strict inversions of the form
+$\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$ in
+this subset. In this preliminary snapshot, accuracy is a faithful
+proxy for $\ES$ at the model level. Whether this alignment persists
+in domains with heavier-tailed cost vectors, and whether inversions
+emerge there, is the central open question that the full evaluation
+addresses (Figure~\ref{fig:ranking} shows the per-domain
+$\tau$ once cross-domain coverage is complete).
 
 \subsection{RQ2: Severity vs.\ frequency variance}
 \label{sec:rq2}
@@ -703,42 +672,23 @@ Decomposing inter-model variance in $\ES$ into a severity-only and
 a frequency-only contribution (Section~\ref{sec:protocol}) yields,
 for finance, $\mathrm{Var}_{\bpi} = 1.28\times 10^{14}$ and
 $\mathrm{Var}_p = 8.24 \times 10^{13}$, so the severity share is
-$\mathrm{Var}_{\bpi} / (\mathrm{Var}_{\bpi} + \mathrm{Var}_p) =
-0.61$. The severity profile $\bpi$ accounts for a larger share of
+$0.61$. The severity profile $\bpi$ accounts for a larger share of
 inter-model risk variance than the error rate $p$ in this domain.
-This decomposition is sensitive to the cost vector and to the model
-mix; we report it as descriptive rather than confirmatory.
+This decomposition is sensitive to the cost vector and the model
+mix; we report it as descriptive rather than confirmatory and
+include per-domain profiles in Figure~\ref{fig:profiles}.
 
-\subsection{RQ3: Ranking inversions}
+\subsection{RQ3: Routing benefit}
 \label{sec:rq3}
-
-In the FinanceBench subset, where $\tau$ is close to one, we
-observe $0$ strict inversions of the form $\mathrm{acc}(A) >
-\mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$. This is consistent
-with the high $\tau$ above. Whether inversions emerge in other
-domains, or under different prompt styles, remains open.
-
-\subsection{RQ4: Routing benefit}
-\label{sec:rq4}
 
 Using a retention threshold of $d = c_3$ (route ``major'' and
 ``critical'' errors) and human-review cost $h = \$50$, the
 estimated mean cost reduction is $85.1\%$ in finance, $99.9\%$ in
-insurance (single model), $66.6\%$ in medical and $50.0\%$ in legal. The Spearman correlation between the
+insurance (single model), $66.6\%$ in medical and $50.0\%$ in legal
+(Figure~\ref{fig:routing}). The Spearman correlation between the
 coefficient of variation of $\mathbf{c}$ and the mean reduction is
 upward in the snapshot but cannot be tested rigorously with only
 four domains and uneven within-domain coverage.
-
-\subsection{RQ5: Robustness to cost calibration}
-\label{sec:rq5}
-
-Perturbing each $c_k$ by $\pm 20\%$ (one coordinate at a time,
-$\pm$ directions) leaves the FinanceBench $\ES$ ranking unchanged
-in our snapshot: the minimum Spearman correlation between the base
-and perturbed rankings is $1.00$. With only one domain reaching
-the three-model threshold, the result is preliminary, but it
-suggests that moderate uncertainty in $\mathbf{c}$ does not
-overturn rankings dominated by large differences in $\bpi$ and $p$.
 
 % ============================================================================
 % 7. DISCUSSION
@@ -795,7 +745,7 @@ accurately routing decisions are made at inference time.
 Cost vectors are approximate. Real costs depend on context,
 downstream action, detection probability, and whether an error
 propagates. Our levels represent expected per-instance costs
-conditioned on an undetected error. The robustness analysis (RQ5)
+conditioned on an undetected error. The robustness analysis (Appendix~\ref{sec:app-robustness})
 suggests that $\pm 20\%$ perturbations do not overturn rankings in
 the snapshot we report, but practitioners should recalibrate
 $\mathbf{c}$ to their organization's loss data when available.
@@ -850,7 +800,7 @@ Our cost vectors are grounded in regulatory and market evidence, but
 the mapping from severity labels to dollar amounts is inherently
 approximate; different organisations within the same domain face
 different cost structures depending on size, regulatory exposure,
-and risk tolerance. The RQ5 robustness analysis tests whether
+and risk tolerance. The robustness analysis (Appendix~\ref{sec:app-robustness}) tests whether
 rankings are stable under moderate perturbation, but practitioners
 should recalibrate cost levels to their specific context.
 
@@ -985,6 +935,35 @@ are sharded across two GPUs with tensor parallelism; the rest run
 single-GPU.}
 \label{tab:models}
 \end{table*}
+
+\section{The \seveval{} Library}
+\label{sec:app-library-overview}
+
+We release \seveval{}, an open-source Python library implementing
+the actuarial evaluation pipeline. The library follows three design
+choices : (1)~a HuggingFace-style \texttt{evaluate.Metric} subclass
+(\texttt{CompoundLossMetric}) so the risk measures plug into existing
+evaluation pipelines alongside accuracy; (2)~minimal core
+dependencies (NumPy, SciPy), with pandas and matplotlib loaded
+lazily for DataFrame export and plotting; (3)~domain-agnostic
+design, with built-in taxonomies for finance, medicine, law and
+insurance plus a registration API for custom domains. Six modules
+cover compound loss simulation, risk measures, ruin theory, routing
+analysis, severity taxonomies, and sensitivity analysis; usage
+examples are in Appendix~\ref{sec:app-library}.
+
+\section{Robustness to Cost Calibration}
+\label{sec:app-robustness}
+
+Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time leaves
+the FinanceBench $\ES$ ranking unchanged in our snapshot: the
+minimum Spearman correlation between the base and perturbed rankings
+is $1.00$. With only one domain reaching the three-model threshold
+the result is preliminary, but it suggests that moderate uncertainty
+in $\mathbf{c}$ does not overturn rankings dominated by large
+differences in $\bpi$ and $p$. The full sensitivity table is
+generated by \texttt{experiments/analysis.py} via the
+\texttt{--robustness} flag.
 
 \section{Inference Hardware and Quantization}
 \label{sec:app-hardware}
