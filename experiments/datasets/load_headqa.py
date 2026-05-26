@@ -57,6 +57,13 @@ def load_headqa(limit: int | None = None) -> pd.DataFrame:
 
     ds = load_dataset("alesi12/head_qa_v2", "en", split="train")
 
+    # The alesi12/head_qa_v2 HF dataset contains 12,751 rows for only
+    # 235 unique `qid` values: the same question appears repeatedly across
+    # years and exam categories. Using `qid` alone as the row id produced
+    # collisions that the resume / checkpoint logic in evaluate_local_vllm
+    # then dropped. We compose the row id from `qid` AND the global index
+    # so every evaluation row is uniquely identified while still tracing
+    # back to the source question.
     records: list[dict] = []
     for i, row in enumerate(ds):
         if limit is not None and i >= limit:
@@ -81,7 +88,7 @@ def load_headqa(limit: int | None = None) -> pd.DataFrame:
 
         records.append(
             {
-                "id": f"headqa_{qid}",
+                "id": f"headqa_{i:06d}_q{qid}",
                 "question": question,
                 "answer": answer_text,
                 "severity": classify_severity(category),
