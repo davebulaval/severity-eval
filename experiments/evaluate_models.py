@@ -1656,7 +1656,20 @@ def evaluate_model(
     checkpoint_interval = 50  # Save partial results every N completions
     checkpoint_path = output_path.with_suffix(".partial.json")
 
-    # Resume from partial results if they exist
+    # When --force is set, ignore any leftover .partial.json so the API
+    # path mirrors the local-vLLM path: a forced re-run truly starts
+    # from scratch rather than silently resuming from a half-finished
+    # earlier attempt with potentially-different prompts or model
+    # versions.
+    if force and checkpoint_path.exists():
+        try:
+            checkpoint_path.unlink()
+            log.info("  --force: removed stale checkpoint %s", checkpoint_path.name)
+        except OSError as exc:
+            log.warning("  --force: could not remove %s (%s)", checkpoint_path, exc)
+
+    # Resume from partial results if they exist (skipped when force=True
+    # since we unlinked above).
     if checkpoint_path.exists():
         try:
             partial_df = pd.read_json(checkpoint_path)
