@@ -38,19 +38,24 @@ DATASETS_PUBLIC=(
     financebench
     finqa
     tatqa
-    medcalc
-    medqa
     headqa
     cuad
     maud
     contractnli
 )
+# medqa and medcalc were dropped: their severity labels come from
+# keyword matching on the question text (medqa) or the calculator name
+# (medcalc), which inter-annotator agreement could not defend at the
+# critical/major boundary. See "Severity annotation provenance" in
+# Limitations.
 
 # Tier 2: private / local datasets (require manual file placement)
 DATASETS_PRIVATE=(
-    rag_insurance
     judgebert
 )
+# rag_insurance dropped for the same heuristic-severity reason; the
+# gold answer was also a generated LLM response, so the comparison
+# was LLM-vs-LLM rather than LLM-vs-expert.
 
 DELAY=1.0
 LIMIT=""
@@ -142,14 +147,6 @@ if [[ "$SKIP_PRIVATE" == "false" ]]; then
     DATASET_DIR="$PROJECT_DIR/dataset"
     for ds in "${DATASETS_PRIVATE[@]}"; do
         case $ds in
-            rag_insurance)
-                if [[ -f "$DATASET_DIR/all_manual_evaluations.jsonl" ]]; then
-                    DATASETS_TO_RUN+=("$ds")
-                    echo "[OK] Private dataset '$ds' found"
-                else
-                    echo "[SKIP] Private dataset '$ds' — place all_manual_evaluations.jsonl in dataset/"
-                fi
-                ;;
             judgebert)
                 if [[ -f "$DATASET_DIR/insurance_text_simplifications_annotated.jsonl" ]]; then
                     DATASETS_TO_RUN+=("$ds")

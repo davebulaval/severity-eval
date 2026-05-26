@@ -110,7 +110,7 @@ fi
 if [[ "$SKIP_VALIDATE" == "false" ]]; then
     echo ""
     echo "[STAGE 3] Validating severity labels with LLM judge ..."
-    for ds in financebench finqa tatqa medcalc medqa headqa cuad maud contractnli; do
+    for ds in financebench finqa tatqa headqa cuad maud contractnli; do
         out="$RESULTS_DIR/validation/${ds}_llm_validation.json"
         if [[ -f "$out" && -z "$FORCE_FLAG" ]]; then
             echo "  [SKIP] $ds validation already exists"

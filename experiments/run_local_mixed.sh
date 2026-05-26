@@ -139,9 +139,17 @@ if [[ -n "$SKIP_MODELS" ]]; then
     STREAM_B_MODELS=("${FILTERED_B[@]}")
 fi
 
-# Datasets (skip private ones unless their files exist)
-DATASETS=(financebench finqa tatqa medcalc medqa headqa cuad maud contractnli)
-[[ -f "$PROJECT_DIR/dataset/all_manual_evaluations.jsonl" ]] && DATASETS+=(rag_insurance)
+# Datasets that survived the "domain-expert-derived vs heuristic-only"
+# audit. medqa, medcalc, and rag_insurance were dropped because their
+# severity label is assigned by keyword matching on raw question text
+# -- too noisy to defend in the paper. What remains is 7 datasets:
+#   * 4 domain-expert-derived (cuad, maud, contractnli, headqa) where
+#     severity comes from a structured categorical field (clause type,
+#     deal-point category, fixed hypothesis, academic category);
+#   * 3 finance datasets (financebench, finqa, tatqa) where severity
+#     comes from a matrix over structured answer/program/metric axes
+#     -- still heuristic, but defensible and disclosed in Limitations.
+DATASETS=(financebench finqa tatqa headqa cuad maud contractnli)
 [[ -f "$PROJECT_DIR/dataset/insurance_text_simplifications_annotated.jsonl" ]] && DATASETS+=(judgebert)
 
 echo "============================================================"
