@@ -753,73 +753,74 @@ Domain & \#Models & $\tau$ & $p$ & Divergent? \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
 \begin{tikzpicture}[
-    yscale=0.40, xscale=1.0,
-    every node/.style={font=\scriptsize},
-    rise/.style={draw=sevNeg, line width=1.1pt},
-    drop/.style={draw=sevCrit, line width=1.1pt},
-    flat/.style={draw=black!25, line width=0.6pt},
-    dot/.style={circle, fill=black!55, inner sep=1.1pt},
+    yscale=0.62, xscale=1.0,
+    every node/.style={font=\footnotesize},
+    rise/.style={draw=sevNeg, line width=1.4pt},
+    drop/.style={draw=sevCrit, line width=1.4pt},
+    flat/.style={draw=black!30, line width=0.7pt},
+    dot/.style={circle, fill=black!60, inner sep=1.3pt},
 ]
-  % column headers
-  \node[font=\footnotesize\bfseries] at (0,0.4) {Accuracy};
-  \node[font=\footnotesize\bfseries] at (5,0.4) {$\ES$};
-  \node[font=\scriptsize\itshape] at (0,-14.1) {best $\rightarrow$ worst};
+  % column header rule + titles
+  \node[font=\small\bfseries] at (0,0.7) {Rank by Accuracy};
+  \node[font=\small\bfseries] at (9,0.7) {Rank by $\ES$ (lower cost)};
+  \draw[black!15] (0,0.2) -- (9,0.2);
   % edges (acc_rank on left, es_rank on right); y = -rank
-  \draw[flat] (0,-1) -- (5,-2);   % qwen3-14b
-  \draw[drop] (0,-2) -- (5,-11);  % llama-3.3-70b  (acc 2 -> ES 11)
-  \draw[flat] (0,-3) -- (5,-4);   % qwen3-30b-a3b
-  \draw[flat] (0,-4) -- (5,-6);   % qwq-32b
-  \draw[flat] (0,-5) -- (5,-3);   % gemma-3-27b
-  \draw[flat] (0,-6) -- (5,-5);   % qwen2.5-72b
-  \draw[flat] (0,-7) -- (5,-9);   % granite-3.2-8b
-  \draw[flat] (0,-8) -- (5,-7);   % gemma-3-12b
-  \draw[rise] (0,-9) -- (5,-1);   % deepseek-r1-distill-70b (acc 9 -> ES 1)
-  \draw[flat] (0,-10) -- (5,-8);  % phi-4
-  \draw[flat] (0,-11) -- (5,-10); % gpt-oss-20b
-  \draw[flat] (0,-12) -- (5,-12); % gpt-oss-120b
-  \draw[flat] (0,-13) -- (5,-13); % mistral-small-3
-  % left labels (by accuracy rank)
-  \node[left] at (-0.15,-1) {Qwen3-14B};
-  \node[left] at (-0.15,-2) {\textcolor{sevCrit}{Llama-3.3-70B}};
-  \node[left] at (-0.15,-3) {Qwen3-30B};
-  \node[left] at (-0.15,-4) {QwQ-32B};
-  \node[left] at (-0.15,-5) {Gemma-3-27B};
-  \node[left] at (-0.15,-6) {Qwen2.5-72B};
-  \node[left] at (-0.15,-7) {Granite-8B};
-  \node[left] at (-0.15,-8) {Gemma-3-12B};
-  \node[left] at (-0.15,-9) {\textcolor{sevNeg}{DeepSeek-R1-70B}};
-  \node[left] at (-0.15,-10) {Phi-4};
-  \node[left] at (-0.15,-11) {GPT-OSS-20B};
-  \node[left] at (-0.15,-12) {GPT-OSS-120B};
-  \node[left] at (-0.15,-13) {Mistral-Small-3};
-  % right labels (by E[S] rank)
-  \node[right] at (5.15,-1) {\textcolor{sevNeg}{DeepSeek-R1-70B}};
-  \node[right] at (5.15,-2) {Qwen3-14B};
-  \node[right] at (5.15,-3) {Gemma-3-27B};
-  \node[right] at (5.15,-4) {Qwen3-30B};
-  \node[right] at (5.15,-5) {Qwen2.5-72B};
-  \node[right] at (5.15,-6) {QwQ-32B};
-  \node[right] at (5.15,-7) {Gemma-3-12B};
-  \node[right] at (5.15,-8) {Phi-4};
-  \node[right] at (5.15,-9) {Granite-8B};
-  \node[right] at (5.15,-10) {GPT-OSS-20B};
-  \node[right] at (5.15,-11) {\textcolor{sevCrit}{Llama-3.3-70B}};
-  \node[right] at (5.15,-12) {GPT-OSS-120B};
-  \node[right] at (5.15,-13) {Mistral-Small-3};
+  \draw[flat] (0,-1) -- (9,-2);   % qwen3-14b
+  \draw[drop] (0,-2) -- (9,-11);  % llama-3.3-70b  (acc 2 -> ES 11)
+  \draw[flat] (0,-3) -- (9,-4);   % qwen3-30b-a3b
+  \draw[flat] (0,-4) -- (9,-6);   % qwq-32b
+  \draw[flat] (0,-5) -- (9,-3);   % gemma-3-27b
+  \draw[flat] (0,-6) -- (9,-5);   % qwen2.5-72b
+  \draw[flat] (0,-7) -- (9,-9);   % granite-3.2-8b
+  \draw[flat] (0,-8) -- (9,-7);   % gemma-3-12b
+  \draw[rise] (0,-9) -- (9,-1);   % deepseek-r1-distill-70b (acc 9 -> ES 1)
+  \draw[flat] (0,-10) -- (9,-8);  % phi-4
+  \draw[flat] (0,-11) -- (9,-10); % gpt-oss-20b
+  \draw[flat] (0,-12) -- (9,-12); % gpt-oss-120b
+  \draw[flat] (0,-13) -- (9,-13); % mistral-small-3
+  % left labels (rank. name) by accuracy rank
+  \node[left] at (-0.2,-1) {1.~Qwen3-14B};
+  \node[left] at (-0.2,-2) {2.~\textcolor{sevCrit}{\bfseries Llama-3.3-70B}};
+  \node[left] at (-0.2,-3) {3.~Qwen3-30B};
+  \node[left] at (-0.2,-4) {4.~QwQ-32B};
+  \node[left] at (-0.2,-5) {5.~Gemma-3-27B};
+  \node[left] at (-0.2,-6) {6.~Qwen2.5-72B};
+  \node[left] at (-0.2,-7) {7.~Granite-8B};
+  \node[left] at (-0.2,-8) {8.~Gemma-3-12B};
+  \node[left] at (-0.2,-9) {9.~\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
+  \node[left] at (-0.2,-10) {10.~Phi-4};
+  \node[left] at (-0.2,-11) {11.~GPT-OSS-20B};
+  \node[left] at (-0.2,-12) {12.~GPT-OSS-120B};
+  \node[left] at (-0.2,-13) {13.~Mistral-Small-3};
+  % right labels (rank. name) by E[S] rank
+  \node[right] at (9.2,-1) {1.~\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
+  \node[right] at (9.2,-2) {2.~Qwen3-14B};
+  \node[right] at (9.2,-3) {3.~Gemma-3-27B};
+  \node[right] at (9.2,-4) {4.~Qwen3-30B};
+  \node[right] at (9.2,-5) {5.~Qwen2.5-72B};
+  \node[right] at (9.2,-6) {6.~QwQ-32B};
+  \node[right] at (9.2,-7) {7.~Gemma-3-12B};
+  \node[right] at (9.2,-8) {8.~Phi-4};
+  \node[right] at (9.2,-9) {9.~Granite-8B};
+  \node[right] at (9.2,-10) {10.~GPT-OSS-20B};
+  \node[right] at (9.2,-11) {11.~\textcolor{sevCrit}{\bfseries Llama-3.3-70B}};
+  \node[right] at (9.2,-12) {12.~GPT-OSS-120B};
+  \node[right] at (9.2,-13) {13.~Mistral-Small-3};
   % endpoint dots
-  \foreach \y in {1,...,13}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
+  \foreach \y in {1,...,13}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
 \end{tikzpicture}
 \caption{Accuracy vs $\ES$ ranking on the finance domain (13 models,
-best at top). Most lines cross: DeepSeek-R1-70B
-(\textcolor{sevNeg}{green}) is 9th by accuracy but \emph{1st} by
-$\ES$, while Llama-3.3-70B (\textcolor{sevCrit}{red}) is 2nd by
-accuracy yet 11th by $\ES$. These crossings are the $138$
-accuracy-versus-$\ES$ inversions of RQ1.}
+rank~1 = best at top). The dense crossing of lines is the point:
+DeepSeek-R1-70B (\textcolor{sevNeg}{green}) is 9th by accuracy but
+\emph{1st} by $\ES$, while Llama-3.3-70B (\textcolor{sevCrit}{red})
+is 2nd by accuracy yet 11th by $\ES$. These reversals are the $138$
+accuracy-versus-$\ES$ inversions of RQ1; a leaderboard built on
+accuracy would mis-order economic risk for almost every model.}
 \label{fig:ranking_finance}
-\end{figure}
+\end{figure*}
 
 \subsection{RQ2: Severity vs.\ frequency variance}
 \label{sec:rq2}
