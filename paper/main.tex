@@ -29,6 +29,16 @@
 \setlist[itemize]{leftmargin=*,label={}}
 \usepackage{url}
 \usepackage{colortbl}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+% Consistent severity palette across all figures
+\definecolor{sevNeg}{HTML}{4C9F70}
+\definecolor{sevMin}{HTML}{E8C547}
+\definecolor{sevMaj}{HTML}{E07B39}
+\definecolor{sevCrit}{HTML}{C1352E}
+\definecolor{accentBlue}{HTML}{2C6E9B}
 
 % Custom commands
 \newcommand{\ES}{\mathbb{E}[S]}
@@ -745,9 +755,69 @@ Domain & \#Models & $\tau$ & $p$ & Divergent? \\
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{figures/fig2_ranking_finance.pdf}
-\caption{Accuracy vs $\ES$ ranking on FinanceBench (13 models). The
-crossing lines visualise the $138$ inversions surfaced by RQ1.}
+\begin{tikzpicture}[
+    yscale=0.40, xscale=1.0,
+    every node/.style={font=\scriptsize},
+    rise/.style={draw=sevNeg, line width=1.1pt},
+    drop/.style={draw=sevCrit, line width=1.1pt},
+    flat/.style={draw=black!25, line width=0.6pt},
+    dot/.style={circle, fill=black!55, inner sep=1.1pt},
+]
+  % column headers
+  \node[font=\footnotesize\bfseries] at (0,0.4) {Accuracy};
+  \node[font=\footnotesize\bfseries] at (5,0.4) {$\ES$};
+  \node[font=\scriptsize\itshape] at (0,-14.1) {best $\rightarrow$ worst};
+  % edges (acc_rank on left, es_rank on right); y = -rank
+  \draw[flat] (0,-1) -- (5,-2);   % qwen3-14b
+  \draw[drop] (0,-2) -- (5,-11);  % llama-3.3-70b  (acc 2 -> ES 11)
+  \draw[flat] (0,-3) -- (5,-4);   % qwen3-30b-a3b
+  \draw[flat] (0,-4) -- (5,-6);   % qwq-32b
+  \draw[flat] (0,-5) -- (5,-3);   % gemma-3-27b
+  \draw[flat] (0,-6) -- (5,-5);   % qwen2.5-72b
+  \draw[flat] (0,-7) -- (5,-9);   % granite-3.2-8b
+  \draw[flat] (0,-8) -- (5,-7);   % gemma-3-12b
+  \draw[rise] (0,-9) -- (5,-1);   % deepseek-r1-distill-70b (acc 9 -> ES 1)
+  \draw[flat] (0,-10) -- (5,-8);  % phi-4
+  \draw[flat] (0,-11) -- (5,-10); % gpt-oss-20b
+  \draw[flat] (0,-12) -- (5,-12); % gpt-oss-120b
+  \draw[flat] (0,-13) -- (5,-13); % mistral-small-3
+  % left labels (by accuracy rank)
+  \node[left] at (-0.15,-1) {Qwen3-14B};
+  \node[left] at (-0.15,-2) {\textcolor{sevCrit}{Llama-3.3-70B}};
+  \node[left] at (-0.15,-3) {Qwen3-30B};
+  \node[left] at (-0.15,-4) {QwQ-32B};
+  \node[left] at (-0.15,-5) {Gemma-3-27B};
+  \node[left] at (-0.15,-6) {Qwen2.5-72B};
+  \node[left] at (-0.15,-7) {Granite-8B};
+  \node[left] at (-0.15,-8) {Gemma-3-12B};
+  \node[left] at (-0.15,-9) {\textcolor{sevNeg}{DeepSeek-R1-70B}};
+  \node[left] at (-0.15,-10) {Phi-4};
+  \node[left] at (-0.15,-11) {GPT-OSS-20B};
+  \node[left] at (-0.15,-12) {GPT-OSS-120B};
+  \node[left] at (-0.15,-13) {Mistral-Small-3};
+  % right labels (by E[S] rank)
+  \node[right] at (5.15,-1) {\textcolor{sevNeg}{DeepSeek-R1-70B}};
+  \node[right] at (5.15,-2) {Qwen3-14B};
+  \node[right] at (5.15,-3) {Gemma-3-27B};
+  \node[right] at (5.15,-4) {Qwen3-30B};
+  \node[right] at (5.15,-5) {Qwen2.5-72B};
+  \node[right] at (5.15,-6) {QwQ-32B};
+  \node[right] at (5.15,-7) {Gemma-3-12B};
+  \node[right] at (5.15,-8) {Phi-4};
+  \node[right] at (5.15,-9) {Granite-8B};
+  \node[right] at (5.15,-10) {GPT-OSS-20B};
+  \node[right] at (5.15,-11) {\textcolor{sevCrit}{Llama-3.3-70B}};
+  \node[right] at (5.15,-12) {GPT-OSS-120B};
+  \node[right] at (5.15,-13) {Mistral-Small-3};
+  % endpoint dots
+  \foreach \y in {1,...,13}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
+\end{tikzpicture}
+\caption{Accuracy vs $\ES$ ranking on the finance domain (13 models,
+best at top). Most lines cross: DeepSeek-R1-70B
+(\textcolor{sevNeg}{green}) is 9th by accuracy but \emph{1st} by
+$\ES$, while Llama-3.3-70B (\textcolor{sevCrit}{red}) is 2nd by
+accuracy yet 11th by $\ES$. These crossings are the $138$
+accuracy-versus-$\ES$ inversions of RQ1.}
 \label{fig:ranking_finance}
 \end{figure}
 
@@ -761,11 +831,10 @@ severity share is $0.81$ in insurance, $0.65$ in finance, $0.56$ in
 legal, and $0.49$ in medical. In other words, in finance, legal,
 and insurance, models differ from one another more in \emph{which}
 errors they make than in \emph{how often}; only medical is
-(marginally) frequency-driven. Figure~\ref{fig:profiles_insurance}
-shows that the insurance domain's $\bpi$ varies widely across
-models, which explains the highest $\sigma^2_{\bpi}/\sigma^2$
-ratio. The decomposition is sensitive to the cost vector and to the
-model
+(marginally) frequency-driven. Figure~\ref{fig:variance} shows the
+full decomposition: where the severity bar is long (insurance,
+finance), accuracy alone cannot rank models on economic risk. The
+decomposition is sensitive to the cost vector and to the model
 mix; we report it as descriptive rather than confirmatory.
 
 \subsection{RQ3: Routing benefit}
@@ -802,19 +871,65 @@ Domain & CV($c$) & \#Models & Median $\rho$ & Mean reduction (\%) \\
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{figures/fig3_profiles_insurance.pdf}
-\caption{Severity profile $\hat{\bpi}$ per model on the insurance
-domain. Wide spread on the critical and major levels explains why
-insurance has the highest severity-share (0.92) in RQ2.}
-\label{fig:profiles_insurance}
+\begin{tikzpicture}
+\begin{axis}[
+    width=\linewidth, height=4.4cm,
+    xbar stacked,
+    xmin=0, xmax=1,
+    ytick=data, symbolic y coords={Medical,Legal,Finance,Insurance},
+    y dir=reverse,
+    xtick={0,0.25,0.5,0.75,1},
+    xticklabel={\pgfmathprintnumber{\tick}},
+    tick label style={font=\footnotesize},
+    xlabel={Share of inter-model variance in $\ES$},
+    xlabel style={font=\small},
+    bar width=13pt,
+    nodes near coords style={font=\tiny, /pgf/number format/fixed,
+        /pgf/number format/precision=2},
+    legend style={font=\footnotesize, at={(0.5,1.25)}, anchor=north,
+        legend columns=2},
+    legend cell align=left,
+]
+% severity share (sigma^2_pi / sigma^2) then frequency share (remainder)
+\addplot+[fill=accentBlue, draw=accentBlue!70!black] coordinates
+    {(0.647,Finance) (0.811,Insurance) (0.560,Legal) (0.489,Medical)};
+\addplot+[fill=black!18, draw=black!40] coordinates
+    {(0.353,Finance) (0.189,Insurance) (0.440,Legal) (0.511,Medical)};
+\legend{severity ($\bpi$), frequency ($p$)}
+\end{axis}
+\end{tikzpicture}
+\caption{Decomposition of inter-model variance in $\ES$ into a
+severity ($\sigma^2_{\bpi}$, blue) and a frequency ($\sigma^2_p$,
+grey) component. Severity dominates in insurance (0.81), finance
+(0.65), and legal (0.56); only medical (0.49) is frequency-driven.
+Where the blue bar is long, accuracy alone cannot rank models on
+economic risk.}
+\label{fig:variance}
 \end{figure}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{figures/fig4_routing_impact.pdf}
-\caption{Per-domain mean $\ES$ reduction from HITL routing at
-$d=c_3$, $h{=}\$50$. Domains with higher severity-share (insurance,
-medical) gain the most.}
+\begin{tikzpicture}
+\begin{axis}[
+    width=\linewidth, height=4.4cm,
+    ybar, bar width=24pt,
+    ymin=0, ymax=108,
+    symbolic x coords={Finance,Insurance,Legal,Medical},
+    xtick=data, tick label style={font=\footnotesize},
+    ylabel={Mean $\ES$ reduction (\%)}, ylabel style={font=\small},
+    nodes near coords, nodes near coords style={font=\footnotesize},
+    every node near coord/.append style={/pgf/number format/fixed,
+        /pgf/number format/precision=1},
+    enlarge x limits=0.2,
+]
+\addplot+[fill=accentBlue, draw=accentBlue!70!black] coordinates
+    {(Finance,80.8) (Insurance,99.1) (Legal,67.3) (Medical,82.8)};
+\end{axis}
+\end{tikzpicture}
+\caption{Mean $\ES$ reduction from human-in-the-loop routing at
+retention threshold $d{=}c_3$ and review cost $h{=}\$50$. Insurance,
+the highest severity-share domain (RQ2), gains the most (99\%):
+deferring the heavy right tail has outsized leverage there.}
 \label{fig:routing}
 \end{figure}
 
@@ -921,18 +1036,22 @@ evaluation. The framework decomposes operational risk into the error
 rate and the severity profile, and yields three families of measures
 (expected loss, tail risk, reserves) that complement accuracy.
 
-On the data reported in this paper, model rankings by accuracy and by
-expected loss are closely aligned on FinanceBench; the severity
-profile nevertheless drives a majority of inter-model variance in
-$\ES$, and routing analysis suggests sizeable cost reductions when
-high-severity errors are deferred to human review. We frame these
-observations as preliminary: extending coverage across the four
-domains and 29 models in Section~\ref{sec:experiments} is the natural
-next step, and the released \seveval{} library and
-\texttt{run\_full\_pipeline.sh} script are designed to make that
-extension reproducible. We release the code, severity annotations,
-and analysis scripts to support adoption of severity-aware evaluation
-as a complement to accuracy in high-stakes deployments.
+Across 13 open-weight models and four domains, accuracy and expected
+loss rankings diverge in three of four domains (Kendall $\tau$
+$0.41$--$0.46$), aligning only on legal extraction ($\tau=0.84$);
+$138$ strict inversions arise where a more accurate model is the more
+expensive one. The severity profile drives the majority of
+inter-model $\ES$ variance in three domains, and routing high-severity
+errors to human review cuts $\ES$ by $67$--$99\%$. The pattern holds
+across the heterogeneous model sample, supporting the claim that the
+framework, not any single model choice, exposes the cost structure
+that accuracy hides. Extending to the frontier API models and to
+larger per-dataset samples is the natural next step; the released
+\seveval{} library and \texttt{run\_full\_pipeline.sh} script make
+that extension reproducible. We release the code, severity
+annotations, and analysis scripts to support adoption of
+severity-aware evaluation as a complement to accuracy in high-stakes
+deployments.
 
 % ============================================================================
 % LIMITATIONS
@@ -1101,15 +1220,14 @@ examples are in Appendix~\ref{sec:app-library}.
 \section{Robustness to Cost Calibration}
 \label{sec:app-robustness}
 
-Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time leaves
-the FinanceBench $\ES$ ranking unchanged in our snapshot: the
-minimum Spearman correlation between the base and perturbed rankings
-is $1.00$. With only one domain reaching the three-model threshold
-the result is preliminary, but it suggests that moderate uncertainty
-in $\mathbf{c}$ does not overturn rankings dominated by large
-differences in $\bpi$ and $p$. The full sensitivity table is
-generated by \texttt{experiments/analysis.py} via the
-\texttt{--robustness} flag.
+Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time barely
+moves the per-domain $\ES$ rankings: the minimum Spearman
+correlation between the base and perturbed rankings is $0.93$ in
+finance and $\geq 0.99$ in legal, insurance, and medical (mean
+$\geq 0.97$ in all four). Moderate uncertainty in $\mathbf{c}$ thus
+does not overturn rankings dominated by large differences in $\bpi$
+and $p$. The full sensitivity table is generated by
+\texttt{experiments/analysis.py} via the \texttt{--robustness} flag.
 
 \section{Inference Hardware and Quantization}
 \label{sec:app-hardware}
@@ -1239,7 +1357,131 @@ accuracy and actuarial risk measures generated by
 in the released code for the raw values and the additional CI columns
 (accuracy Wilson interval, VaR / TVaR bootstrap intervals).
 
-\input{tables/table_main}
+\begin{table*}[t]
+\centering\footnotesize
+\caption{Accuracy and actuarial risk measures per (model, dataset).
+Costs are in dollars. $\hat{p}$ is the empirical error rate, $\widehat{E[S]}$ the
+expected aggregate loss for $n{=}10{,}000$ queries, with 95\% bootstrap CI.
+Lower $\widehat{E[S]}$ is better.}
+\label{tab:main-results}
+\begin{tabular}{lllrrrrrr}
+\toprule
+Domain & Dataset & Model & Acc.~(\%) & $\hat{p}$ & $\widehat{E[S]}$ & CI 95\% & VaR$_{95}$ & TVaR$_{95}$ \\
+\midrule
+  Finance & financebench & llama-3.3-70b & 40.0 & 0.600 & \$14,998,654 & [\$14,994,777, \$15,002,637] & \$15,477,000 & \$15,594,735 \\
+   &  & qwen2.5-72b & 50.7 & 0.493 & \$22,217,176 & [\$22,202,123, \$22,233,018] & \$24,143,810 & \$24,652,200 \\
+   &  & qwen3-14b & 56.0 & 0.440 & \$22,881,187 & [\$22,865,501, \$22,897,375] & \$24,803,605 & \$25,346,736 \\
+   &  & qwen3-30b-a3b & 55.3 & 0.447 & \$24,150,033 & [\$24,134,922, \$24,165,907] & \$26,096,845 & \$26,588,532 \\
+   &  & gpt-oss-120b & 10.0 & 0.900 & \$26,100,876 & [\$26,095,893, \$26,106,021] & \$26,709,100 & \$26,865,254 \\
+   &  & qwq-32b & 47.3 & 0.527 & \$26,692,653 & [\$26,675,890, \$26,707,894] & \$28,639,855 & \$29,150,454 \\
+   &  & gemma-3-27b & 40.7 & 0.593 & \$26,762,621 & [\$26,746,477, \$26,778,472] & \$28,716,255 & \$29,214,636 \\
+   &  & phi-4 & 37.3 & 0.627 & \$26,975,585 & [\$26,959,961, \$26,990,314] & \$28,919,900 & \$29,429,873 \\
+   &  & gemma-3-12b & 34.0 & 0.660 & \$27,971,937 & [\$27,955,378, \$27,988,296] & \$29,933,155 & \$30,437,488 \\
+   &  & deepseek-r1-distill-70b & 26.0 & 0.740 & \$30,559,490 & [\$30,546,769, \$30,570,570] & \$32,008,920 & \$32,403,466 \\
+   &  & granite-3.2-8b & 35.3 & 0.647 & \$34,421,963 & [\$34,402,054, \$34,440,618] & \$36,770,520 & \$37,366,019 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$36,102,634 & [\$36,096,514, \$36,109,076] & \$36,786,745 & \$36,967,902 \\
+   &  & gpt-oss-20b & 19.3 & 0.807 & \$39,689,719 & [\$39,672,372, \$39,706,464] & \$41,637,220 & \$42,148,618 \\
+\midrule
+  Finance & finqa & deepseek-r1-distill-70b & 23.6 & 0.764 & \$37,805,828 & [\$37,788,039, \$37,823,003] & \$39,793,715 & \$40,324,782 \\
+   &  & qwen3-14b & 14.3 & 0.857 & \$46,515,102 & [\$46,496,605, \$46,534,201] & \$48,756,735 & \$49,331,930 \\
+   &  & gemma-3-27b & 11.3 & 0.887 & \$46,634,983 & [\$46,616,405, \$46,652,595] & \$48,805,750 & \$49,390,853 \\
+   &  & granite-3.2-8b & 13.1 & 0.869 & \$46,787,066 & [\$46,768,233, \$46,805,507] & \$49,085,925 & \$49,668,983 \\
+   &  & gemma-3-12b & 11.2 & 0.888 & \$47,715,954 & [\$47,697,745, \$47,734,271] & \$49,962,200 & \$50,525,652 \\
+   &  & qwq-32b & 10.9 & 0.891 & \$48,032,458 & [\$48,012,592, \$48,051,135] & \$50,310,925 & \$50,898,530 \\
+   &  & qwen3-30b-a3b & 12.1 & 0.879 & \$48,506,074 & [\$48,487,096, \$48,525,888] & \$50,787,025 & \$51,392,013 \\
+   &  & gpt-oss-20b & 11.7 & 0.883 & \$48,625,692 & [\$48,606,886, \$48,645,082] & \$50,946,820 & \$51,570,237 \\
+   &  & qwen2.5-72b & 9.9 & 0.901 & \$49,803,780 & [\$49,784,611, \$49,822,937] & \$52,150,250 & \$52,764,869 \\
+   &  & phi-4 & 8.7 & 0.913 & \$50,590,691 & [\$50,570,806, \$50,610,792] & \$52,937,040 & \$53,542,463 \\
+   &  & gpt-oss-120b & 10.0 & 0.900 & \$116,101,236 & [\$116,060,685, \$116,142,062] & \$120,997,155 & \$122,278,150 \\
+   &  & llama-3.3-70b & 10.0 & 0.900 & \$116,101,236 & [\$116,060,685, \$116,142,062] & \$120,997,155 & \$122,278,150 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$117,102,958 & [\$117,059,194, \$117,142,793] & \$122,009,545 & \$123,238,335 \\
+\midrule
+  Finance & tatqa & llama-3.3-70b & 70.0 & 0.300 & \$3,000,298 & [\$2,999,684, \$3,000,947] & \$3,076,000 & \$3,095,524 \\
+   &  & gpt-oss-120b & 50.0 & 0.500 & \$13,999,906 & [\$13,996,092, \$14,003,971] & \$14,486,000 & \$14,606,769 \\
+   &  & deepseek-r1-distill-70b & 45.0 & 0.550 & \$14,478,038 & [\$14,467,243, \$14,489,704] & \$15,897,525 & \$16,280,340 \\
+   &  & gemma-3-27b & 54.8 & 0.452 & \$16,277,407 & [\$16,264,859, \$16,288,704] & \$17,700,115 & \$18,068,517 \\
+   &  & gpt-oss-20b & 48.6 & 0.514 & \$18,073,594 & [\$18,059,730, \$18,085,853] & \$19,579,315 & \$19,983,007 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$18,100,177 & [\$18,096,164, \$18,103,863] & \$18,552,700 & \$18,668,414 \\
+   &  & qwen3-30b-a3b & 51.7 & 0.483 & \$19,024,167 & [\$19,011,785, \$19,037,745] & \$20,633,910 & \$21,049,463 \\
+   &  & qwen3-14b & 51.0 & 0.490 & \$19,772,795 & [\$19,756,931, \$19,787,378] & \$21,452,445 & \$21,909,546 \\
+   &  & granite-3.2-8b & 48.1 & 0.519 & \$20,743,828 & [\$20,729,031, \$20,758,868] & \$22,496,925 & \$22,977,755 \\
+   &  & qwq-32b & 49.0 & 0.510 & \$21,014,788 & [\$20,999,846, \$21,029,322] & \$22,783,980 & \$23,250,890 \\
+   &  & gemma-3-12b & 50.2 & 0.498 & \$21,782,367 & [\$21,767,341, \$21,798,503] & \$23,603,035 & \$24,107,843 \\
+   &  & qwen2.5-72b & 44.1 & 0.559 & \$22,920,126 & [\$22,905,262, \$22,934,770] & \$24,759,955 & \$25,236,818 \\
+   &  & phi-4 & 42.7 & 0.573 & \$24,138,466 & [\$24,122,658, \$24,154,808] & \$26,055,620 & \$26,544,264 \\
+\midrule
+  Insurance & judgebert & qwen3-14b & 28.8 & 0.712 & \$334,109,988 & [\$333,995,587, \$334,214,381] & \$347,588,195 & \$350,908,630 \\
+   &  & gpt-oss-20b & 31.0 & 0.690 & \$340,398,244 & [\$340,281,474, \$340,504,872] & \$354,088,130 & \$357,462,658 \\
+   &  & gemma-3-27b & 29.3 & 0.707 & \$340,998,349 & [\$340,889,534, \$341,113,667] & \$354,635,020 & \$358,136,129 \\
+   &  & granite-3.2-8b & 27.1 & 0.729 & \$341,750,298 & [\$341,628,772, \$341,862,024] & \$355,239,170 & \$358,642,374 \\
+   &  & qwq-32b & 26.7 & 0.733 & \$342,543,913 & [\$342,429,448, \$342,658,338] & \$356,214,430 & \$359,810,388 \\
+   &  & qwen3-30b-a3b & 27.3 & 0.727 & \$344,735,017 & [\$344,617,437, \$344,852,144] & \$358,302,130 & \$361,867,623 \\
+   &  & phi-4 & 23.3 & 0.767 & \$346,022,520 & [\$345,903,808, \$346,129,232] & \$359,742,700 & \$363,186,969 \\
+   &  & gemma-3-12b & 26.6 & 0.734 & \$349,953,008 & [\$349,837,328, \$350,064,593] & \$363,703,245 & \$367,402,784 \\
+   &  & deepseek-r1-distill-70b & 21.6 & 0.784 & \$389,818,401 & [\$389,700,310, \$389,936,824] & \$404,204,515 & \$407,793,380 \\
+   &  & gpt-oss-120b & 60.0 & 0.400 & \$500,207,304 & [\$500,069,066, \$500,339,217] & \$516,701,210 & \$521,034,892 \\
+   &  & qwen2.5-72b & 50.0 & 0.500 & \$510,206,746 & [\$510,067,656, \$510,343,112] & \$526,629,695 & \$530,726,626 \\
+   &  & llama-3.3-70b & 20.0 & 0.800 & \$530,340,043 & [\$530,206,813, \$530,473,840] & \$546,510,925 & \$550,634,110 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$780,475,650 & [\$780,309,732, \$780,650,259] & \$798,944,635 & \$803,747,672 \\
+\midrule
+  Legal & contractnli & qwen2.5-72b & 80.0 & 0.200 & \$400,036 & [\$399,923, \$400,148] & \$413,200 & \$416,654 \\
+   &  & llama-3.3-70b & 80.0 & 0.200 & \$20,201,576 & [\$20,192,744, \$20,209,920] & \$21,198,620 & \$21,451,653 \\
+   &  & qwen3-30b-a3b & 81.9 & 0.181 & \$65,651,991 & [\$65,606,829, \$65,694,926] & \$71,126,210 & \$72,580,653 \\
+   &  & qwq-32b & 82.0 & 0.180 & \$65,955,450 & [\$65,910,856, \$65,999,387] & \$71,485,950 & \$72,861,204 \\
+   &  & qwen3-14b & 81.4 & 0.186 & \$74,631,463 & [\$74,583,935, \$74,680,779] & \$80,512,800 & \$82,083,584 \\
+   &  & gpt-oss-20b & 81.8 & 0.182 & \$78,417,143 & [\$78,364,281, \$78,468,017] & \$84,532,020 & \$86,084,876 \\
+   &  & gemma-3-27b & 84.1 & 0.159 & \$79,114,030 & [\$79,064,257, \$79,169,166] & \$85,148,890 & \$86,768,379 \\
+   &  & gemma-3-12b & 81.2 & 0.188 & \$100,830,036 & [\$100,773,101, \$100,886,523] & \$107,740,030 & \$109,633,165 \\
+   &  & deepseek-r1-distill-70b & 79.4 & 0.206 & \$105,988,878 & [\$105,929,538, \$106,046,937] & \$113,059,610 & \$114,882,354 \\
+   &  & granite-3.2-8b & 74.9 & 0.251 & \$115,171,834 & [\$115,111,465, \$115,232,422] & \$122,473,060 & \$124,453,637 \\
+   &  & phi-4 & 75.5 & 0.245 & \$121,733,663 & [\$121,668,569, \$121,800,880] & \$129,446,490 & \$131,376,646 \\
+   &  & gpt-oss-120b & 70.0 & 0.300 & \$220,178,301 & [\$220,100,411, \$220,261,399] & \$230,179,440 & \$232,659,882 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$461,015,544 & [\$460,909,893, \$461,121,547] & \$473,773,070 & \$477,045,425 \\
+\midrule
+  Legal & cuad & qwen3-30b-a3b & 40.0 & 0.600 & \$64,195,350 & [\$64,182,033, \$64,208,072] & \$65,655,400 & \$66,035,713 \\
+   &  & gpt-oss-120b & 30.0 & 0.700 & \$66,198,127 & [\$66,185,152, \$66,210,437] & \$67,648,820 & \$67,999,569 \\
+   &  & llama-3.3-70b & 20.0 & 0.800 & \$66,396,791 & [\$66,383,850, \$66,408,274] & \$67,834,620 & \$68,217,715 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$68,605,352 & [\$68,592,765, \$68,618,683] & \$70,011,200 & \$70,391,211 \\
+   &  & qwen2.5-72b & 19.4 & 0.806 & \$199,489,799 & [\$199,429,039, \$199,556,178] & \$207,071,010 & \$209,123,678 \\
+   &  & gemma-3-12b & 16.1 & 0.839 & \$204,916,198 & [\$204,856,593, \$204,982,766] & \$212,687,420 & \$214,682,218 \\
+   &  & qwq-32b & 16.2 & 0.838 & \$207,079,777 & [\$207,014,130, \$207,142,375] & \$214,921,020 & \$216,845,981 \\
+   &  & gemma-3-27b & 16.1 & 0.839 & \$208,601,998 & [\$208,538,947, \$208,671,340] & \$216,503,300 & \$218,516,849 \\
+   &  & gpt-oss-20b & 16.8 & 0.832 & \$210,871,461 & [\$210,808,618, \$210,931,871] & \$218,839,040 & \$220,912,202 \\
+   &  & qwen3-14b & 14.6 & 0.854 & \$213,779,907 & [\$213,719,136, \$213,851,922] & \$221,750,820 & \$223,746,498 \\
+   &  & phi-4 & 12.1 & 0.879 & \$215,660,811 & [\$215,595,825, \$215,728,888] & \$223,545,910 & \$225,630,830 \\
+   &  & granite-3.2-8b & 12.4 & 0.876 & \$219,710,060 & [\$219,647,138, \$219,774,774] & \$227,693,740 & \$229,825,197 \\
+   &  & deepseek-r1-distill-70b & 4.2 & 0.958 & \$227,583,014 & [\$227,515,929, \$227,652,526] & \$235,686,410 & \$237,787,411 \\
+\midrule
+  Legal & maud & gpt-oss-120b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
+   &  & llama-3.3-70b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
+   &  & qwen2.5-72b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
+   &  & gpt-oss-20b & 99.4 & 0.006 & \$127,286 & [\$127,062, \$127,499] & \$154,000 & \$162,477 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$2,000,000 & [\$2,000,000, \$2,000,000] & \$2,000,000 & \$2,000,000 \\
+   &  & qwen3-14b & 79.2 & 0.208 & \$4,153,232 & [\$4,152,042, \$4,154,329] & \$4,288,000 & \$4,323,347 \\
+   &  & qwen3-30b-a3b & 79.1 & 0.209 & \$4,178,548 & [\$4,177,446, \$4,179,614] & \$4,312,000 & \$4,347,222 \\
+   &  & qwq-32b & 65.9 & 0.341 & \$6,828,524 & [\$6,827,208, \$6,829,878] & \$6,986,000 & \$7,026,415 \\
+   &  & gemma-3-27b & 50.4 & 0.496 & \$9,911,428 & [\$9,910,004, \$9,912,930] & \$10,078,000 & \$10,119,792 \\
+   &  & gemma-3-12b & 49.0 & 0.510 & \$10,052,902 & [\$10,051,546, \$10,054,319] & \$10,218,010 & \$10,259,843 \\
+   &  & granite-3.2-8b & 38.1 & 0.619 & \$12,335,929 & [\$12,334,663, \$12,337,264] & \$12,496,800 & \$12,537,489 \\
+   &  & phi-4 & 4.7 & 0.953 & \$18,920,128 & [\$18,919,503, \$18,920,796] & \$18,993,200 & \$19,011,859 \\
+   &  & deepseek-r1-distill-70b & 0.0 & 1.000 & \$19,770,851 & [\$19,770,591, \$19,771,137] & \$19,803,800 & \$19,812,348 \\
+\midrule
+  Medical & headqa & gpt-oss-120b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
+   &  & llama-3.3-70b & 0.0 & 1.000 & \$5,000,000 & [\$5,000,000, \$5,000,000] & \$5,000,000 & \$5,000,000 \\
+   &  & mistral-small-3 & 0.0 & 1.000 & \$5,000,000 & [\$5,000,000, \$5,000,000] & \$5,000,000 & \$5,000,000 \\
+   &  & gpt-oss-20b & 88.5 & 0.115 & \$156,507,407 & [\$156,392,615, \$156,622,559] & \$169,835,650 & \$173,060,604 \\
+   &  & phi-4 & 81.0 & 0.190 & \$234,025,962 & [\$233,893,072, \$234,152,763] & \$249,746,675 & \$253,792,660 \\
+   &  & qwen3-30b-a3b & 45.4 & 0.546 & \$715,285,929 & [\$715,071,422, \$715,509,598] & \$741,566,475 & \$748,356,914 \\
+   &  & qwq-32b & 37.3 & 0.627 & \$799,877,969 & [\$799,638,163, \$800,094,914] & \$827,288,525 & \$834,352,690 \\
+   &  & qwen2.5-72b & 29.9 & 0.701 & \$880,636,026 & [\$880,400,501, \$880,858,734] & \$908,487,575 & \$915,756,282 \\
+   &  & granite-3.2-8b & 33.0 & 0.670 & \$951,822,641 & [\$951,563,132, \$952,073,415] & \$981,406,800 & \$988,721,355 \\
+   &  & deepseek-r1-distill-70b & 14.6 & 0.854 & \$1,074,358,919 & [\$1,074,110,919, \$1,074,620,103] & \$1,104,479,600 & \$1,112,391,492 \\
+   &  & qwen3-14b & 16.4 & 0.836 & \$1,130,438,054 & [\$1,130,179,112, \$1,130,707,439] & \$1,161,608,550 & \$1,169,652,774 \\
+   &  & gemma-3-12b & 0.6 & 0.994 & \$1,343,818,793 & [\$1,343,541,267, \$1,344,085,492] & \$1,376,206,650 & \$1,384,722,380 \\
+   &  & gemma-3-27b & 0.2 & 0.998 & \$1,350,583,490 & [\$1,350,313,131, \$1,350,864,531] & \$1,383,491,775 & \$1,391,737,155 \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
 \section{Inter-Annotator Agreement}
 \label{sec:app-agreement}
