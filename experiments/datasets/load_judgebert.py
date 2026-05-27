@@ -177,7 +177,12 @@ def load_judgebert(
                     "category": ", ".join(category_names) if category_names else "",
                     "evaluation": evaluation,
                     "annotator": annotator,
-                    "domain": "legal_simplification",
+                    # JudgeBERT is Quebec auto-insurance regulation text;
+                    # the task is legal-clause simplification but the
+                    # domain (and the applicable cost vector) is insurance.
+                    # Tagged "insurance" so it anchors the insurance
+                    # taxonomy now that the rag_insurance corpus is dropped.
+                    "domain": "insurance",
                 }
             )
 

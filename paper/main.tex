@@ -68,11 +68,11 @@ empirical validation by annotating eight benchmarks (finance,
 medicine, law, insurance) with a per-instance cost of error and
 evaluating $13$ open-weight language models spanning 8\,B to
 120\,B parameters across dense, MoE, and reasoning-tuned
-architectures. The framework surfaces $115$ strict
+architectures. The framework surfaces $138$ strict
 accuracy-versus-$\ES$ inversions, a variance decomposition that
 isolates severity-dominated from frequency-dominated domains, and
 a human-in-the-loop routing analysis that cuts $\ES$ by
-$74$--$99$\,\% at a fixed review cost. The pattern is consistent
+$67$--$99$\,\% at a fixed review cost. The pattern is consistent
 across the model sample, indicating that the framework, not any
 particular model choice, is what makes the cost picture visible.
 We release \seveval{}, a HuggingFace-compatible Python library,
@@ -159,19 +159,19 @@ Our contributions are:
     that the divergence between accuracy and expected loss
     observed by \citet{beauchemin2026position} on a single
     insurance corpus reproduces across four high-stakes domains
-    and a heterogeneous LLM sample, with 115 strict
+    and a heterogeneous LLM sample, with 138 strict
     accuracy-versus-$\ES$ inversions and per-domain Kendall $\tau$
-    spanning $0.64$ to $0.90$.
+    spanning $0.41$ (insurance) to $0.84$ (legal).
   \item \textbf{Diagnostic decomposition.} The variance
-    decomposition isolates two distinct regimes empirically:
-    severity-dominated domains (insurance, medical) where models
-    differ chiefly in \emph{which} errors they make, and
-    frequency-dominated domains (finance, legal) where models
-    differ chiefly in \emph{how often}.
+    decomposition isolates two regimes empirically:
+    severity-dominated domains (insurance, finance, legal) where
+    models differ chiefly in \emph{which} errors they make, and a
+    frequency-dominated domain (medical) where they differ chiefly
+    in \emph{how often}.
   \item \textbf{Actionable HITL signal.} The routing-as-reinsurance
-    analysis yields per-domain $\ES$ reductions of $74$--$99$\% at
-    a fixed human-review cost, with the magnitude tracking the
-    severity-share decomposition above.
+    analysis yields per-domain $\ES$ reductions of $67$--$99$\% at
+    a fixed human-review cost, with the largest saving in the
+    highest severity-share domain (insurance).
   \item \textbf{Severity-annotated benchmarks + library.} We
     release the per-instance severity annotations, the calibration
     evidence (\S\ref{sec:severity-annotation},
@@ -709,24 +709,24 @@ dataset ($150$ for FinanceBench, which exhausts the corpus).
 \subsection{RQ1: Ranking divergence and inversions}
 \label{sec:rq1}
 
-Across the $13$ models and four taxonomy domains, accuracy and
-$\ES$ rankings are positively correlated but \emph{not}
-monotonically aligned: per-domain Kendall $\tau$ ranges from
-$\tau=0.64$ on finance ($p=2\times 10^{-3}$) to $\tau=0.90$ on
-insurance ($p=1\times 10^{-3}$), with legal at $\tau=0.74$ and
-medical at $\tau=0.69$ (Table~\ref{tab:h1}). All four are above the
-$\tau=0.5$ ``non-divergent'' threshold, but finance and medical
-sit close enough to the threshold that within-domain rerankings are
-common. Concretely, the analysis surfaces \textbf{$115$ strict
+Across the $13$ models, accuracy and $\ES$ rankings diverge in three
+of the four domains: per-domain Kendall $\tau$ is $0.46$ on finance
+($p=0.03$), $0.43$ on medical ($p=0.04$), and $0.41$ on insurance
+($p=0.06$), all far below a monotone ranking, while legal is the
+lone aligned domain at $\tau=0.84$ ($p<10^{-3}$) (Table~\ref{tab:h1}).
+The split is itself the finding: accuracy is a faithful proxy for
+economic risk on legal extraction tasks but a poor one in finance,
+medicine, and insurance, where reranking by $\ES$ reshuffles the
+leaderboard. Concretely, the analysis surfaces \textbf{$138$ strict
 inversions} of the form $\mathrm{acc}(A) > \mathrm{acc}(B)$
-\emph{and} $\ES(A) > \ES(B)$: e.g.\ on FinanceBench
-granite-3.2-8b has $+9.3$ accuracy points over deepseek-r1-distill-70b
-but \emph{costs} $\$3.86$M more per $n{=}10{,}000$ outputs, and
-qwen3-30b-a3b is $+6.7$ points over llama-3.3-70b yet costs
-$\$1.13$M more. Figure~\ref{fig:ranking_finance} shows the bump
-chart for finance. Accuracy and $\ES$ ordering disagree often
-enough that picking a model on accuracy alone risks substantial
-hidden cost exposure.
+\emph{and} $\ES(A) > \ES(B)$: e.g.\ on FinanceBench qwen3-14b has
+$+16.0$ accuracy points over llama-3.3-70b yet \emph{costs}
+$\$7.9$M more per $n{=}10{,}000$ outputs, and qwen3-30b-a3b is
+$+15.3$ points over llama-3.3-70b while costing $\$9.2$M more.
+Figure~\ref{fig:ranking_finance} shows the bump chart for finance.
+The pattern holds across the full model sample: picking a model on
+accuracy alone risks substantial hidden cost exposure in every
+domain except legal.
 
 \begin{table}[t]\centering\small
 \caption{H1 -- Kendall $\tau$ between accuracy and $E[S]$ rankings per
@@ -735,10 +735,10 @@ taxonomy domain.}\label{tab:h1}
 \toprule
 Domain & \#Models & $\tau$ & $p$ & Divergent? \\
 \midrule
-  Finance & 13 & 0.641 & 0.002 & No \\
-  Insurance & 13 & 0.899 & 0.001 & No \\
-  Legal & 13 & 0.744 & 0.000 & No \\
-  Medical & 13 & 0.692 & 0.001 & No \\
+  Finance & 13 & 0.462 & 0.030 & Yes \\
+  Insurance & 13 & 0.410 & 0.057 & No \\
+  Legal & 13 & 0.839 & 0.000 & No \\
+  Medical & 13 & 0.429 & 0.043 & Yes \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -747,7 +747,7 @@ Domain & \#Models & $\tau$ & $p$ & Divergent? \\
 \centering
 \includegraphics[width=\linewidth]{figures/fig2_ranking_finance.pdf}
 \caption{Accuracy vs $\ES$ ranking on FinanceBench (13 models). The
-crossing lines visualise the $115$ inversions surfaced by RQ1.}
+crossing lines visualise the $138$ inversions surfaced by RQ1.}
 \label{fig:ranking_finance}
 \end{figure}
 
@@ -756,15 +756,16 @@ crossing lines visualise the $115$ inversions surfaced by RQ1.}
 
 Decomposing inter-model variance in $\ES$ into a severity-only
 ($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component
-shows that the severity share varies sharply across domains : it
-is $0.92$ in insurance and $0.52$ in medical, but only $0.37$ in
-finance and $0.27$ in legal. In insurance and medical, the
-severity profile $\bpi$ explains the bulk of model-to-model risk
-variance; in finance and legal, the error rate dominates instead.
-Figure~\ref{fig:profiles_insurance} shows that the insurance
-domain's $\bpi$ varies an order of magnitude across models, which
-explains the high $\sigma^2_{\bpi}/\sigma^2$ ratio. The
-decomposition is sensitive to the cost vector and to the model
+shows the severity profile dominates in three of four domains: the
+severity share is $0.81$ in insurance, $0.65$ in finance, $0.56$ in
+legal, and $0.49$ in medical. In other words, in finance, legal,
+and insurance, models differ from one another more in \emph{which}
+errors they make than in \emph{how often}; only medical is
+(marginally) frequency-driven. Figure~\ref{fig:profiles_insurance}
+shows that the insurance domain's $\bpi$ varies widely across
+models, which explains the highest $\sigma^2_{\bpi}/\sigma^2$
+ratio. The decomposition is sensitive to the cost vector and to the
+model
 mix; we report it as descriptive rather than confirmatory.
 
 \subsection{RQ3: Routing benefit}
@@ -773,16 +774,16 @@ mix; we report it as descriptive rather than confirmatory.
 Using a retention threshold of $d = c_3$ (route ``major'' and
 ``critical'' errors) and a human-review cost $h = \$50$, the mean
 $\ES$ reduction from HITL deferral is large across the board:
-$83.4$\% in finance, $98.8$\% in insurance, $73.5$\% in legal, and
-$97.0$\% in medical (Table~\ref{tab:h4} and
-Figure~\ref{fig:routing}). The two domains where routing saves the
-most ($>97$\%) are also the two with the highest severity share
-in RQ2: when $\bpi$ concentrates mass on the largest cost levels,
-clipping the right tail by deferral has outsized leverage. The
-Spearman correlation between the coefficient of variation of
-$\mathbf{c}$ and the per-(model, domain) reduction is upward
-(median $0.19$ in finance to $1.00$ in medical) but not estimable
-with confidence at only four domains.
+$80.8$\% in finance, $99.1$\% in insurance, $67.3$\% in legal, and
+$82.8$\% in medical (Table~\ref{tab:h4} and
+Figure~\ref{fig:routing}). Insurance, the domain with the highest
+severity share in RQ2 ($0.81$), gains the most ($99.1$\%): when
+$\bpi$ concentrates mass on the largest cost levels, clipping the
+right tail by deferral has outsized leverage. The Spearman
+correlation between the coefficient of variation of $\mathbf{c}$ and
+the per-(model, domain) reduction is positive (median $0.20$ in
+finance to $0.63$ in medical) but not estimable with confidence at
+only four domains.
 
 \begin{table}[t]\centering\small
 \caption{H4 -- HITL routing benefit by domain (retention threshold $d{=}c_3$,
@@ -791,10 +792,10 @@ human review cost $h{=}\$50$).}\label{tab:h4}
 \toprule
 Domain & CV($c$) & \#Models & Median $\rho$ & Mean reduction (\%) \\
 \midrule
-  Finance & 1.51 & 39 & 0.19 & 83.4 \\
-  Insurance & 1.63 & 13 & 0.50 & 98.8 \\
-  Legal & 1.51 & 52 & 0.45 & 73.5 \\
-  Medical & 1.51 & 36 & 1.00 & 97.0 \\
+  Finance & 1.51 & 39 & 0.20 & 80.8 \\
+  Insurance & 1.63 & 13 & 0.46 & 99.1 \\
+  Legal & 1.51 & 36 & 0.41 & 67.3 \\
+  Medical & 1.51 & 12 & 0.63 & 82.8 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -865,11 +866,12 @@ for the majority of inter-model variance in $\ES$. The mechanism is
 intuitive: $\ES = n p \mu_X$, and $\mu_X$ spans three orders of
 magnitude across severity levels in all four of our taxonomies.
 Two systems with the same $p$ but different $\bpi$ produce $\ES$
-values that can differ by an order of magnitude. Empirically this
-manifests as the insurance / medical (severity-dominated) vs
-finance / legal (frequency-dominated) split in our RQ2 numbers;
-practitioners deploying in the former category cannot rely on
-accuracy as a proxy at all.
+values that can differ by an order of magnitude. Empirically the
+severity profile dominates the inter-model variance in three of our
+four domains (insurance $0.81$, finance $0.65$, legal $0.56$) and is
+near-even with frequency in the fourth (medical $0.49$); accuracy is
+therefore an unreliable proxy for economic risk in the first three,
+exactly the domains where RQ1 also shows the lowest Kendall $\tau$.
 
 \subsection{Human-in-the-loop routing}
 
