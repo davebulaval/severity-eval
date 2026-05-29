@@ -62,8 +62,8 @@ _vllm_engine: dict[str, Any] = {}
 # asks for ~33 K -- families capped below that (Qwen2.5, Qwen3, QwQ at
 # 32 K; phi-4 at 16 K) need this entry so vLLM does not reject the init,
 # and prompts get tail-truncated by the caller. gemma-3 (12B/27B), the
-# gpt-oss models, mistral-small-3, llama-3.3-70b, deepseek-r1-distill,
-# and granite-3.2-8b all handle >= 33 K natively.
+# gpt-oss models, llama-3.3-70b, deepseek-r1-distill, and granite-3.2-8b
+# all handle >= 33 K natively.
 _MODEL_MAX_LEN_CAPS: tuple[tuple[str, int], ...] = (
     ("phi-4", 16384),
     ("qwen2.5", 32768),

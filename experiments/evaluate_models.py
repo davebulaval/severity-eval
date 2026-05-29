@@ -107,10 +107,6 @@ MODELS = {
         "provider": "local",
         "model_id": "Qwen/Qwen3-30B-A3B-FP8",
     },
-    "mistral-small-3": {
-        "provider": "local",
-        "model_id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-FP8-dynamic",
-    },
     # Gemma-3 (Dec 2024) replaces gemma-2. RedHatAI FP8-dynamic: better
     # quality and faster than the GPTQ INT4 community variants.
     "gemma-3-27b": {
@@ -167,13 +163,16 @@ DATASETS = {
     "medcalc": "experiments.datasets.load_medcalc:load_medcalc",
     "medqa": "experiments.datasets.load_medqa:load_medqa",
     "headqa": "experiments.datasets.load_headqa:load_headqa",
+    "medmcqa": "experiments.datasets.load_medmcqa:load_medmcqa",
+    "ddi": "experiments.datasets.load_ddi:load_ddi",
     # Legal
     "cuad": "experiments.datasets.load_cuad:load_cuad",
     "maud": "experiments.datasets.load_maud:load_maud",
     "contractnli": "experiments.datasets.load_contractnli:load_contractnli",
-    # Insurance (local)
+    # Insurance / compliance
     "rag_insurance": "experiments.datasets.load_rag_insurance:load_rag_insurance",
     "judgebert": "experiments.datasets.load_judgebert:load_judgebert",
+    "privacyqa": "experiments.datasets.load_privacyqa:load_privacyqa",
 }
 
 OUTPUT_DIR = Path("experiments/results")
@@ -198,6 +197,11 @@ DATASET_INFERENCE_CONFIG: dict[str, tuple[int, int]] = {
     # prompt forces letter-only output.
     "medqa": (96, 4096),
     "headqa": (96, 4096),
+    # MedMCQA: 4-option MCQ, same letter-only output as HEAD-QA.
+    "medmcqa": (96, 4096),
+    # DDI: 5-class classification with sentence context; budget mirrors
+    # MAUD letter-then-justification.
+    "ddi": (96, 4096),
     # Legal clause extraction: clauses can be long, especially with
     # surrounding context the model copies verbatim.
     "cuad": (512, 32768),
@@ -207,6 +211,9 @@ DATASET_INFERENCE_CONFIG: dict[str, tuple[int, int]] = {
     # Open-ended QA / simplification: generous budget.
     "rag_insurance": (256, 4096),
     "judgebert": (512, 4096),
+    # PrivacyQA: binary (relevant / irrelevant) over a single segment,
+    # very short answer space.
+    "privacyqa": (32, 4096),
 }
 _DEFAULT_INFERENCE_CONFIG = (256, 4096)
 
@@ -300,6 +307,27 @@ DATASET_PROMPTS: dict[str, dict[str, str]] = {
         ),
         "standard": "Question: {question}\n{options_str}Answer:",
     },
+    "medmcqa": {
+        # Same biomedical MCQ instruction as HEAD-QA; AIIMS/NEET-PG items.
+        "original": (
+            "You are a highly knowledgeable AI assistant specializing in biomedical "
+            "sciences. Select the correct answer by outputting only the letter "
+            "corresponding to your choice.\n\n"
+            "Question: {question}\n{options_str}Answer:"
+        ),
+        "standard": "Question: {question}\n{options_str}Answer:",
+    },
+    "ddi": {
+        # Sentence-level drug-drug interaction classification.
+        "original": (
+            "You are a clinical pharmacology assistant. Read the sentence and "
+            "classify the interaction between the two drugs mentioned by selecting "
+            "exactly one letter from the options.\n\n"
+            "Sentence: {context}"
+            "Question: {question}\n{options_str}Answer:"
+        ),
+        "standard": "Question: {question}\n{context}{options_str}Answer:",
+    },
     # --- Legal ---
     "cuad": {
         # LegalBench (Guha et al. 2023) — zero-shot jargon, extractive QA
@@ -352,6 +380,18 @@ DATASET_PROMPTS: dict[str, dict[str, str]] = {
             "en préservant le sens légal.\n\nTexte : {question}\nSimplification :"
         ),
         "standard": "Texte : {question}\nSimplification :",
+    },
+    "privacyqa": {
+        # Ravichander et al. 2019. Binary relevance: the question already
+        # carries the segment text; we ask the model for a single-letter
+        # answer to stay consistent with the other classification datasets.
+        "original": (
+            "You are a privacy-policy analyst. Decide whether the policy segment "
+            "is relevant to the user's question and answer with exactly one "
+            "letter from the options.\n\n"
+            "{question}\n{options_str}Answer:"
+        ),
+        "standard": "Question: {question}\n{options_str}Answer:",
     },
 }
 

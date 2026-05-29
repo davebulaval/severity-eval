@@ -28,7 +28,7 @@ MODELS_API=(
 
 MODELS_LOCAL=(
     llama-3.3-70b deepseek-r1-distill-70b
-    qwq-32b qwen3-30b-a3b gemma-2-27b mistral-small-3
+    qwq-32b qwen3-30b-a3b gemma-2-27b
     qwen3-14b phi-4
     gemma-2-9b granite-3.2-8b
 )

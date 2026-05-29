@@ -59,10 +59,13 @@ RETAINED_DATASETS = (
     "finqa",
     "tatqa",
     "headqa",
+    "medmcqa",
+    "ddi",
     "cuad",
     "maud",
     "contractnli",
     "judgebert",
+    "privacyqa",
 )
 _DROPPED_DATASETS = ("medqa", "medcalc", "rag_insurance")
 
@@ -106,11 +109,14 @@ def load_results(results_dir: Path, include_dropped: bool = False) -> pd.DataFra
             "medcalc",
             "medqa",
             "headqa",
+            "medmcqa",
+            "ddi",
             "cuad",
             "maud",
             "contractnli",
             "rag_insurance",
             "judgebert",
+            "privacyqa",
         )
         ds_match = next((d for d in known_datasets if stem.startswith(d + "_")), None)
         if ds_match is None:
@@ -226,7 +232,7 @@ def compute_metrics(
         # Wilson 95% CI on accuracy : robust at p_hat=0 or p_hat=1 unlike
         # the normal approximation. Critical because several (model,
         # dataset) cells sit at the extremes (e.g. gpt-oss-20b on maud at
-        # ~0.99, mistral-small-3 at 0 everywhere).
+        # ~0.99).
         acc_lo, acc_hi = wilson_score_interval(correct, n)
         mu_X = float((taxonomy.cost_levels * pi).sum())
 
