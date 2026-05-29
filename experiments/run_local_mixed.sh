@@ -19,9 +19,7 @@
 #
 # The lists are hard-coded above based on per-model size and KV-cache
 # behaviour; if you add a model to MODELS, place it in Stream A if it
-# is >36 GB FP8 or thinking-class, otherwise Stream B. mistral-small-3
-# is deliberately omitted (broken tokenizer on the RedHat FP8
-# checkpoint -- emits raw BPE tokens).
+# is >36 GB FP8 or thinking-class, otherwise Stream B.
 #
 # Defaults match the run_local_sequential_tp.sh contract:
 #   --gpus      comma list, default "0,1,2"
@@ -118,12 +116,6 @@ STREAM_B_MODELS=(
     phi-4
     granite-3.2-8b
 )
-# mistral-small-3 deliberately omitted from both lists: its
-# RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-FP8-dynamic checkpoint
-# emits raw BPE tokens (e.g. "Ġ;)ĊĊĠterzo...") instead of decoded text,
-# so accuracy is 0% across every dataset in the smoke run. Pass it via
-# --models if you want to re-validate after a checkpoint swap.
-
 # Apply --models filter (only keep names that appear in the selection)
 if [[ -n "$SELECTED_MODELS" ]]; then
     FILTERED_A=()
@@ -162,7 +154,7 @@ fi
 #   * 3 finance datasets (financebench, finqa, tatqa) where severity
 #     comes from a matrix over structured answer/program/metric axes
 #     -- still heuristic, but defensible and disclosed in Limitations.
-DATASETS=(financebench finqa tatqa headqa cuad maud contractnli)
+DATASETS=(financebench finqa tatqa headqa medmcqa ddi cuad maud contractnli privacyqa)
 [[ -f "$PROJECT_DIR/dataset/insurance_text_simplifications_annotated.jsonl" ]] && DATASETS+=(judgebert)
 
 # Apply --datasets filter (only keep names that appear in the selection).
