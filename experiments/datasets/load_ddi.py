@@ -5,16 +5,23 @@ corpus with pharmacological substances and drug-drug interactions").
 Annotated by clinical pharmacology experts at UC3M; gold labels are
 per-pair and grounded in DrugBank / pharmacology references.
 
-Source: bigbio/ddi_corpus on HuggingFace (kb config).
+Source: the official XML release, mirrored at
+        https://github.com/isegura/DDICorpus (Isabel Segura-Bedmar).
+        Place the unzipped corpus under ``dataset/ddi_corpus/`` so the
+        loader finds ``**/*.xml`` recursively.
 License: CC BY-NC-SA 4.0.
 
-Each annotated pair (drug1, drug2, sentence) carries one of five relation
-labels, expert-graded by clinical pharmacologists:
-    - effect    : a drug interaction with described clinical effect
+The corpus is distributed as XML files (SemEval-2013 Task 9 format) and
+the official ``bigbio/ddi_corpus`` Hugging Face dataset is script-based,
+which the current ``datasets`` library no longer loads. To keep the
+loader self-contained and reproducible, we parse the XML directly.
+
+Each annotated pair (drug1, drug2, sentence) carries one of five labels:
+    - effect    : interaction with described clinical effect
     - mechanism : interaction with described pharmacokinetic mechanism
-    - advice    : a recommendation about co-administration
+    - advice    : recommendation about co-administration
     - int       : interaction mentioned without further classification
-    - false     : no interaction asserted
+    - false     : no interaction asserted (ddi="false" pairs in the XML)
 
 Severity is the financial cost of misclassifying that pair, anchored on
 published costs of preventable adverse drug events (Bates et al. 1997;
@@ -36,14 +43,16 @@ prediction is scored as exact match against the gold class letter.
 
 from __future__ import annotations
 
-import itertools
+import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pandas as pd
 
-try:
-    from datasets import load_dataset
-except ImportError:
-    load_dataset = None
+
+# Project-relative path to the unzipped DDI XML release.
+DDI_XML_DIR = (
+    Path(__file__).resolve().parents[2] / "dataset" / "ddi_corpus"
+)
 
 
 # Relation type -> severity tier.
@@ -53,13 +62,13 @@ RELATION_SEVERITY: dict[str, str] = {
     "mechanism": "major",
     "int": "minor",
     "false": "negligible",
-    # bigbio_kb sometimes returns "DDI-effect", "DDI-advise" etc.
+    # Tolerate the DDI- prefixes used by some derivatives.
     "ddi-effect": "critical",
     "ddi-advise": "major",
     "ddi-mechanism": "major",
     "ddi-int": "minor",
     "ddi-false": "negligible",
-    # Sentinel for negative (non-interacting) pairs
+    # Sentinel used by the loader for "no interaction".
     "none": "negligible",
 }
 
@@ -87,7 +96,7 @@ def _normalise_relation(label: str) -> str:
         lab = lab[4:]
     if lab in ("advise", "advices"):
         lab = "advice"
-    if lab in ("", "false", "none"):
+    if lab in ("", "false", "none", "no", "n"):
         return "none"
     if lab in {"mechanism", "effect", "advice", "int"}:
         return lab
@@ -99,126 +108,102 @@ def classify_severity(relation: str) -> str:
     return RELATION_SEVERITY.get(_normalise_relation(relation), "minor")
 
 
-def _iter_pairs_from_bigbio(ds) -> list[dict]:
-    """Flatten bigbio_kb-formatted documents into (drug1, drug2, sentence,
-    relation) records.
+def _resolve_xml_dir(path: str | Path | None) -> Path:
+    base = Path(path) if path else DDI_XML_DIR
+    if not base.exists():
+        raise FileNotFoundError(
+            f"DDI corpus not found at {base}. Download from "
+            "https://github.com/isegura/DDICorpus (unzip into "
+            "dataset/ddi_corpus/) and retry."
+        )
+    if not any(base.rglob("*.xml")):
+        raise FileNotFoundError(
+            f"No XML files under {base}; the directory exists but is empty. "
+            "Re-extract the DDI corpus zip there."
+        )
+    return base
 
-    bigbio_kb structure per doc:
-        passages -> [{text, offsets, ...}]
-        entities -> [{id, type, text, offsets}]
-        relations -> [{type, arg1_id, arg2_id, ...}]
 
-    Negative (non-interacting) pairs are NOT typically encoded as
-    relations; we generate them by enumerating drug-drug entity pairs that
-    appear in the same sentence and do not appear among the positive
-    relations.
+def _iter_pairs_from_xml(xml_dir: Path) -> list[dict]:
+    """Walk all XML files under ``xml_dir`` and emit one record per
+    annotated pair.
+
+    The DDI Corpus XML schema (SemEval-2013 Task 9):
+
+        <document id="...">
+          <sentence id="..." text="...">
+            <entity id="..." type="drug" charOffset="0-12" text="..."/>
+            ...
+            <pair id="..." e1="..." e2="..." ddi="true" type="effect"/>
+            ...
+          </sentence>
+        </document>
+
+    The ``type`` attribute is only present when ``ddi="true"``; pairs
+    flagged ``ddi="false"`` carry no relation type and are emitted with
+    the ``none`` sentinel.
     """
     records: list[dict] = []
-    for doc in ds:
-        passages = doc.get("passages") or []
-        entities = doc.get("entities") or []
-        relations = doc.get("relations") or []
-
-        # Index entities by id; keep only drug-like entity types.
-        ent_by_id = {}
-        for e in entities:
-            eid = e.get("id")
-            if not eid:
-                continue
-            # bigbio offsets can be nested lists [[start, end]]
-            offsets = e.get("offsets") or []
-            if offsets and isinstance(offsets[0], list):
-                offsets = offsets[0]
-            ent_by_id[eid] = {
-                "id": eid,
-                "type": e.get("type", ""),
-                "text": (e.get("text") or [""])[0]
-                if isinstance(e.get("text"), list)
-                else (e.get("text") or ""),
-                "offsets": offsets,
-            }
-
-        # Map each entity to its containing passage text (use earliest
-        # passage covering the offset).
-        passage_texts = [p.get("text") or "" for p in passages]
-        passage_offsets = [p.get("offsets") or [] for p in passages]
-
-        def _which_passage(off: list[int]) -> tuple[int, str] | None:
-            if not off:
-                return None
-            start = off[0]
-            for i, po in enumerate(passage_offsets):
-                if not po:
+    for xml_path in sorted(xml_dir.rglob("*.xml")):
+        try:
+            tree = ET.parse(xml_path)
+        except ET.ParseError:
+            continue
+        root = tree.getroot()
+        doc_id = root.get("id") or xml_path.stem
+        sentences = root.findall(".//sentence") or [root]
+        for sent in sentences:
+            sent_text = sent.get("text") or ""
+            entities: dict[str, str] = {}
+            for ent in sent.findall("entity"):
+                eid = ent.get("id")
+                if not eid:
                     continue
-                rng = po[0] if isinstance(po[0], list) else po
-                if len(rng) == 2 and rng[0] <= start < rng[1]:
-                    text = passage_texts[i]
-                    text = text[0] if isinstance(text, list) else text
-                    return i, text
-            return None
-
-        # Positive pairs from relations
-        pos_keys: set[tuple[str, str]] = set()
-        for r in relations:
-            rtype = r.get("type", "")
-            a1 = r.get("arg1_id") or r.get("head", {}).get("ref_id")
-            a2 = r.get("arg2_id") or r.get("tail", {}).get("ref_id")
-            if not a1 or not a2 or a1 not in ent_by_id or a2 not in ent_by_id:
-                continue
-            pos_keys.add(tuple(sorted([a1, a2])))
-            p = _which_passage(ent_by_id[a1]["offsets"])
-            sent = p[1] if p else (passage_texts[0] if passage_texts else "")
-            records.append(
-                {
-                    "drug1": ent_by_id[a1]["text"],
-                    "drug2": ent_by_id[a2]["text"],
-                    "sentence": sent if isinstance(sent, str) else "",
-                    "relation": _normalise_relation(rtype),
-                    "doc_id": doc.get("document_id") or doc.get("id", ""),
-                }
-            )
-
-        # Negative pairs: drug-drug entity pairs in the same passage that
-        # are not in pos_keys. Limit to keep dataset balanced.
-        drug_ents = [
-            e for e in ent_by_id.values() if "drug" in e["type"].lower() or e["type"] in ("DRUG", "GROUP", "BRAND")
-        ]
-        for e1, e2 in itertools.combinations(drug_ents, 2):
-            key = tuple(sorted([e1["id"], e2["id"]]))
-            if key in pos_keys:
-                continue
-            p1 = _which_passage(e1["offsets"])
-            p2 = _which_passage(e2["offsets"])
-            if not p1 or not p2 or p1[0] != p2[0]:
-                continue
-            records.append(
-                {
-                    "drug1": e1["text"],
-                    "drug2": e2["text"],
-                    "sentence": p1[1] if isinstance(p1[1], str) else "",
-                    "relation": "none",
-                    "doc_id": doc.get("document_id") or doc.get("id", ""),
-                }
-            )
-
+                entities[eid] = ent.get("text") or ""
+            for pair in sent.findall("pair"):
+                e1 = pair.get("e1")
+                e2 = pair.get("e2")
+                drug1 = entities.get(e1, "")
+                drug2 = entities.get(e2, "")
+                if not drug1 or not drug2:
+                    continue
+                ddi_flag = (pair.get("ddi") or "false").strip().lower() == "true"
+                rel_type = pair.get("type") if ddi_flag else "false"
+                relation = _normalise_relation(rel_type or "false")
+                records.append(
+                    {
+                        "doc_id": doc_id,
+                        "sentence_id": sent.get("id") or "",
+                        "pair_id": pair.get("id") or "",
+                        "drug1": drug1,
+                        "drug2": drug2,
+                        "sentence": sent_text,
+                        "relation": relation,
+                    }
+                )
     return records
 
 
-def load_ddi(limit: int | None = None) -> pd.DataFrame:
-    """Load DDI Corpus 2013 and annotate with per-pair severity.
+def load_ddi(
+    limit: int | None = None,
+    xml_dir: str | Path | None = None,
+) -> pd.DataFrame:
+    """Load DDI Corpus 2013 from local XML and annotate per-pair severity.
+
+    Parameters
+    ----------
+    limit : int or None
+        Max number of pairs to load.
+    xml_dir : path or None
+        Override directory containing the unzipped XML release.
 
     Returns
     -------
     DataFrame with columns:
         id, question, answer, severity, category, options, evidence, domain
     """
-    if load_dataset is None:
-        raise ImportError("Install the datasets package: pip install datasets")
-
-    ds = load_dataset(
-        "bigbio/ddi_corpus", "ddi_corpus_bigbio_kb", split="train", trust_remote_code=True
-    )
-    pairs = _iter_pairs_from_bigbio(ds)
+    base = _resolve_xml_dir(xml_dir)
+    pairs = _iter_pairs_from_xml(base)
 
     records: list[dict] = []
     for i, p in enumerate(pairs):
@@ -230,9 +215,11 @@ def load_ddi(limit: int | None = None) -> pd.DataFrame:
             f"In the sentence below, classify the interaction between "
             f"\"{p['drug1']}\" and \"{p['drug2']}\"."
         )
+        # Build a stable id from the corpus' own pair id when present.
+        rid = p["pair_id"] or f"{p['doc_id']}_{p['sentence_id']}_{i:06d}"
         records.append(
             {
-                "id": f"ddi_{i:06d}_{p['doc_id']}",
+                "id": f"ddi_{i:06d}_{rid}",
                 "question": question,
                 "answer": answer_letter,
                 "answer_text": _OPTIONS[answer_letter],
