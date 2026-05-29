@@ -16,10 +16,10 @@ but with domain-appropriate dollar amounts.
 % ============================================================
 \subsection{Finance (\$100, \$1k, \$10k, \$100k)}
 
-See Section~\ref{sec:severity-scale} for full calibration.
+See \autoref{sec:severity-scale} for full calibration.
 
 \textbf{Key sources:} SEC SAB~99 materiality framework; FINRA median
-fine \$125k (2024); SOX~\S906 individual penalty \$10k; ``Big~R''
+fine \$125k (2024); SOX~\S906 individual penalty \$10k; \enquote{Big~R}
 restatement average net income impact --\$16M; IBM/Ponemon cost per
 record \$173.
 
@@ -30,10 +30,10 @@ Medical errors carry higher unit costs than financial errors due to
 direct patient safety implications and the regulatory environment
 (FDA, malpractice liability).
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering
 \small
-\begin{tabular}{lrl}
+\begin{tabular}{@{}lrp{12cm}@{}}
 \toprule
 Level & $c_k$ & Calibration \\
 \midrule
@@ -45,7 +45,7 @@ Critical & \$500\,000 & Dosage error; sepsis triage failure \\
 \end{tabular}
 \caption{Medical severity scale.}
 \label{tab:medical-scale}
-\end{table}
+\end{table*}
 
 \paragraph{Empirical evidence.}
 \begin{itemize}
@@ -88,10 +88,10 @@ The error-cost mapping is:
 Legal errors in contract analysis expose organizations to missed
 obligations, unintended liability, and unfavorable terms.
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering
 \small
-\begin{tabular}{lrl}
+\begin{tabular}{@{}lrp{12cm}@{}}
 \toprule
 Level & $c_k$ & Calibration \\
 \midrule
@@ -103,7 +103,7 @@ Critical & \$200\,000 & Indemnification, liability cap, termination \\
 \end{tabular}
 \caption{Legal severity scale.}
 \label{tab:legal-scale}
-\end{table}
+\end{table*}
 
 \paragraph{Empirical evidence.}
 \begin{itemize}
@@ -146,10 +146,10 @@ legal risk category:
 Vulnerability-related errors in code carry costs that scale with
 the CVSS severity score and the attack surface affected.
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering
 \small
-\begin{tabular}{lrl}
+\begin{tabular}{@{}lrp{12cm}@{}}
 \toprule
 Level & $c_k$ & Calibration \\
 \midrule
@@ -161,7 +161,7 @@ Critical & \$1\,000\,000 & Critical CVSS (9.0--10.0); RCE/zero-day \\
 \end{tabular}
 \caption{Code/Security severity scale.}
 \label{tab:code-security-scale}
-\end{table}
+\end{table*}
 
 \paragraph{Empirical evidence.}
 \begin{itemize}
@@ -205,10 +205,10 @@ CVE-Bench provides native CVSS scores. The mapping is direct:
 Content moderation errors expose platforms to regulatory fines
 (DSA, Online Safety Act), advertiser withdrawal, and user harm.
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering
 \small
-\begin{tabular}{lrl}
+\begin{tabular}{@{}lrp{12cm}@{}}
 \toprule
 Level & $c_k$ & Calibration \\
 \midrule
@@ -220,7 +220,7 @@ Critical & \$50\,000 & CSAM; imminent violence threat missed \\
 \end{tabular}
 \caption{Content moderation severity scale.}
 \label{tab:moderation-scale}
-\end{table}
+\end{table*}
 
 \paragraph{Empirical evidence.}
 \begin{itemize}
@@ -236,7 +236,7 @@ Critical & \$50\,000 & CSAM; imminent violence threat missed \\
     removal affects an estimated 1 in 10\,000 pieces of content;
     incorrect non-removal of violating content estimated at 3--5\%
     of reports \citep{meta2023transparency}.
-\item \textbf{Advertiser boycotts:} The 2020 ``Stop Hate for Profit''
+\item \textbf{Advertiser boycotts:} The 2020 \enquote{Stop Hate for Profit}
     campaign cost Facebook an estimated \$7.2B in market value in
     one week \citep{reuters2020stophate}.
 \item \textbf{Trust \& Safety teams:} Average cost per manual content

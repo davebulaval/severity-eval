@@ -92,9 +92,17 @@ def load_medmcqa(limit: int | None = None) -> pd.DataFrame:
         if limit is not None and i >= limit:
             break
 
-        qid = row.get("id", f"medmcqa_{i:06d}")
-        question: str = row.get("question") or ""
-        cop = row.get("cop")
+        qid = row.get("id") or f"medmcqa_{i:06d}"
+        question: str = (row.get("question") or "").strip()
+        if not question:
+            # Empty stems would generate a prompt the model cannot answer
+            # and inflate the per-dataset error rate spuriously.
+            continue
+        cop_raw = row.get("cop")
+        try:
+            cop = int(cop_raw) if cop_raw is not None else None
+        except (TypeError, ValueError):
+            cop = None
         if cop is None or cop not in (0, 1, 2, 3):
             # Skip malformed rows rather than poison the eval set.
             continue
@@ -106,6 +114,10 @@ def load_medmcqa(limit: int | None = None) -> pd.DataFrame:
         }
         answer_letter = letter_for[cop]
         answer_text = opts[answer_letter]
+        if not answer_text:
+            # The correct option has no text; the eval cannot compute a
+            # meaningful score against an empty reference.
+            continue
         subject = (row.get("subject_name") or "Unknown").strip()
 
         records.append(

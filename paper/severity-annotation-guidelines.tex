@@ -27,15 +27,16 @@ at that severity.
 
 \begin{table}[h]
 \centering
-\small
-\begin{tabular}{llrl}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrp{3.4cm}@{}}
 \toprule
 Level & Label & $c_k$ & Regulatory calibration \\
 \midrule
-1 & Negligible & \$100    & Immaterial per SAB~99; no decision impact \\
-2 & Minor      & \$1\,000  & ``Little~r'' revision; isolated correction \\
-3 & Major      & \$10\,000 & SOX individual penalty; operational impact \\
-4 & Critical   & \$100\,000 & ``Big~R'' restatement; SEC enforcement threshold \\
+1 & Negligible & \$100      & Immaterial per SAB~99; no decision impact \\
+2 & Minor      & \$1\,000   & \enquote{Little~r} revision; isolated correction \\
+3 & Major      & \$10\,000  & SOX individual penalty; operational impact \\
+4 & Critical   & \$100\,000 & \enquote{Big~R} restatement; SEC enforcement \\
 \bottomrule
 \end{tabular}
 \caption{Four-level severity scale for the finance domain.}
@@ -50,16 +51,16 @@ The cost levels are calibrated against the following empirical evidence:
 
 \paragraph{Negligible (\$100).}
 Corresponds to the per-record cost of a data quality error in financial
-systems. The ``1-10-100'' rule \citep{labovitz1992} estimates \$1 to
+systems. The \enquote{1-10-100} rule \citep{labovitz1992} estimates \$1 to
 prevent, \$10 to correct, and \$100 per record per year for uncorrected
 errors. IBM/Ponemon's 2024 Cost of a Data Breach report measures the
 average cost per compromised record at \$173 \citep{ponemon2024},
 consistent with this level.
 
 \paragraph{Minor (\$1\,000).}
-Corresponds to a ``little~r'' restatement, an immaterial correction
+Corresponds to a \enquote{little~r} restatement, an immaterial correction
 disclosed in subsequent filings without a Form~8-K Item~4.02 filing.
-``Little~r'' restatements account for 76\% of all restatements as of
+\enquote{Little~r} restatements account for 76\% of all restatements as of
 2020 \citep{wilmerhale2022}. The IRS accuracy-related penalty of 20\%
 on a \$5\,000 understatement (\$1\,000) falls in this range. Gartner
 reports that one-third of accountants make several financial errors per
@@ -79,13 +80,13 @@ TransAlta's 2003 spreadsheet copy-paste error cost \$24M
 \paragraph{Critical (\$100\,000).}
 The median FINRA disciplinary fine in 2024 was \$125\,000
 \citep{csglaw2024}. The SEC maximum penalty per single violation is
-\$775\,000 \citep{harvard2016sec}. ``Big~R'' restatements carry an
+\$775\,000 \citep{harvard2016sec}. \enquote{Big~R} restatements carry an
 average negative impact on net income of \$16M \citep{accountingtoday2024},
 with associated stock price declines of 2--10\% \citep{gleason2008contagion}.
 The GAO documented over \$100B in aggregate market capitalization loss
 from restatements between 1997 and 2002 \citep{gao2003}. Securities
 class action median settlements are \$14M
-\citep{cornerstone2024}. JPMorgan's 2012 ``London Whale'' spreadsheet
+\citep{cornerstone2024}. JPMorgan's 2012 \enquote{London Whale} spreadsheet
 error resulted in \$6.2B in losses \citep{prosperspark2023}.
 
 \paragraph{Beyond the scale.}
@@ -110,31 +111,31 @@ matrix.
 
 The answer format is a strong signal of error magnitude.
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering
-\small
-\begin{tabular}{llp{5.5cm}}
+\footnotesize
+\begin{tabular}{@{}llp{10cm}@{}}
 \toprule
 Code & Pattern & Detection rule \\
 \midrule
 \texttt{dollar\_large}
   & \$X in M/B
-  & Answer contains \$-amount AND (answer mentions ``million''/``billion''
-    OR value $\geq 50$ AND question mentions ``million''/``billion''
-    OR value $> 500$ without scale) \\
+  & Answer contains \$-amount AND (answer mentions \enquote{million}/\enquote{billion} OR
+    value $\geq 50$ AND question mentions \enquote{million}/\enquote{billion} OR value
+    $> 500$ without scale) \\
 \texttt{dollar\_small}
   & \$X per-share
-  & Answer contains \$-amount with value $< 50$
-    (per-share, dividend, small absolute) \\
+  & Answer contains \$-amount with value $< 50$ (per-share, dividend,
+    small absolute) \\
 \texttt{percentage}
   & X\%
-  & Answer contains ``\%'' or ``percent'' \\
+  & Answer contains \enquote{\%} or \enquote{percent} \\
 \texttt{ratio}
   & Plain number
   & Answer matches \texttt{-?[\textbackslash d,.]+x?} \\
 \texttt{yes\_no}
   & Yes/No
-  & Answer starts with ``yes'' or ``no'' \\
+  & Answer starts with \enquote{yes} or \enquote{no} \\
 \texttt{text}
   & Free-form
   & All other answers \\
@@ -142,7 +143,7 @@ Code & Pattern & Detection rule \\
 \end{tabular}
 \caption{Answer type classification rules (Axis~1).}
 \label{tab:answer-types}
-\end{table}
+\end{table*}
 
 \paragraph{Rationale.}
 A wrong absolute dollar amount in the millions (e.g., reporting revenue
@@ -152,7 +153,7 @@ misrepresent materiality thresholds. A wrong percentage or ratio
 (e.g., gross margin of 32\% vs.\ 34\%) is less likely to alter a
 binary decision (buy/sell/hold) but still affects analytical precision.
 A wrong yes/no qualitative answer about business characteristics
-(``Is the company capital-intensive?'') has the least direct
+(\enquote{Is the company capital-intensive?}) has the least direct
 dollar-denominated impact unless it concerns a regulatory or
 compliance question.
 
@@ -163,33 +164,29 @@ compliance question.
 The financial metric being queried determines the \emph{domain of
 impact} if the answer is wrong.
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering
-\small
-\begin{tabular}{llp{4.5cm}}
+\footnotesize
+\begin{tabular}{@{}lp{4.5cm}p{8cm}@{}}
 \toprule
 Code & SEC/GAAP category & Keywords (in question) \\
 \midrule
 \texttt{core}
   & Income statement, balance sheet line items
-  & revenue, net income, net earnings, net loss,
-    total assets, total liabilities, total equity,
-    gross profit, COGS, cost of sales \\
+  & revenue, net income, net earnings, net loss, total assets, total
+    liabilities, total equity, gross profit, COGS, cost of sales \\
 \texttt{operational}
   & Cash flow, working capital, capital structure
-  & EBITDA, operating income, cash flow,
-    capex, capital expenditure, working capital,
-    debt, inventory, accounts receivable/payable,
+  & EBITDA, operating income, cash flow, capex, capital expenditure,
+    working capital, debt, inventory, accounts receivable/payable,
     pension, restructuring, derivatives \\
 \texttt{ratio}
   & Derived metrics (ratios, margins, per-share)
-  & ratio, margin, growth rate, return on,
-    ROE, ROA, EPS, per share, yield, turnover,
-    leverage, liquidity, P/E \\
+  & ratio, margin, growth rate, return on, ROE, ROA, EPS, per share,
+    yield, turnover, leverage, liquidity, P/E \\
 \texttt{descriptive}
   & Qualitative, non-numerical
-  & products and services, key agenda,
-    describe, list, which securities \\
+  & products and services, key agenda, describe, list, which securities \\
 \bottomrule
 \end{tabular}
 \caption{Metric type classification (Axis~2). First keyword match wins.
@@ -197,13 +194,13 @@ Ordered: \texttt{descriptive} $\to$ \texttt{core} $\to$
 \texttt{operational} $\to$ \texttt{ratio} $\to$ default
 \texttt{descriptive}.}
 \label{tab:metric-types}
-\end{table}
+\end{table*}
 
 \paragraph{Rationale.}
 Core financial statement items (revenue, net income, total assets) are
 the primary inputs to valuation models (DCF, comparable analysis) and
 are subject to the strictest SEC materiality standards (SAB~99). An
-error on these items directly affects the ``top line'' or ``bottom line''
+error on these items directly affects the \enquote{top line} or \enquote{bottom line}
 that investors use for decision-making. Operational metrics (EBITDA,
 cash flow, debt) are secondary inputs that inform creditworthiness and
 operational efficiency assessments. Ratios and derived metrics are
@@ -219,21 +216,23 @@ The severity level is determined by the intersection of the two axes:
 
 \begin{table}[h]
 \centering
-\small
-\begin{tabular}{l|cccc}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}l|cccc@{}}
 \toprule
-& \texttt{core} & \texttt{operational} & \texttt{ratio} & \texttt{descriptive} \\
+& \texttt{core} & \texttt{operat.} & \texttt{ratio} & \texttt{descr.} \\
 \midrule
-\texttt{dollar\_large}  & \cellcolor{red!25}critical & \cellcolor{orange!25}major   & \cellcolor{orange!25}major      & \cellcolor{orange!25}major \\
-\texttt{dollar\_small}   & \cellcolor{yellow!25}minor     & \cellcolor{yellow!25}minor    & \cellcolor{yellow!25}minor      & \cellcolor{green!15}negligible \\
-\texttt{percentage}      & \cellcolor{yellow!25}minor     & \cellcolor{yellow!25}minor    & \cellcolor{yellow!25}minor      & \cellcolor{yellow!25}minor \\
-\texttt{ratio}           & \cellcolor{yellow!25}minor     & \cellcolor{yellow!25}minor    & \cellcolor{yellow!25}minor      & \cellcolor{yellow!25}minor \\
-\texttt{yes\_no}         & \cellcolor{orange!25}major     & \cellcolor{orange!25}major    & \cellcolor{yellow!25}minor      & \cellcolor{yellow!25}minor \\
-\texttt{text}            & \cellcolor{orange!25}major     & \cellcolor{yellow!25}minor    & \cellcolor{yellow!25}minor      & \cellcolor{green!15}negligible \\
+\texttt{dollar\_large} & \cellcolor{sevCrit!22}critical & \cellcolor{sevMaj!22}major & \cellcolor{sevMaj!22}major & \cellcolor{sevMaj!22}major \\
+\texttt{dollar\_small} & \cellcolor{sevMin!22}minor    & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor & \cellcolor{sevNeg!18}neglig. \\
+\texttt{percentage}    & \cellcolor{sevMin!22}minor    & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor \\
+\texttt{ratio}         & \cellcolor{sevMin!22}minor    & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor \\
+\texttt{yes\_no}       & \cellcolor{sevMaj!22}major    & \cellcolor{sevMaj!22}major & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor \\
+\texttt{text}          & \cellcolor{sevMaj!22}major    & \cellcolor{sevMin!22}minor & \cellcolor{sevMin!22}minor & \cellcolor{sevNeg!18}neglig. \\
 \bottomrule
 \end{tabular}
 \caption{Severity matrix: answer type (rows) $\times$ metric type
-(columns). Each cell maps to one of the four severity levels.}
+(columns). Wong colorblind-safe palette: vermillion (critical),
+orange (major), sky blue (minor), blue (negligible).}
 \label{tab:severity-matrix}
 \end{table}
 
@@ -245,16 +244,16 @@ The severity level is determined by the intersection of the two axes:
 \item \textbf{Core + dollar\_large = critical.}
     Revenue, net income, total assets expressed as absolute dollar amounts
     in millions/billions are subject to the most stringent regulatory
-    scrutiny (SAB~99 ``Big~R'' threshold).
+    scrutiny (SAB~99 \enquote{Big~R} threshold).
 \item \textbf{Ratios and percentages are always minor.}
     Derived metrics, even when computed from core financial items, are
     bounded in magnitude and more easily detected by cross-checking with
     source data. This reflects the LLM validation finding that the
-    distinction between ``core revenue'' and ``revenue growth rate \%''
+    distinction between \enquote{core revenue} and \enquote{revenue growth rate \%}
     matters more than the underlying metric category.
 \item \textbf{Yes/No on core or operational topics = major.}
-    Binary assessments about financial health (e.g., ``Does the company
-    have adequate liquidity?'') can directly influence investment
+    Binary assessments about financial health (e.g., \enquote{Does the company
+    have adequate liquidity?}) can directly influence investment
     decisions.
 \item \textbf{Text + descriptive = negligible.}
     Qualitative answers about company descriptions, filing metadata, or
@@ -272,7 +271,7 @@ resulting severity, ensuring full traceability.
 
 \paragraph{Step 2: LLM validation.}
 A strong LLM (Claude Sonnet 4) independently annotates each instance
-using the rubric in Table~\ref{tab:severity-scale} and a one-shot
+using the rubric in \autoref{tab:severity-scale} and a one-shot
 prompt. The LLM provides a severity label and a one-sentence
 justification.
 
@@ -282,7 +281,7 @@ reviewed manually. We report the inter-annotator agreement (Cohen's
 $\kappa$) between the rule-based system and the LLM.
 
 \paragraph{Validation results.}
-Table~\ref{tab:llm-agreement} reports the inter-annotator agreement
+\autoref{tab:llm-agreement} reports the inter-annotator agreement
 between the rule-based system and Claude Sonnet~4 on the 150
 FinanceBench instances. After one round of rule refinement informed by
 disagreement analysis, the system achieves moderate agreement
@@ -319,7 +318,7 @@ sensitivity analysis module of \texttt{severity-eval}.
 \subsection{Empirical Evidence Summary}
 \label{sec:evidence-summary}
 
-Table~\ref{tab:evidence-summary} compiles the regulatory and market
+\autoref{tab:evidence-summary} compiles the regulatory and market
 evidence supporting the cost calibration.
 
 \begin{table*}[t]
@@ -342,8 +341,8 @@ Source & Metric & Amount & Calibration \\
 \quad SOX \S906 (willful) & Willful certification & \$5\,000\,000 & $\gg$ Critical \\
 \midrule
 \multicolumn{4}{l}{\textit{Market impact}} \\
-\quad ``Little r'' restatement & Immaterial correction & Limited & Minor--Major \\
-\quad ``Big R'' restatement & Avg.\ net income impact & --\$16M & $\gg$ Critical \\
+\quad \enquote{Little r} restatement & Immaterial correction & Limited & Minor--Major \\
+\quad \enquote{Big R} restatement & Avg.\ net income impact & --\$16M & $\gg$ Critical \\
 \quad Stock price (restatement) & Market-adjusted decline & --2\% to --10\% & $\gg$ Critical \\
 \quad GAO 1997--2002 & Aggregate cap.\ loss & \$100B+ & Systemic \\
 \midrule
@@ -353,7 +352,7 @@ Source & Metric & Amount & Calibration \\
 \midrule
 \multicolumn{4}{l}{\textit{Operational risk}} \\
 \quad ORX (banking) & Mean loss event 2023 & EUR~232k & Critical \\
-\quad Spreadsheet errors & JPMorgan ``London Whale'' & \$6.2B & Catastrophic \\
+\quad Spreadsheet errors & JPMorgan \enquote{London Whale} & \$6.2B & Catastrophic \\
 \quad Spreadsheet errors & TransAlta copy-paste & \$24M & Catastrophic \\
 \midrule
 \multicolumn{4}{l}{\textit{Data quality (macro)}} \\
@@ -364,7 +363,7 @@ Source & Metric & Amount & Calibration \\
 \bottomrule
 \end{tabular}
 \caption{Empirical evidence calibrating the four-level severity scale.
-Amounts exceeding the \$100k ``critical'' threshold illustrate that the
+Amounts exceeding the \$100k \enquote{critical} threshold illustrate that the
 per-query scale captures the \emph{unit cost} of an error; systemic
 exposure is modeled through the compound loss $S = \sum X_i$.}
 \label{tab:evidence-summary}
@@ -378,15 +377,16 @@ Applying the annotation rules to all 150 FinanceBench instances yields:
 
 \begin{table}[h]
 \centering
-\small
-\begin{tabular}{lrrl}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrp{3cm}@{}}
 \toprule
 Level & $n$ & \% & Typical questions \\
 \midrule
 Negligible & 15 & 10.0\% & Company descriptions, filing metadata \\
 Minor      & 86 & 57.3\% & Ratios, margins, yes/no, qualitative \\
-Major      & 44 & 29.3\% & Operational \$M/B, financial health (y/n) \\
-Critical   &  5 &  3.3\% & Core financials in \$M/B (revenue, net income) \\
+Major      & 44 & 29.3\% & Operational \$M/B, financial health \\
+Critical   &  5 &  3.3\% & Core financials in \$M/B \\
 \bottomrule
 \end{tabular}
 \caption{Severity distribution on FinanceBench (150 instances).}
