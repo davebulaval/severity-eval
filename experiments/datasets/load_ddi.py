@@ -43,16 +43,17 @@ prediction is scored as exact match against the gold class letter.
 
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
 
+log = logging.getLogger(__name__)
+
 
 # Project-relative path to the unzipped DDI XML release.
-DDI_XML_DIR = (
-    Path(__file__).resolve().parents[2] / "dataset" / "ddi_corpus"
-)
+DDI_XML_DIR = Path(__file__).resolve().parents[2] / "dataset" / "ddi_corpus"
 
 
 # Relation type -> severity tier.
@@ -144,14 +145,24 @@ def _iter_pairs_from_xml(xml_dir: Path) -> list[dict]:
     the ``none`` sentinel.
     """
     records: list[dict] = []
+    skipped_parse = 0
+    skipped_no_sent = 0
     for xml_path in sorted(xml_dir.rglob("*.xml")):
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as exc:
+            skipped_parse += 1
+            log.warning("DDI: malformed XML %s skipped (%s)", xml_path.name, exc)
             continue
         root = tree.getroot()
         doc_id = root.get("id") or xml_path.stem
-        sentences = root.findall(".//sentence") or [root]
+        sentences = root.findall(".//sentence")
+        if not sentences:
+            # XMLs that contain no <sentence> elements (rare) carry no
+            # pair annotations either; treating root as a sentence would
+            # produce empty entity/pair lookups silently. Skip cleanly.
+            skipped_no_sent += 1
+            continue
         for sent in sentences:
             sent_text = sent.get("text") or ""
             entities: dict[str, str] = {}
@@ -181,6 +192,13 @@ def _iter_pairs_from_xml(xml_dir: Path) -> list[dict]:
                         "relation": relation,
                     }
                 )
+    if skipped_parse or skipped_no_sent:
+        log.info(
+            "DDI: %d files parsed (skipped %d malformed, %d without sentences)",
+            len(list(xml_dir.rglob("*.xml"))) - skipped_parse - skipped_no_sent,
+            skipped_parse,
+            skipped_no_sent,
+        )
     return records
 
 
@@ -213,7 +231,7 @@ def load_ddi(
         answer_letter = _RELATION_LETTER[rel]
         question = (
             f"In the sentence below, classify the interaction between "
-            f"\"{p['drug1']}\" and \"{p['drug2']}\"."
+            f'"{p["drug1"]}" and "{p["drug2"]}".'
         )
         # Build a stable id from the corpus' own pair id when present.
         rid = p["pair_id"] or f"{p['doc_id']}_{p['sentence_id']}_{i:06d}"

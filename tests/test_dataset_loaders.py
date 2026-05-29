@@ -14,14 +14,17 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from experiments.datasets import load_medmcqa as medmcqa_module
 from experiments.datasets.load_ddi import (
     RELATION_SEVERITY,
+    _iter_pairs_from_xml,
     _normalise_relation,
     classify_severity as ddi_severity,
 )
 from experiments.datasets.load_medmcqa import (
     SUBJECT_SEVERITY,
     classify_severity as medmcqa_severity,
+    load_medmcqa,
 )
 from experiments.datasets.load_privacyqa import (
     CATEGORY_SEVERITY,
@@ -116,9 +119,7 @@ def test_ddi_normalise_relation_handles_dataset_variants(relation, expected_norm
 def test_ddi_severity_critical_only_on_effect():
     """Only ``effect`` should carry critical severity: it's the relation
     whose miss has direct clinical impact."""
-    critical = {
-        r for r, tier in RELATION_SEVERITY.items() if tier == "critical"
-    }
+    critical = {r for r, tier in RELATION_SEVERITY.items() if tier == "critical"}
     # Accept both canonical and DDI-prefixed variants.
     assert critical == {"effect", "ddi-effect"}
 
@@ -270,3 +271,193 @@ def test_all_loaders_use_canonical_severity_labels():
     for table in (SUBJECT_SEVERITY, RELATION_SEVERITY, CATEGORY_SEVERITY):
         for tier in table.values():
             assert tier in VALID_SEVERITIES, tier
+
+
+# ----------------------------------------------------------------------
+# DDI XML parser : malformed / sentence-less files must be skipped
+# loudly (logged) but never crash the loader.
+# ----------------------------------------------------------------------
+
+
+_DDI_VALID_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<document id='DDI-DrugBank.d1'>
+  <sentence id='DDI-DrugBank.d1.s0' text='Drug A interacts with Drug B causing arrhythmia.'>
+    <entity id='e0' type='drug' charOffset='0-5' text='Drug A'/>
+    <entity id='e1' type='drug' charOffset='22-27' text='Drug B'/>
+    <pair id='p0' e1='e0' e2='e1' ddi='true' type='effect'/>
+  </sentence>
+</document>
+"""
+
+_DDI_FALSE_PAIR_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<document id='DDI-DrugBank.d2'>
+  <sentence id='DDI-DrugBank.d2.s0' text='Drug X and Drug Y are unrelated.'>
+    <entity id='e0' type='drug' text='Drug X'/>
+    <entity id='e1' type='drug' text='Drug Y'/>
+    <pair id='p0' e1='e0' e2='e1' ddi='false'/>
+  </sentence>
+</document>
+"""
+
+
+def test_ddi_xml_parser_emits_one_record_per_pair(tmp_path):
+    """A well-formed XML with two pairs produces two records with the
+    correct gold relation."""
+    (tmp_path / "good.xml").write_text(_DDI_VALID_XML)
+    (tmp_path / "neg.xml").write_text(_DDI_FALSE_PAIR_XML)
+
+    records = _iter_pairs_from_xml(tmp_path)
+    rels = sorted(r["relation"] for r in records)
+    assert rels == ["effect", "none"]
+
+
+def test_ddi_xml_parser_skips_malformed_xml_without_crashing(tmp_path, caplog):
+    """A broken XML must NOT abort the whole batch — it must be logged
+    and skipped so the good files still produce records."""
+    (tmp_path / "broken.xml").write_text("<document><sentence")
+    (tmp_path / "ok.xml").write_text(_DDI_VALID_XML)
+
+    with caplog.at_level("WARNING"):
+        records = _iter_pairs_from_xml(tmp_path)
+    assert len(records) == 1
+    assert records[0]["relation"] == "effect"
+    assert any("malformed XML" in r.getMessage() for r in caplog.records), (
+        "Skipped XML must produce a WARNING log"
+    )
+
+
+def test_ddi_xml_parser_skips_files_without_sentence_elements(tmp_path):
+    """Files with no <sentence> elements (e.g. metadata-only XMLs) must
+    not produce empty/garbage records; treating the root as a sentence
+    would silently leak through."""
+    sentence_less = """<?xml version='1.0'?>
+<document id='meta.d1'>
+  <entity id='e0' text='Drug Z'/>
+</document>
+"""
+    (tmp_path / "sentence_less.xml").write_text(sentence_less)
+    (tmp_path / "ok.xml").write_text(_DDI_VALID_XML)
+
+    records = _iter_pairs_from_xml(tmp_path)
+    assert len(records) == 1
+    assert records[0]["drug1"] == "Drug A"
+
+
+def test_ddi_xml_parser_drops_pairs_with_missing_entity_reference(tmp_path):
+    """A pair whose e1/e2 references an entity not in the sentence must
+    be dropped. Otherwise the prompt would contain empty drug names and
+    the eval would score on garbage."""
+    bad = """<?xml version='1.0'?>
+<document id='d3'>
+  <sentence id='d3.s0' text='Sentence.'>
+    <entity id='e0' text='Drug A'/>
+    <pair id='p0' e1='e0' e2='e_missing' ddi='true' type='effect'/>
+    <pair id='p1' e1='e_missing' e2='e0' ddi='true' type='effect'/>
+  </sentence>
+</document>
+"""
+    (tmp_path / "bad.xml").write_text(bad)
+    records = _iter_pairs_from_xml(tmp_path)
+    assert records == []
+
+
+# ----------------------------------------------------------------------
+# MedMCQA loader : silent skip of malformed rows must not poison the
+# eval set. Mock load_dataset to inject controlled bad inputs.
+# ----------------------------------------------------------------------
+
+
+class _StubMedmcqaDataset:
+    """Iterable stand-in for the HuggingFace dataset object used by
+    load_medmcqa. The loader only calls ``for row in ds: row.get(...)``."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def __iter__(self):
+        return iter(self._rows)
+
+
+def _patch_load(monkeypatch, rows):
+    stub = _StubMedmcqaDataset(rows)
+    monkeypatch.setattr(
+        medmcqa_module,
+        "load_dataset",
+        lambda *args, **kwargs: stub,
+    )
+
+
+def _good_row(cop=0, subject="Pharmacology", question="What is the dose?"):
+    return {
+        "id": "q1",
+        "question": question,
+        "opa": "10 mg",
+        "opb": "20 mg",
+        "opc": "30 mg",
+        "opd": "40 mg",
+        "cop": cop,
+        "subject_name": subject,
+    }
+
+
+def test_medmcqa_loader_keeps_well_formed_rows(monkeypatch):
+    _patch_load(monkeypatch, [_good_row(cop=0), _good_row(cop=2)])
+    df = load_medmcqa()
+    assert len(df) == 2
+    assert df["answer"].tolist() == ["A", "C"]
+    assert df["severity"].tolist() == ["critical", "critical"]
+
+
+def test_medmcqa_loader_skips_empty_question(monkeypatch):
+    """Empty stems would generate an unanswerable prompt and inflate the
+    per-dataset error rate. They must be dropped, not silently kept."""
+    _patch_load(
+        monkeypatch,
+        [_good_row(), _good_row(question=""), _good_row(question="   ")],
+    )
+    df = load_medmcqa()
+    assert len(df) == 1
+
+
+def test_medmcqa_loader_coerces_string_cop(monkeypatch):
+    """If the source emits ``cop`` as a string ('0'), the loader must
+    accept it -- silently skipping all rows would empty the dataset."""
+    rows = [
+        {**_good_row(), "cop": "0"},
+        {**_good_row(), "cop": "3"},
+    ]
+    _patch_load(monkeypatch, rows)
+    df = load_medmcqa()
+    assert df["answer"].tolist() == ["A", "D"]
+
+
+def test_medmcqa_loader_skips_invalid_cop(monkeypatch):
+    """A cop value outside 0-3 (e.g. 4, -1, 'banana') must drop the row,
+    not raise."""
+    rows = [
+        {**_good_row(), "cop": 4},
+        {**_good_row(), "cop": -1},
+        {**_good_row(), "cop": "banana"},
+        {**_good_row(), "cop": None},
+    ]
+    _patch_load(monkeypatch, rows)
+    df = load_medmcqa()
+    assert len(df) == 0
+
+
+def test_medmcqa_loader_skips_row_when_correct_option_text_is_empty(monkeypatch):
+    """The eval scorer compares the model's letter against the gold
+    option *text*. An empty correct option produces a no-op reference
+    that always scores as no_match -- silently inflating the error rate.
+    """
+    bad_row = {**_good_row(cop=1), "opb": ""}  # B is the gold and is empty
+    _patch_load(monkeypatch, [bad_row, _good_row()])
+    df = load_medmcqa()
+    assert len(df) == 1
+    assert df["answer"].iloc[0] == "A"
+
+
+def test_medmcqa_loader_limit_caps_output(monkeypatch):
+    _patch_load(monkeypatch, [_good_row() for _ in range(50)])
+    df = load_medmcqa(limit=10)
+    assert len(df) == 10

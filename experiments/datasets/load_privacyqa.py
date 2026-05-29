@@ -56,9 +56,9 @@ except ImportError:
 # illustrative ranges from public enforcement data.
 # ----------------------------------------------------------------------
 CATEGORY_SEVERITY: dict[str, str] = {
-    "Data Security": "critical",          # ex. GDPR 4% turnover, breach
+    "Data Security": "critical",  # ex. GDPR 4% turnover, breach
     "Third Party Sharing/Collection": "major",  # consent / transfer fines
-    "Data Retention": "major",            # storage limitation breaches
+    "Data Retention": "major",  # storage limitation breaches
     "First Party Collection/Use": "minor",
     "User Choice/Control": "minor",
     "User Access, Edit and Deletion": "minor",
@@ -77,44 +77,88 @@ _CATEGORY_RULES: list[tuple[str, list[str]]] = [
     (
         "Data Security",
         [
-            "secur", "encrypt", "password", "credential", "hash", "breach",
-            "leak", "vulnerab", "safeguard", "protect", "ssl", "tls",
+            "secur",
+            "encrypt",
+            "password",
+            "credential",
+            "hash",
+            "breach",
+            "leak",
+            "vulnerab",
+            "safeguard",
+            "protect",
+            "ssl",
+            "tls",
         ],
     ),
     (
         "Third Party Sharing/Collection",
         [
-            "third party", "third-party", "third parties", "advertis",
-            "partner", "affiliate", "share", "sell", "transferred to",
-            "transfer my", "with other companies", "external compan",
+            "third party",
+            "third-party",
+            "third parties",
+            "advertis",
+            "partner",
+            "affiliate",
+            "share",
+            "sell",
+            "transferred to",
+            "transfer my",
+            "with other companies",
+            "external compan",
         ],
     ),
     (
         "Data Retention",
         [
-            "retention", "retain", "how long", "store for", "keep my data",
-            "kept for", "delete my", "deletion period", "remove my data",
+            "retention",
+            "retain",
+            "how long",
+            "store for",
+            "keep my data",
+            "kept for",
+            "delete my",
+            "deletion period",
+            "remove my data",
         ],
     ),
     (
         "User Access, Edit and Deletion",
         [
-            "access my", "edit my", "review my", "modify my", "correct my",
-            "delete my account", "request my data", "see my data",
+            "access my",
+            "edit my",
+            "review my",
+            "modify my",
+            "correct my",
+            "delete my account",
+            "request my data",
+            "see my data",
         ],
     ),
     (
         "User Choice/Control",
         [
-            "opt-out", "opt out", "consent", "preference", "choice",
-            "control", "do not", "opt in", "opt-in",
+            "opt-out",
+            "opt out",
+            "consent",
+            "preference",
+            "choice",
+            "control",
+            "do not",
+            "opt in",
+            "opt-in",
         ],
     ),
     (
         "Policy Change",
         [
-            "change to", "policy update", "modif", "amend", "revise",
-            "notification of change", "update this policy",
+            "change to",
+            "policy update",
+            "modif",
+            "amend",
+            "revise",
+            "notification of change",
+            "update this policy",
         ],
     ),
     (
@@ -124,15 +168,28 @@ _CATEGORY_RULES: list[tuple[str, list[str]]] = [
     (
         "International and Specific Audiences",
         [
-            "children", "minor", "under 13", "coppa", "outside the",
-            "international", "eu user", "european", "california",
+            "children",
+            "minor",
+            "under 13",
+            "coppa",
+            "outside the",
+            "international",
+            "eu user",
+            "european",
+            "california",
         ],
     ),
     (
         "First Party Collection/Use",
         [
-            "collect", "gather", "obtain", "receive", "track", "monitor",
-            "log", "record",
+            "collect",
+            "gather",
+            "obtain",
+            "receive",
+            "track",
+            "monitor",
+            "log",
+            "record",
         ],
     ),
 ]
@@ -158,9 +215,7 @@ def classify_severity(question: str) -> tuple[str, str]:
 
 
 # Local fallback paths (relative to the project root).
-_LOCAL_CSV_DIR = (
-    Path(__file__).resolve().parents[2] / "dataset" / "privacyqa"
-)
+_LOCAL_CSV_DIR = Path(__file__).resolve().parents[2] / "dataset" / "privacyqa"
 
 
 def _load_from_local() -> pd.DataFrame:
@@ -214,6 +269,7 @@ def _coerce_columns(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(
             f"PrivacyQA frame is missing columns {missing}; got {list(df.columns)}"
         )
+
     # Normalise label to Y/N
     def _norm(x):
         s = str(x).strip().lower()

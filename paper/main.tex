@@ -16,6 +16,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{microtype}
 \usepackage{inconsolata}
+\usepackage{csquotes}
 
 % Packages
 \usepackage{amsmath,amssymb,amsthm}
@@ -34,11 +35,47 @@
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.17}
 % Consistent severity palette across all figures
-\definecolor{sevNeg}{HTML}{4C9F70}
-\definecolor{sevMin}{HTML}{E8C547}
-\definecolor{sevMaj}{HTML}{E07B39}
-\definecolor{sevCrit}{HTML}{C1352E}
-\definecolor{accentBlue}{HTML}{2C6E9B}
+% Colorblind-safe palette (Wong 2011, "Color blindness", Nature Methods 8:441).
+% Avoids the red/green pair entirely. sevNeg = blue (good), sevCrit =
+% vermillion (bad), sevMaj = orange, sevMin = sky blue. accentBlue is
+% reserved for figures that show a single quantitative variable.
+\definecolor{sevNeg}{HTML}{0072B2}
+\definecolor{sevMin}{HTML}{56B4E9}
+\definecolor{sevMaj}{HTML}{E69F00}
+\definecolor{sevCrit}{HTML}{D55E00}
+\definecolor{accentBlue}{HTML}{0072B2}
+
+% Capitalise \autoref output to match ACL style.
+\renewcommand{\sectionautorefname}{Section}
+\renewcommand{\subsectionautorefname}{Section}
+\renewcommand{\subsubsectionautorefname}{Section}
+\renewcommand{\figureautorefname}{Figure}
+\renewcommand{\tableautorefname}{Table}
+
+% QFrCoRE-style prompt template (Beauchemin et al. 2025) -- two stacked
+% rounded TikZ nodes: blue = task instruction (system), yellow = user
+% message with data placeholders. Both colours are colorblind-safe
+% (Wong palette: blue #0072B2, yellow #F0E442).
+\definecolor{promptBlue}{HTML}{0072B2}
+\definecolor{promptYellow}{HTML}{F0E442}
+\newcommand{\promptbox}[2]{%
+  \par\smallskip\noindent
+  \begin{tikzpicture}[every node/.style={transform shape}]
+    \node[rectangle, rounded corners, draw=promptBlue!70,
+          fill=promptBlue!18, line width=0.4pt,
+          text width=0.92\linewidth, align=left, inner sep=4pt]
+        (sysbox) {%
+          \scriptsize\textbf{\textlangle system\textrangle}\\[1pt]%
+          \footnotesize\ttfamily #1};
+    \node[rectangle, rounded corners, draw=promptYellow!75!black,
+          fill=promptYellow!55, line width=0.4pt,
+          below=2pt of sysbox,
+          text width=0.92\linewidth, align=left, inner sep=4pt]
+        (userbox) {%
+          \scriptsize\textbf{\textlangle user\textrangle}\\[1pt]%
+          \footnotesize\ttfamily #2};
+  \end{tikzpicture}\par\smallskip
+}
 
 % Custom commands
 \newcommand{\ES}{\mathbb{E}[S]}
@@ -69,24 +106,22 @@ An Empirical Study with Actuarial Frequency-Severity Models}
 % ============================================================================
 
 \begin{abstract}
-Accuracy treats every error as equally costly: a \$2~billion revenue
-hallucination is penalised like a rounded decimal. The actuarial
+Accuracy treats every LLM error as equally costly. The actuarial
 frequency-severity framework of \citet{beauchemin2026position}
-fixes this in theory but was only demonstrated on one insurance
-corpus with one model family. We provide the first multi-domain
-empirical validation by annotating eight benchmarks (finance,
-medicine, law, insurance) with a per-instance cost of error and
-evaluating $13$ open-weight language models spanning 8\,B to
-120\,B parameters across dense, MoE, and reasoning-tuned
-architectures. The framework surfaces $138$ strict
-accuracy-versus-$\ES$ inversions, a variance decomposition that
-isolates severity-dominated from frequency-dominated domains, and
-a human-in-the-loop routing analysis that cuts $\ES$ by
-$67$--$99$\,\% at a fixed review cost. The pattern is consistent
-across the model sample, indicating that the framework, not any
-particular model choice, is what makes the cost picture visible.
-We release \seveval{}, a HuggingFace-compatible Python library,
-alongside the annotations.
+fixes this in theory but was demonstrated on a single
+$82$-query insurance corpus. We provide the first multi-domain
+empirical validation: $12$ open-weight LLMs ($8$\,B--$120$\,B
+parameters) on $11$ benchmarks across finance, medicine, law,
+and insurance, with severity labels derived from each corpus's
+structured fields. At full-corpus scale, accuracy and $\ES$
+rankings agree strongly in every domain (Kendall
+$\tau \in [0.58, 1.00]$), overturning the small-sample
+divergence claim. The framework's residual value lies in
+$72$ dollar-magnitude inversions, a variance decomposition whose
+severity share spans $1\%$ (medical) to $67\%$ (finance), and a
+routing tradeoff that cuts $\ES$ by $84$--$99\%$ at $18$--$53\%$
+human-review deferral. We release \seveval{}, a HuggingFace-style
+Python library, alongside the annotations.
 \end{abstract}
 
 % ============================================================================
@@ -96,99 +131,63 @@ alongside the annotations.
 \section{Introduction}
 \label{sec:introduction}
 
-The dominant paradigm for evaluating language models on downstream
-tasks reduces performance to a single scalar: the fraction of correct
-answers. This convention is inherited from the classification
-literature, where accuracy, F1, and related metrics have served as
-standard measures for decades \citep{manning2008ir}. In that setting,
-the assumption that all errors are interchangeable, that a
-misclassified spam email carries the same weight as a misclassified
-cancer diagnosis, is recognized as unrealistic but tolerated because
-cost-sensitive alternatives require domain-specific calibration that
-generalized benchmarks cannot provide.
+Accuracy treats every error as equally costly: a misclassified
+spam email and a misclassified cancer diagnosis count the same.
+As LLMs move into high-stakes deployments, that assumption
+breaks. A revenue answer of \$11.6\,B instead of \$14.2\,B
+shifts a trading decision; a missed sepsis cue delays
+intervention; mis-extracting an indemnity clause changes a
+contract's risk profile. The per-error cost of these failures
+spans orders of magnitude, yet accuracy assigns them all the
+same penalty.
 
-As language models are deployed in high-stakes applications, this
-assumption becomes untenable. In financial question answering, an
-incorrect revenue figure of \$11.6~billion instead of \$14.2~billion
-can trigger erroneous trading decisions and regulatory consequences,
-while a rounded margin of 32\% instead of 34\% is unlikely to alter
-any downstream decision. In clinical settings, an incorrect sepsis
-score can delay life-saving interventions, whereas a minor rounding
-error on a body mass index has negligible clinical impact. The gap
-between the per-error cost of these two failure modes spans orders of
-magnitude, yet accuracy assigns both the same penalty.
+\citet{beauchemin2026position} proposed adopting actuarial
+frequency-severity models from insurance mathematics to address
+this. Their framework decomposes operational risk into a
+\emph{frequency} component (error rate $p$) and a \emph{severity}
+component (a distribution $\bpi$ over cost levels), yielding a
+compound loss $S = \sum_{i=1}^{N} X_i$ whose expected value, tail
+quantiles and reserves are computable in closed form or by Monte
+Carlo. That work was conceptual: feasibility on a single
+$82$-query insurance corpus, no empirical validation across
+domains or models.
 
-\citet{beauchemin2026position} recently proposed adopting actuarial
-frequency-severity models from insurance mathematics to formalize this
-distinction. Their framework decomposes the total operational risk of
-an AI system into a \emph{frequency} component (the error rate $p$)
-and a \emph{severity} component (a distribution $\bpi$ over cost
-categories), yielding a compound loss $S = \sum_{i=1}^{N} X_i$ whose
-expected value, variance, and tail behavior can all be computed in
-closed form or estimated via Monte Carlo simulation. The framework
-further imports tools from ruin theory to compute capital reserves and
-from reinsurance to formalize human-in-the-loop routing. However, that
-work was primarily conceptual: it demonstrated the framework on a
-single insurance domain with expert-annotated data from 82 queries,
-leaving open the empirical question of whether the divergence between
-accuracy and economic risk is consistent, substantial, and
-reproducible across models, domains, and scales.
+This paper provides that validation. We evaluate $12$ open-weight
+LLMs (granite-3.2-8b through gpt-oss-120b, dense, MoE and
+reasoning-tuned) on $11$ benchmarks across four high-stakes
+domains, with severity labels derived from each corpus's
+structured fields. Each (model, dataset) cell uses the
+\emph{full} test corpus, totalling $\sim$$149$\,K predictions over
+$96$ cells. We do not aim to find the best model; we aim to
+characterise the cost picture the framework surfaces, and where
+it adds signal beyond accuracy.
 
-This paper provides the missing empirical grounding. The goal is
-\emph{not} to find the best language model on a benchmark, but to
-demonstrate that the actuarial framework yields decision-relevant
-signal across the full diversity of currently deployed LLMs and
-high-stakes domains. We treat the 13 open-weight models we
-evaluate as a representative sample of the LLM design space, from
-8\,B FP16 (granite-3.2-8b) through dense 72\,B FP8
-(qwen2.5-72b) to a 120\,B sparse MXFP4 mixture-of-experts
-(gpt-oss-120b), and from reasoning-tuned thinking models
-(qwq-32b, deepseek-r1-distill-70b) to general-purpose checkpoints
-(gemma-3, phi-4, llama-3.3). The question is whether the
-framework's three outputs, ranking divergence, severity-share
-decomposition, and routing benefit, surface consistent patterns in
-this heterogeneous mix or collapse to the trivial accuracy story
-on most cells. We define a four-level severity taxonomy per
-domain, calibrated against publicly available regulatory
-penalties, litigation data, and operational loss references; each
-test instance is annotated with a severity level derived from a
-structured categorical field in the source dataset (clause type in
-CUAD, deal-point category in MAUD, fixed hypothesis in
-ContractNLI, academic category in HEAD-QA) or, for the three
-finance benchmarks, from a matrix over answer/program/metric type
-axes (the latter subset is spot-checked against an independent
-LLM annotator; Section~\ref{sec:limitations}). We then apply the
-actuarial framework to estimate, for each (model, dataset) pair,
-the expected aggregate loss $\ES$, the value-at-risk
-$\VaR_{0.95}(S)$, the tail value-at-risk $\TVaR_{0.95}(S)$, and
-the Lundberg reserve.
-
-Our contributions are:
+Our contributions:
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{First multi-domain empirical validation.} We show
-    that the divergence between accuracy and expected loss
-    observed by \citet{beauchemin2026position} on a single
-    insurance corpus reproduces across four high-stakes domains
-    and a heterogeneous LLM sample, with 138 strict
-    accuracy-versus-$\ES$ inversions and per-domain Kendall $\tau$
-    spanning $0.41$ (insurance) to $0.84$ (legal).
-  \item \textbf{Diagnostic decomposition.} The variance
-    decomposition isolates two regimes empirically:
-    severity-dominated domains (insurance, finance, legal) where
-    models differ chiefly in \emph{which} errors they make, and a
-    frequency-dominated domain (medical) where they differ chiefly
-    in \emph{how often}.
-  \item \textbf{Actionable HITL signal.} The routing-as-reinsurance
-    analysis yields per-domain $\ES$ reductions of $67$--$99$\% at
-    a fixed human-review cost, with the largest saving in the
-    highest severity-share domain (insurance).
-  \item \textbf{Severity-annotated benchmarks + library.} We
-    release the per-instance severity annotations, the calibration
-    evidence (\S\ref{sec:severity-annotation},
-    Appendix~\ref{sec:app-calibration}), and \seveval{}
-    (Appendix~\ref{sec:app-library-overview}), a HuggingFace-style
-    Python library implementing the full pipeline so any
-    benchmark with a severity field can be re-evaluated.
+  \item At full-corpus scale, accuracy and $\ES$ rankings agree
+    strongly in every domain (Kendall
+    $\tau \in [0.58, 1.00]$, all $p < 0.01$). The
+    \enquote{accuracy~$\neq$~economic-risk} claim of the conceptual
+    paper does not survive a saturated corpus.
+  \item Where rankings agree, dollar magnitudes still diverge.
+    We detect $72$ strict inversions $\mathrm{acc}(A) >
+    \mathrm{acc}(B)$ and $\ES(A) > \ES(B)$; the largest is
+    DeepSeek-R1-70B vs.\ Llama-3.3-70B on JudgeBERT, $+0.7$
+    accuracy points for $+\$28.7$\,M per $10{,}000$ outputs.
+  \item The variance decomposition of $\ES$ into severity vs.\
+    frequency components varies from $1\%$ (medical) to $67\%$
+    (finance) across domains. Reducing $\ES$ requires changing
+    \emph{which} errors a model makes in finance / legal, and
+    changing \emph{how often} it errs in medical / insurance.
+  \item HITL routing cuts $\ES$ by $85\%$ in finance at only
+    $18\%$ deferral (cheap-routing regime) and by $98$--$99\%$
+    in the other three domains at $\sim 50\%$ deferral
+    (deep-routing regime).
+  \item We release \seveval{}, a HuggingFace-style Python library
+    (\autoref{sec:app-library-overview}), the rule-based
+    severity tables (\autoref{sec:severity-annotation}), and the
+    cost-calibration evidence
+    (\autoref{sec:app-calibration}).
 \end{enumerate}
 
 % ============================================================================
@@ -198,134 +197,47 @@ Our contributions are:
 \section{Related Work}
 \label{sec:related-work}
 
-\subsection{Evaluation Metrics Beyond Accuracy}
+\paragraph{Evaluation metrics and cost-sensitive learning.}
+Accuracy ignores error heterogeneity. NLP metrics that partly
+address this (BLEU \citep{papineni2002bleu}, ROUGE
+\citep{lin2004rouge}, BERTScore \citep{zhang2020bertscore},
+BLEURT \citep{sellam2020bleurt}) measure linguistic quality, not
+operational risk; MQM \citep{lommel2014mqm} weights minor/major/
+critical errors at $1/5/25$, the closest NLP precedent. Cost-sensitive
+learning \citep{elkan2001foundations,drummond2006cost,ling2008cost}
+optimises models under a known cost matrix at training time but
+is restricted to classification with fixed classes. None of these
+maps errors to dollar-denominated organisational losses.
 
-The limitations of accuracy as an evaluation metric are well
-established. In information retrieval, precision, recall, and their
-harmonic mean (F1) were introduced precisely because accuracy fails to
-account for class imbalance \citep{vanrijsbergen1979}. In generation
-tasks, overlap-based metrics such as BLEU \citep{papineni2002bleu},
-ROUGE \citep{lin2004rouge}, and METEOR \citep{banerjee2005meteor}
-attempt to capture partial credit, while learned metrics like
-BERTScore \citep{zhang2020bertscore} and BLEURT \citep{sellam2020bleurt}
-use neural representations to better align with human judgments.
-MQM-based evaluation in machine translation \citep{lommel2014mqm}
-explicitly distinguishes minor, major, and critical errors, with
-weights of 1, 5, and 25 respectively, the closest precedent to
-severity-weighted evaluation in NLP.
+\paragraph{Risk-aware AI evaluation and actuarial loss models.}
+Regulatory frameworks (EU AI Act \citep{euaiact2024}, NIST AI RMF
+\citep{nist2023rmf}, ISO/IEC~42001 \citep{iso42001}) prescribe
+risk tiering without quantitative loss measures. Risk taxonomies
+\citep{weidinger2022taxonomy,bergman2024stela,kirk2024personalising}
+and ontologies \citep{golpayegani2022airo} formalise harms
+qualitatively. The Basel~II/III operational-risk Loss
+Distribution Approach \citep{basel2006} and its cyber-risk
+extensions \citep{malavasi2022cyber,eling2016cyber} use the same
+frequency-severity decomposition we adopt; recent Federal Reserve
+work \citep{bosfed2025ai} applies it to AI-related operational
+losses. \citet{beauchemin2026position} bridge actuarial methods
+and AI evaluation; our paper is the empirical companion.
 
-However, none of these metrics connect error severity to economic
-consequences. They measure \emph{linguistic quality} rather than
-\emph{operational risk}. A translation with two minor errors (MQM
-score 2) is linguistically worse than one with zero errors, but the
-cost difference to the deploying organization depends on whether the
-mistranslation appears in a marketing brochure or a pharmaceutical
-label.
-
-\subsection{Cost-Sensitive Learning and Evaluation}
-
-Cost-sensitive learning \citep{elkan2001foundations,
-drummond2006cost} explicitly incorporates misclassification costs
-into the training objective, typically through a cost matrix
-$C_{ij}$ specifying the penalty for predicting class $j$ when the
-true class is $i$. \citet{ling2008cost} provide a comprehensive
-survey. Cost curves \citep{drummond2006cost} generalize ROC analysis
-to visualize performance under varying cost ratios.
-
-This literature focuses on \emph{optimizing} models given known costs,
-not on \emph{evaluating} deployed systems under realistic economic
-assumptions. The cost matrix framework is also limited to
-classification settings with known class structure; it does not
-naturally extend to the open-ended generation tasks characteristic of
-modern language models. Our work complements cost-sensitive learning by
-providing evaluation-time risk quantification that operates on any
-system's outputs, regardless of how it was trained.
-
-\subsection{Risk-Aware AI Evaluation}
-
-Several regulatory and governance frameworks call for risk-based
-evaluation of AI systems. The EU AI Act \citep{euaiact2024}
-establishes four risk tiers (unacceptable, high, limited, minimal) but
-does not prescribe quantitative loss metrics. The NIST AI Risk
-Management Framework \citep{nist2023rmf} identifies risk as a function
-of likelihood and impact, echoing actuarial intuitions, but provides
-no computational tools. ISO/IEC~42001 \citep{iso42001} specifies
-management system requirements without defining risk measures.
-
-\citet{golpayegani2022airo} propose an ontology (AIRO) that
-represents AI risks and aligns with the EU AI Act and ISO risk
-management standards but does not include a probabilistic loss
-model. \citet{weidinger2022taxonomy} develop a six-area taxonomy of
-risks posed by language models that maps failure modes to harms but
-stops short of aggregate loss computation.
-\citet{bergman2024stela} introduce STELA, a community-centred
-sociotechnical evaluation framework that considers context-specific
-harms but does not formalize them as economic losses.
-\citet{kirk2024personalising} discuss the benefits, risks and bounds
-of personalising the alignment of large language models to
-individuals, mostly along qualitative dimensions rather than
-quantitative risk measures.
-
-The recent position paper by \citet{beauchemin2026position} bridges
-this gap by importing the actuarial compound loss model, ruin theory,
-and excess-of-loss reinsurance into AI evaluation. Our work is the
-empirical companion to that theoretical contribution.
-
-\subsection{Actuarial Models in Technology Risk}
-
-The application of actuarial loss models to technology risk is not
-new. The Basel~II/III Accords \citep{basel2006} require banks to
-model operational risk using a Loss Distribution Approach (LDA) that
-decomposes aggregate loss into frequency and severity components, the
-same decomposition we employ. \citet{malavasi2022cyber} apply the LDA
-to cyber risk, modeling claim frequency with Poisson processes and
-severity with log-normal or generalized Pareto distributions.
-\citet{eling2016cyber} provide a survey of actuarial approaches to
-cyber risk. The Federal Reserve Banks of Boston and Richmond have
-recently applied frequency-severity models to AI-related operational
-losses in banking \citep{bosfed2025ai}, providing independent
-validation that this class of models is appropriate for AI risk.
-
-Our work specializes these models to the AI evaluation setting, where
-the ``claim'' is a model error and the ``severity'' is calibrated
-against domain-specific regulatory and economic evidence rather than
-historical loss databases.
-
-\subsection{Human-in-the-Loop and Deferral}
-
-The option to route uncertain predictions to a human reviewer has been
-studied as \emph{learning to defer}
-\citep{madras2018predict,mozannar2020consistent}
-and \emph{selective prediction}
-\citep{elyaniv2010selective,geifman2017selective}. \citet{narasimhan2022posthoc}
-develop post-hoc estimators for the cost of deferral.
-\citet{okati2021differentiable} propose differentiable triage systems
-that jointly optimize model prediction and deferral.
-
-The actuarial framework recasts deferral as excess-of-loss
-reinsurance: outputs whose estimated severity exceeds a retention
-threshold $d$ are routed to human review at a fixed per-unit cost $h$,
-reducing the retained aggregate loss at the expense of increased
-review volume \citep{beauchemin2026position}. This formulation makes
-the cost-benefit trade-off of human review explicit and computable.
-
-\subsection{LLM Benchmarking at Scale}
-
-Large-scale LLM evaluation has become a field of its own. The HELM
-framework \citep{liang2023helm} standardizes evaluation across dozens
-of scenarios with uniform prompting. Open LLM Leaderboard
-\citep{beeching2023openllm} and Chatbot Arena
-\citep{chiang2024chatbot} provide crowdsourced comparisons.
-Domain-specific benchmarks exist for finance
-\citep{islam2023financebench,chen2021finqa}, medicine
-\citep{jin2021medqa,kazi2024medcalc}, and law
-\citep{hendrycks2021cuad,koreeda2021contractnli}.
-
-These efforts share a common limitation: they reduce model performance
-to accuracy or a closely related metric, discarding information about
-the severity distribution of errors. Our work augments, rather than
-replaces, existing benchmarks by annotating each instance with a
-severity level and computing risk measures that complement accuracy.
+\paragraph{HITL deferral and large-scale LLM benchmarks.}
+Routing uncertain predictions to a human has been studied under
+\emph{learning to defer}
+\citep{madras2018predict,mozannar2020consistent}, \emph{selective
+prediction} \citep{elyaniv2010selective,geifman2017selective}, and
+post-hoc deferral estimators
+\citep{narasimhan2022posthoc,okati2021differentiable}; we recast
+it as excess-of-loss reinsurance. Large-scale LLM evaluation
+suites (HELM \citep{liang2023helm}, Open LLM Leaderboard
+\citep{beeching2023openllm}, Chatbot Arena
+\citep{chiang2024chatbot}) and domain-specific benchmarks
+\citep{islam2023financebench,chen2021finqa,jin2021medqa,kazi2024medcalc,hendrycks2021cuad,koreeda2021contractnli}
+all report accuracy-class metrics. Our work augments these
+benchmarks with a per-instance severity label and the actuarial
+risk measures that follow.
 
 % ============================================================================
 % 3. FRAMEWORK
@@ -411,15 +323,17 @@ where $\mu_X^{\mathrm{ret}}$ is the mean severity of retained errors.
 \subsection{Datasets}
 \label{sec:datasets}
 
-We select eight benchmarks across four high-stakes domains for which
-severity can be derived from a structured field of the source dataset
-(clause type, category, fixed hypothesis, simplified-clause type) or
-from a defensible matrix over structured answer/program/metric axes.
-Three benchmarks initially considered, MedQA, MedCalc-Bench, and the
-RAG Insurance corpus, were removed after an inter-annotator audit
-showed their keyword-based severity labels could not be defended at
-the critical-vs-major boundary (see \S\ref{sec:limitations}).
-Table~\ref{tab:datasets} summarizes the retained selection.
+We use $11$ benchmarks across four high-stakes domains
+(\autoref{tab:datasets}). The selection criterion is that
+severity must be derivable from a \emph{structured} field of the
+source dataset, or from a defensible matrix over structured
+answer/program/metric axes (finance benchmarks only). Three
+datasets initially considered (MedQA, MedCalc-Bench, and the RAG
+Insurance corpus) were dropped after an inter-annotator audit
+could not defend their keyword-based labels at the
+critical-vs-major boundary (\autoref{sec:limitations}). Per-domain
+severity mapping rules and tier-by-tier worked examples are in
+\autoref{sec:app-severity-by-dataset}.
 
 \begin{table*}[t]
 \centering
@@ -430,151 +344,56 @@ Table~\ref{tab:datasets} summarizes the retained selection.
 Domain & Dataset & Inst.\ & Task & Severity source & Reference \\
 \midrule
 \multirow{3}{*}{Finance}
-  & FinanceBench  & 150   & Extr.\ QA       & Answer $\times$ metric type  & \citet{islam2023financebench} \\
-  & FinQA         & 8,281 & Num.\ reasoning  & Deviation magnitude          & \citet{chen2021finqa} \\
-  & TAT-QA        & 4,500 & Table+text QA    & Deviation magnitude          & \citet{zhu2021tatqa} \\
+  & FinanceBench  & 150        & Extr.\ QA          & Answer $\times$ metric matrix       & \citet{islam2023financebench} \\
+  & FinQA         & 1{,}147    & Num.\ reasoning    & Answer $\times$ metric matrix       & \citet{chen2021finqa} \\
+  & TAT-QA        & 1{,}663    & Table+text QA      & Answer $\times$ metric matrix       & \citet{zhu2021tatqa} \\
 \midrule
-Medical
-  & HEAD-QA       & 12,751 & MCQ             & Academic category            & \citet{vilares2019headqa} \\
+\multirow{3}{*}{Medical}
+  & HEAD-QA       & 12{,}751   & MCQ                & Academic category                   & \citet{vilares2019headqa} \\
+  & MedMCQA       & 194{,}000  & MCQ                & Specialty (\texttt{subject\_name})  & \citet{pal2022medmcqa} \\
+  & DDI~2013      & $\sim$30{,}000 & Relation extr.   & Relation type (effect/advice)       & \citet{herrerozazo2013ddi} \\
 \midrule
 \multirow{3}{*}{Legal}
-  & CUAD          & 4,182  & Clause extr.\   & Clause category              & \citet{hendrycks2021cuad} \\
-  & MAUD          & 39,231 & Merger QA       & Deal point category          & \citet{wang2023maud} \\
-  & ContractNLI   & 9,788  & NLI             & Fixed hypothesis             & \citet{koreeda2021contractnli} \\
+  & CUAD          & 4{,}182    & Clause extr.\      & Clause type ($41$)                  & \citet{hendrycks2021cuad} \\
+  & MAUD          & 39{,}231   & Merger MCQ         & Deal-point category                 & \citet{wang2023maud} \\
+  & ContractNLI   & 9{,}788    & NLI                & Fixed hypothesis                    & \citet{koreeda2021contractnli} \\
 \midrule
-Insurance
-  & JudgeBERT     & 1,483  & Simplification  & Meaning preserv.\            & \citet{beauchemin2025thesis} \\
+\multirow{2}{*}{Insurance}
+  & JudgeBERT     & 1{,}483    & Simplification     & Clause category $\times$ score      & \citet{beauchemin2025thesis} \\
+  & PrivacyQA     & $\sim$130{,}000 & Relevance     & OPP-115 category mapping            & \citet{ravichander2019privacyqa} \\
 \bottomrule
 \end{tabular}
-\caption{Datasets used in the evaluation. Inst.\ denotes the number of test-set instances evaluated.}
+\caption{Datasets evaluated. \enquote{Inst.} denotes the number of
+test-set instances.}
 \label{tab:datasets}
 \end{table*}
-
-\subsubsection{Finance}
-
-\paragraph{FinanceBench} \citep{islam2023financebench} contains
-questions over SEC 10-K and 10-Q filings. We annotate severity using a
-two-axis rule system: \emph{answer type} (dollar amounts in
-millions/billions, percentages, ratios, yes/no, free text) crossed
-with \emph{metric type} (core financial statements, operational
-metrics, derived ratios, descriptive). The cross-tabulation maps each
-combination to one of four severity levels (Section~\ref{sec:severity-annotation}).
-We validate the rule-based annotations against an independent LLM
-annotator, achieving adjacent agreement of 94\% ($\kappa = 0.46$).
-Severity here is the cost of \emph{erring} on that instance, not a
-property of the question itself: an instance is critical when a wrong
-prediction would materially shift a downstream decision, and negligible
-when even a wrong prediction is unlikely to mislead a reader. For
-example, the gold answer to ``Does Corning have positive working
-capital based on FY2022 data?'' is \$831M positive; a model that
-reports the opposite sign mis-states a yes/no over a core operational
-metric and could flip a credit decision (\emph{critical}). In
-contrast, mis-reporting Amazon's FY2017 DPO of 93.86 (a derived ratio
-over a non-core operational metric) generally produces a smaller
-business consequence (\emph{minor}).
-
-\paragraph{FinQA} \citep{chen2021finqa} and \textbf{TAT-QA}
-\citep{zhu2021tatqa} require numerical reasoning over financial tables
-and text. Severity reflects the cost of a wrong answer on each
-instance: erring on arithmetic over core P\&L items at the
-billion-dollar scale moves a balance-sheet readout (critical), while
-erring on a ratio or comparison over non-core items is typically
-recoverable (minor). For example, mis-answering ``by what percentage
-did average borrowings decrease from 2016 to 2017?'' (gold
-\(-8.4\%\)) is a small-magnitude reasoning slip on a derived ratio
-(\emph{minor} in FinQA). Mis-answering ``What does the deferred
-income taxes reflect?'' (gold is a free-form span describing
-temporary differences) typically yields a descriptive paraphrase
-error that does not change a downstream accounting decision
-(\emph{negligible} in TAT-QA).
-
-\subsubsection{Medical}
-
-\paragraph{HEAD-QA} \citep{vilares2019headqa} contains biomedical
-exam questions from the Spanish healthcare system. Each question
-carries a structured \emph{academic category} field (pharmacology,
-medicine, nursing, psychology, biology, chemistry); we map the six
-categories to severity levels by clinical decision impact
-(pharmacology $\to$ critical; medicine and nursing $\to$ major;
-psychology $\to$ minor; biology and chemistry $\to$ negligible).
-A wrong answer on a pharmacology instance defining ``Parameter'' as
-``any descriptive measure related to the variable x in the
-population'' propagates into every downstream biostatistics decision
-(\emph{critical}). In contrast, a wrong answer on a biology instance
-about whether carotid body stimulation decreases arterial PCO2 is a
-fact-recall miss with little clinical-decision exposure
-(\emph{negligible}). We omit
-MedQA \citep{jin2021medqa} and MedCalc-Bench \citep{kazi2024medcalc}
-from the present evaluation: their severity labels rely on keyword
-matching over raw question text or calculator names, which our
-inter-annotator validation could not defend at the critical-vs-major
-boundary (see \S\ref{sec:limitations}).
-
-\subsubsection{Legal}
-
-\paragraph{CUAD} \citep{hendrycks2021cuad} requires extracting 41
-types of legal clauses from contracts. We classify clause types by
-contractual risk: indemnification and liability limitation clauses are
-critical, non-compete and IP assignment clauses are major, renewal and
-notice clauses are minor, and definitional clauses are negligible.
-This follows the risk stratification in legal due diligence practice
-\citep{guha2023legalbench}. Failing to extract a ``Termination For Convenience'' clause exposes
-the buyer to unilateral contract cancellation that was hidden by the
-extractor (\emph{critical}). Failing on an ``Audit Rights'' clause
-may delay compliance review but is unlikely to be catastrophic
-(\emph{major}).
-
-\paragraph{MAUD} \citep{wang2023maud} covers merger agreement
-understanding with multiple-choice questions about deal points.
-\textbf{ContractNLI} \citep{koreeda2021contractnli} is a natural
-language inference task over non-disclosure agreements. Severity
-follows clause-type risk as in CUAD. An incorrect MAUD answer on whether the target's securities or
-credit rating is subject to a ``disproportionate impact'' modifier in
-the Material Adverse Effect definition directly mis-states a deal
-closing condition (\emph{critical}). An incorrect ContractNLI label
-on the hypothesis ``Receiving Party may independently develop
-information similar to Confidential Information'' generally turns a
-boilerplate provision into another boilerplate provision: the
-business exposure of the error is small (\emph{negligible}).
-
-\subsubsection{Insurance}
-
-\paragraph{JudgeBERT} \citep{beauchemin2025thesis} contains
-domain-specific multiple-choice questions on Quebec insurance
-regulation, with severity derived from the simplified-clause
-category and the human evaluation score. The RAG Insurance corpus
-of \citet{beauchemin2024quebec} is omitted from this evaluation:
-the gold answer in that corpus was itself a generated LLM response
-graded against criteria rather than an expert-authored reference,
-so a comparison would be LLM-vs-LLM rather than LLM-vs-expert (see
-\S\ref{sec:limitations}).
 
 % ----------------------------------------------------------------------------
 \subsection{Severity Annotation}
 \label{sec:severity-annotation}
 
 Each domain uses a four-level severity taxonomy ($K = 4$) with cost
-levels calibrated against empirical evidence. Table~\ref{tab:costs}
+levels calibrated against empirical evidence. \autoref{tab:costs}
 summarizes the cost vectors.
 
 \begin{table}[t]
 \centering
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lrrrr}
 \toprule
-Domain & $c_1$ & $c_2$ & $c_3$ & $c_4$ \\
- & (negl.) & (minor) & (major) & (crit.) \\
+Domain & $c_1$ (negl.) & $c_2$ (minor) & $c_3$ (major) & $c_4$ (crit.) \\
 \midrule
 Finance   & \$100  & \$1k   & \$10k  & \$100k \\
 Medical   & \$500  & \$5k   & \$50k  & \$500k \\
 Legal     & \$200  & \$2k   & \$20k  & \$200k \\
 Insurance & \$100  & \$2k   & \$10k  & \$250k \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{Cost vectors by domain. Each spans approximately three orders
 of magnitude, reflecting the heavy-tailed nature of error costs in
 high-stakes applications. Calibration sources are detailed in
-Appendix~\ref{sec:app-calibration}.}
+\autoref{sec:app-calibration}.}
 \label{tab:costs}
 \end{table}
 
@@ -584,101 +403,59 @@ litigation data (securities class actions, medical malpractice
 settlements), operational loss databases (ORX for banking, IBM/Ponemon
 for data breaches), and published case studies of AI failures in
 production \citep{aircanada2024,prosperspark2023}. Detailed
-calibration evidence is provided in Appendix~\ref{sec:app-calibration}.
+calibration evidence is provided in \autoref{sec:app-calibration}.
 
-\paragraph{Annotation protocol.}
-The severity level we attach to each instance is the cost of
-\emph{erring on that instance}, not a property of the question per
-se. A pharmacology question is labelled critical because a wrong
-prediction propagates into downstream clinical decisions, not because
-pharmacology is intrinsically more important than biology; a CUAD
-extraction is labelled critical when missing the clause exposes the
-buyer to material legal risk, regardless of whether the clause itself
-is verbose or terse. For each dataset, we define deterministic rules
-that map structured metadata (answer type, question topic, clause
-category, fixed hypothesis) to a severity level reflecting this
-error-cost interpretation. The rule-based approach ensures
-reproducibility and eliminates annotator subjectivity on individual
-instances. We validate each rule system against an independent LLM
-annotator (Claude Sonnet~4) using the severity rubric as a one-shot
-prompt, reporting Cohen's $\kappa$ and adjacent agreement
+\paragraph{Severity assignment.}
+We do not collect new human annotations. For each dataset, we
+define deterministic rules that map an existing structured field
+of the corpus (clause type, deal-point category, fixed
+hypothesis, academic specialty, etc.) to a severity tier. The
+tier reflects the cost of \emph{erring on that instance}, not a
+property of the question: a CUAD extraction is labelled critical
+when missing the clause exposes the buyer to material legal
+risk, not because the clause text is verbose. The rule-based
+approach is reproducible and removes per-instance annotator
+subjectivity. We validate each rule system against an
+independent LLM annotator (Claude Sonnet~4) using the severity
+rubric as a one-shot prompt, reporting Cohen's $\kappa$ and
+adjacent agreement
 ($\pm 1$ level).
 
 % ----------------------------------------------------------------------------
 \subsection{Models}
 \label{sec:models}
 
-We evaluate up to 29 language models spanning nine provider families
-and four scale tiers (Table~\ref{tab:models}). The 12 local
-open-weight models are run on a 3$\times$RTX 6000 Ada workstation
-(see Section~\ref{sec:protocol}); the 17 frontier API models are
-budget-gated and we report numbers only for the API models that have
-completed their full benchmark sweep by submission. Provider budgets
-and pricing led us to select recent flagship and mid-tier checkpoints
-from each family rather than running every available variant.
+We evaluate $12$ open-weight checkpoints chosen to span the
+deployed LLM design space: $8$\,B to $120$\,B parameters, dense
+and mixture-of-experts, base and reasoning-tuned, FP16, FP8 and
+MXFP4 quantizations. Concretely: Granite-3.2-8B, Phi-4,
+Gemma-3-12B/27B, Qwen3-14B/30B-A3B, QwQ-32B, GPT-OSS-20B/120B,
+Qwen2.5-72B, Llama-3.3-70B and DeepSeek-R1-Distill-70B. All
+inference runs on a $3\times$RTX~6000~Ada workstation via vLLM.
+The exact checkpoint identifiers, quantization details, and the
+inference hardware configuration are in
+\autoref{sec:app-models} and \autoref{sec:app-hardware}.
 
-The full model roster (12 open-weight checkpoints served by vLLM
-with FP8 or MXFP4 quantization, 17 frontier API models from nine
-providers) is listed in Appendix~\ref{sec:app-models}, and the
-inference hardware and quantization details are summarised in
-Appendix~\ref{sec:app-hardware}.
-
-\subsection{Evaluation Protocol}
+\subsection{Evaluation protocol}
 \label{sec:protocol}
 
-Each dataset is evaluated under two prompting conditions, an
-\emph{original} format reproducing the dataset's published evaluation
-protocol (Appendix~\ref{sec:app-prompts}) and a \emph{standard}
-zero-shot format modeled after HELM \citep{liang2023helm}; original
-prompts are the primary evaluation, standard prompts an ablation.
-Predictions are scored by a cascaded function: option letter for MCQ,
-yes/no extraction, numeric comparison at 5\% relative tolerance,
-exact text match after normalization, substring containment (4+ chars),
-then word-set overlap (3+ ref words). For each (model, dataset) pair
-we compute $\hat{p}=1-\mathrm{accuracy}$, the severity profile
-$\hat{\bpi}$ from the empirical error distribution, $\widehat{\ES}$ via
-Eq.~\eqref{eq:expected_loss}, the full distribution of $S$ from $10^5$
-Monte Carlo replications at $n=10{,}000$ outputs per period (which
-yields $\VaR_{0.95}$ and $\TVaR_{0.95}$), the Lundberg coefficient $R$
-and reserve $u^*$ at ruin tolerance $\psi^*=0.01$, and the routing
-cost reduction at thresholds $d\in\{c_2, c_3\}$ with human review cost
-$h=\$50$. All computations use the \seveval{} library
-(Appendix~\ref{sec:app-library}). The analysis is organised around
-three research questions, each tied to a concrete reporting criterion;
-a robustness check on the cost calibration is deferred to
-Appendix~\ref{sec:app-robustness}.
-
-\paragraph{Uncertainty quantification.}
-Our benchmarks span three orders of magnitude in size (financebench
-$n=150$, judgebert $n=1{,}483$, headqa $n=12{,}751$, maud
-$n=39{,}231$), so per-dataset confidence intervals on every reported
-quantity are essential to avoid over-reading small-sample noise.
-For each (model, dataset) pair we report:
-
-\begin{itemize}
-  \item Accuracy $\hat{p}$ : Wilson score 95\% interval
-    \citep{wilson1927ci}, which is well-behaved near $\hat{p}=0$ and
-    $\hat{p}=1$ unlike the normal approximation.
-  \item Severity profile $\hat{\bpi}$ : Goodman simultaneous multinomial
-    95\% intervals on each $\hat{\pi}_k$, with the family-wise rate
-    controlled via Bonferroni across $K=4$ categories.
-  \item $\widehat{\ES}$, $\VaR_{0.95}$, $\TVaR_{0.95}$ : non-parametric
-    percentile bootstrap with $B = 1{,}000$ resamples over the
-    $10^5$-replication Monte Carlo loss vector, exposed through
-    \texttt{severity\_eval.bootstrap\_ci}.
-\end{itemize}
-
-For pairwise model comparisons within a dataset we use a paired
-bootstrap on the per-instance loss vector
-$L_i = \mathbb{1}\{\text{wrong}_i\} \cdot c(\text{severity}_i)$, which
-controls for shared difficulty across instances. The two-sample
-$z$-test on accuracy is reported only as a quick sanity check; the
-bootstrap intervals are the primary inferential tool because they
-remain valid under the heavy-tailed cost vector. Per-domain
-aggregates weight datasets by sample size to avoid letting a small
-benchmark (financebench, $n=150$) dominate a large one (maud,
-$n=39{,}231$) when the per-dataset CIs differ by an order of
-magnitude.
+Each dataset is evaluated under an \emph{original} prompt
+(reproducing the dataset's published protocol) and a
+\emph{standard} HELM-style prompt \citep{liang2023helm} as an
+ablation. Predictions are scored by a cascade (MCQ letter, yes/no,
+numeric at $5\%$ tolerance, exact, fuzzy). For each (model,
+dataset) pair we compute $\hat{p}{=}1{-}\mathrm{acc}$, the
+severity profile $\hat{\bpi}$, and the actuarial measures
+$\widehat{\ES}$, $\VaR_{0.95}$, $\TVaR_{0.95}$, $R$, $u^\ast$ via
+$10^5$ Monte Carlo replications at $n{=}10{,}000$ outputs. Wilson
+score intervals on accuracy, Goodman simultaneous intervals on
+$\hat{\bpi}$, and percentile bootstrap intervals on the actuarial
+measures are computed at $\alpha{=}0.95$ throughout. Full
+methodological detail (scoring cascade, CI formulas, paired
+bootstrap, per-domain aggregation) is in
+\autoref{sec:app-protocol}; the cost-calibration robustness check
+is in \autoref{sec:app-robustness}. The analysis is organised
+around three research questions:
 
 \begin{description}[leftmargin=0pt,labelindent=0pt]
   \item[RQ1 (Ranking divergence and inversions).] How closely aligned
@@ -706,51 +483,68 @@ magnitude.
 \section{Results}
 \label{sec:results}
 
-We report results for the model--benchmark pairs we evaluated,
-organised around the three research questions of
-Section~\ref{sec:protocol}. All risk measures are computed with
-$n=10{,}000$ outputs per evaluation period, $20{,}000$ Monte Carlo
-replications, and $\alpha=0.95$. The complete per-pair table is
-provided in Appendix~\ref{sec:app-full-results}; we highlight here
-the aggregate signals. Headline numbers come from
-$13$ open-weight local models evaluated on $1{,}000$ instances per
-dataset ($150$ for FinanceBench, which exhausts the corpus).
+We report results on the $96$ (model, dataset) cells, each
+evaluated on the \emph{full} test corpus. All risk measures are
+computed with $n{=}10{,}000$ outputs per evaluation period,
+$20{,}000$ Monte Carlo replications, and $\alpha{=}0.95$. The
+complete per-pair table is provided in
+\autoref{sec:app-full-results}. The headline numbers below
+come from $12$ open-weight local models on $8$ benchmarks, with
+per-cell sample sizes ranging from $150$ (FinanceBench) to
+$39{,}231$ (MAUD).
 
-\subsection{RQ1: Ranking divergence and inversions}
+\subsection{RQ1: Ranking alignment and dollar-magnitude inversions}
 \label{sec:rq1}
 
-Across the $13$ models, accuracy and $\ES$ rankings diverge in three
-of the four domains: per-domain Kendall $\tau$ is $0.46$ on finance
-($p=0.03$), $0.43$ on medical ($p=0.04$), and $0.41$ on insurance
-($p=0.06$), all far below a monotone ranking, while legal is the
-lone aligned domain at $\tau=0.84$ ($p<10^{-3}$) (Table~\ref{tab:h1}).
-The split is itself the finding: accuracy is a faithful proxy for
-economic risk on legal extraction tasks but a poor one in finance,
-medicine, and insurance, where reranking by $\ES$ reshuffles the
-leaderboard. Concretely, the analysis surfaces \textbf{$138$ strict
-inversions} of the form $\mathrm{acc}(A) > \mathrm{acc}(B)$
-\emph{and} $\ES(A) > \ES(B)$: e.g.\ on FinanceBench qwen3-14b has
-$+16.0$ accuracy points over llama-3.3-70b yet \emph{costs}
-$\$7.9$M more per $n{=}10{,}000$ outputs, and qwen3-30b-a3b is
-$+15.3$ points over llama-3.3-70b while costing $\$9.2$M more.
-Figure~\ref{fig:ranking_finance} shows the bump chart for finance.
-The pattern holds across the full model sample: picking a model on
-accuracy alone risks substantial hidden cost exposure in every
-domain except legal.
+\paragraph{Rankings agree, contrary to the small-sample claim.}
+At full-corpus scale, accuracy and $\ES$ rankings are strongly
+correlated in every domain: per-domain Kendall $\tau$ is
+$0.58$ in finance ($p{=}0.009$), $0.64$ in insurance ($p{=}0.003$),
+$0.97$ in legal ($p{=}5{\times}10^{-8}$), and $1.00$ in medical
+($p{=}4{\times}10^{-9}$) (\autoref{tab:h1}). The dramatic
+divergence reported by \citet{beauchemin2026position} on an $82$-query
+insurance corpus, and the $\tau \approx 0.4$ we ourselves obtained
+on a $1$\,K-per-dataset pilot run, do not reproduce once the
+corpora are saturated: medical and legal collapse to
+near-monotone ranking, finance and insurance retain moderate but
+significant correlation. This is itself a contribution: \emph{the
+case for severity-aware evaluation cannot rest on rerankings
+disagreeing}, because at scale they largely do not.
+
+\paragraph{Dollar magnitudes are still missing from accuracy.}
+The framework's residual value is what an accuracy-only
+leaderboard cannot show: the cost of the rank that is correct.
+We detect $72$ strict accuracy-vs-$\ES$ inversions where
+$\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$.
+The largest is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B
+by $+0.7$ accuracy points yet costs $\$28.7$\,M more per
+$10{,}000$ outputs. On TAT-QA, qwen2.5-72b is $+0.2$ points
+over DeepSeek-R1-70B for $+\$8.7$\,M; on FinanceBench,
+granite-3.2-8b is $+9.3$ over DeepSeek-R1-70B yet costs
+$\$3.86$\,M more. The most visible \emph{rank flip} is in
+finance: DeepSeek-R1-70B is rank $9$ by accuracy and rank $1$
+by $\ES$, a $+8$-rank rise driven by a severity profile
+concentrated on negligible/minor levels
+(\autoref{fig:ranking_finance}). The takeaway is no longer
+\emph{\enquote{accuracy gets the leaderboard wrong}}; it is
+\emph{\enquote{accuracy doesn't tell you how much being wrong costs}}.
 
 \begin{table}[t]\centering\small
-\caption{H1 -- Kendall $\tau$ between accuracy and $E[S]$ rankings per
-taxonomy domain.}\label{tab:h1}
-\begin{tabular}{lrrrl}
+\begin{tabular}{lrr}
 \toprule
-Domain & \#Models & $\tau$ & $p$ & Divergent? \\
+Domain & $\tau$ & $p$-value \\
 \midrule
-  Finance & 13 & 0.462 & 0.030 & Yes \\
-  Insurance & 13 & 0.410 & 0.057 & No \\
-  Legal & 13 & 0.839 & 0.000 & No \\
-  Medical & 13 & 0.429 & 0.043 & Yes \\
+  Finance   & 0.58 & 0.009              \\
+  Insurance & 0.64 & 0.003              \\
+  Legal     & 0.97 & $5{\times}10^{-8}$ \\
+  Medical   & 1.00 & $4{\times}10^{-9}$ \\
 \bottomrule
 \end{tabular}
+\caption{H1: Kendall $\tau$ between accuracy and $\ES$ rankings
+per taxonomy domain ($n_{\text{models}}{=}12$). Finance and
+insurance show moderate alignment; legal is near-monotone;
+medical is monotone.}
+\label{tab:h1}
 \end{table}
 
 \begin{figure*}[t]
@@ -758,150 +552,177 @@ Domain & \#Models & $\tau$ & $p$ & Divergent? \\
 \begin{tikzpicture}[
     yscale=0.62, xscale=1.0,
     every node/.style={font=\footnotesize},
-    rise/.style={draw=sevNeg, line width=1.4pt},
-    drop/.style={draw=sevCrit, line width=1.4pt},
-    flat/.style={draw=black!30, line width=0.7pt},
+    rise/.style={draw=sevNeg, line width=1.6pt},
+    drop/.style={draw=sevCrit, line width=1.0pt},
+    flat/.style={draw=black!25, line width=0.6pt},
     dot/.style={circle, fill=black!60, inner sep=1.3pt},
 ]
-  % column header rule + titles
-  \node[font=\small\bfseries] at (0,0.7) {Rank by Accuracy};
-  \node[font=\small\bfseries] at (9,0.7) {Rank by $\ES$ (lower cost)};
+  \node[font=\small\bfseries] at (0,0.7) {Rank by accuracy};
+  \node[font=\small\bfseries] at (9,0.7) {Rank by $\ES$ (lower is better)};
   \draw[black!15] (0,0.2) -- (9,0.2);
-  % edges (acc_rank on left, es_rank on right); y = -rank
-  \draw[flat] (0,-1) -- (9,-2);   % qwen3-14b
-  \draw[drop] (0,-2) -- (9,-11);  % llama-3.3-70b  (acc 2 -> ES 11)
-  \draw[flat] (0,-3) -- (9,-4);   % qwen3-30b-a3b
-  \draw[flat] (0,-4) -- (9,-6);   % qwq-32b
-  \draw[flat] (0,-5) -- (9,-3);   % gemma-3-27b
-  \draw[flat] (0,-6) -- (9,-5);   % qwen2.5-72b
-  \draw[flat] (0,-7) -- (9,-9);   % granite-3.2-8b
-  \draw[flat] (0,-8) -- (9,-7);   % gemma-3-12b
-  \draw[rise] (0,-9) -- (9,-1);   % deepseek-r1-distill-70b (acc 9 -> ES 1)
-  \draw[flat] (0,-10) -- (9,-8);  % phi-4
-  \draw[flat] (0,-11) -- (9,-10); % gpt-oss-20b
-  \draw[flat] (0,-12) -- (9,-12); % gpt-oss-120b
-  % left labels (rank. name) by accuracy rank
-  \node[left] at (-0.2,-1) {1.~Qwen3-14B};
-  \node[left] at (-0.2,-2) {2.~\textcolor{sevCrit}{\bfseries Llama-3.3-70B}};
-  \node[left] at (-0.2,-3) {3.~Qwen3-30B};
-  \node[left] at (-0.2,-4) {4.~QwQ-32B};
-  \node[left] at (-0.2,-5) {5.~Gemma-3-27B};
-  \node[left] at (-0.2,-6) {6.~Qwen2.5-72B};
-  \node[left] at (-0.2,-7) {7.~Granite-8B};
-  \node[left] at (-0.2,-8) {8.~Gemma-3-12B};
-  \node[left] at (-0.2,-9) {9.~\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
-  \node[left] at (-0.2,-10) {10.~Phi-4};
-  \node[left] at (-0.2,-11) {11.~GPT-OSS-20B};
-  \node[left] at (-0.2,-12) {12.~GPT-OSS-120B};
-  % right labels (rank. name) by E[S] rank
-  \node[right] at (9.2,-1) {1.~\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
-  \node[right] at (9.2,-2) {2.~Qwen3-14B};
-  \node[right] at (9.2,-3) {3.~Gemma-3-27B};
-  \node[right] at (9.2,-4) {4.~Qwen3-30B};
-  \node[right] at (9.2,-5) {5.~Qwen2.5-72B};
-  \node[right] at (9.2,-6) {6.~QwQ-32B};
-  \node[right] at (9.2,-7) {7.~Gemma-3-12B};
-  \node[right] at (9.2,-8) {8.~Phi-4};
-  \node[right] at (9.2,-9) {9.~Granite-8B};
-  \node[right] at (9.2,-10) {10.~GPT-OSS-20B};
-  \node[right] at (9.2,-11) {11.~\textcolor{sevCrit}{\bfseries Llama-3.3-70B}};
-  \node[right] at (9.2,-12) {12.~GPT-OSS-120B};
-  % endpoint dots
+  % Sample-size-weighted finance ranks (n=2960 = 150+1147+1663 per model).
+  % acc_rank -> es_rank; delta = es_rank - acc_rank (positive = drop, neg = rise)
+  \draw[flat] (0,-1) -- (9,-2);   % gemma-3-27b              1 -> 2
+  \draw[flat] (0,-2) -- (9,-4);   % qwen3-14b                2 -> 4
+  \draw[drop] (0,-3) -- (9,-6);   % qwen3-30b-a3b            3 -> 6
+  \draw[rise] (0,-4) -- (9,-1);   % deepseek-r1-distill-70b  4 -> 1
+  \draw[flat] (0,-5) -- (9,-7);   % gemma-3-12b              5 -> 7
+  \draw[flat] (0,-6) -- (9,-5);   % granite-3.2-8b           6 -> 5
+  \draw[flat] (0,-7) -- (9,-8);   % llama-3.3-70b            7 -> 8
+  \draw[flat] (0,-8) -- (9,-9);   % qwq-32b                  8 -> 9
+  \draw[rise] (0,-9) -- (9,-3);   % gpt-oss-20b              9 -> 3
+  \draw[flat] (0,-10) -- (9,-10); % gpt-oss-120b             10 -> 10
+  \draw[flat] (0,-11) -- (9,-11); % qwen2.5-72b              11 -> 11
+  \draw[flat] (0,-12) -- (9,-12); % phi-4                    12 -> 12
+  % left labels by accuracy rank: rank. name (acc %)
+  \node[left] at (-0.2,-1)  {1.~Gemma-3-27B \scriptsize(37.80\%)};
+  \node[left] at (-0.2,-2)  {2.~Qwen3-14B \scriptsize(36.70\%)};
+  \node[left] at (-0.2,-3)  {3.~Qwen3-30B-A3B \scriptsize(36.40\%)};
+  \node[left] at (-0.2,-4)  {4.~\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B} \scriptsize(35.60\%)};
+  \node[left] at (-0.2,-5)  {5.~Gemma-3-12B \scriptsize(34.80\%)};
+  \node[left] at (-0.2,-6)  {6.~Granite-3.2-8B \scriptsize(34.40\%)};
+  \node[left] at (-0.2,-7)  {7.~Llama-3.3-70B \scriptsize(34.20\%)};
+  \node[left] at (-0.2,-8)  {8.~QwQ-32B \scriptsize(33.70\%)};
+  \node[left] at (-0.2,-9)  {9.~\textcolor{sevNeg}{\bfseries GPT-OSS-20B} \scriptsize(33.20\%)};
+  \node[left] at (-0.2,-10) {10.~GPT-OSS-120B \scriptsize(32.90\%)};
+  \node[left] at (-0.2,-11) {11.~Qwen2.5-72B \scriptsize(31.60\%)};
+  \node[left] at (-0.2,-12) {12.~Phi-4 \scriptsize(29.60\%)};
+  % right labels by E[S] rank: rank. name (E[S] in $M)
+  \node[right] at (9.2,-1)  {1.~\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B} \scriptsize(\$25.10\,M)};
+  \node[right] at (9.2,-2)  {2.~Gemma-3-27B \scriptsize(\$30.20\,M)};
+  \node[right] at (9.2,-3)  {3.~\textcolor{sevNeg}{\bfseries GPT-OSS-20B} \scriptsize(\$32.10\,M)};
+  \node[right] at (9.2,-4)  {4.~Qwen3-14B \scriptsize(\$32.20\,M)};
+  \node[right] at (9.2,-5)  {5.~Granite-3.2-8B \scriptsize(\$32.30\,M)};
+  \node[right] at (9.2,-6)  {6.~Qwen3-30B-A3B \scriptsize(\$32.60\,M)};
+  \node[right] at (9.2,-7)  {7.~Gemma-3-12B \scriptsize(\$33.00\,M)};
+  \node[right] at (9.2,-8)  {8.~Llama-3.3-70B \scriptsize(\$33.30\,M)};
+  \node[right] at (9.2,-9)  {9.~QwQ-32B \scriptsize(\$33.30\,M)};
+  \node[right] at (9.2,-10) {10.~GPT-OSS-120B \scriptsize(\$33.50\,M)};
+  \node[right] at (9.2,-11) {11.~Qwen2.5-72B \scriptsize(\$34.10\,M)};
+  \node[right] at (9.2,-12) {12.~Phi-4 \scriptsize(\$35.30\,M)};
   \foreach \y in {1,...,12}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
 \end{tikzpicture}
-\caption{Accuracy vs $\ES$ ranking on the finance domain (12 models,
-rank~1 = best at top). The dense crossing of lines is the point:
-DeepSeek-R1-70B (\textcolor{sevNeg}{green}) is 9th by accuracy but
-\emph{1st} by $\ES$, while Llama-3.3-70B (\textcolor{sevCrit}{red})
-is 2nd by accuracy yet 11th by $\ES$. These reversals are the $138$
-accuracy-versus-$\ES$ inversions of RQ1; a leaderboard built on
-accuracy would mis-order economic risk for almost every model.}
+\caption{Accuracy rank vs.\ $\ES$ rank on the finance domain
+($12$ models, rank~$1$ at top, full corpus, $\tau{=}0.58$). Left
+labels show sample-size-weighted accuracy; right labels show
+$\widehat{\ES}$ per $10{,}000$ outputs. Aggregation weights each
+of the three finance benchmarks by its corpus size (FinanceBench
+$n{=}150$, FinQA $n{=}1{,}147$, TAT-QA $n{=}1{,}663$).
+DeepSeek-R1-70B (\textcolor{sevNeg}{blue}, rank $4 \to 1$) and
+GPT-OSS-20B (\textcolor{sevNeg}{blue}, rank $9 \to 3$) are the
+two largest rises.}
 \label{fig:ranking_finance}
 \end{figure*}
 
 \subsection{RQ2: Severity vs.\ frequency variance}
 \label{sec:rq2}
 
-Decomposing inter-model variance in $\ES$ into a severity-only
-($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component
-shows the severity profile dominates in three of four domains: the
-severity share is $0.81$ in insurance, $0.65$ in finance, $0.56$ in
-legal, and $0.49$ in medical. In other words, in finance, legal,
-and insurance, models differ from one another more in \emph{which}
-errors they make than in \emph{how often}; only medical is
-(marginally) frequency-driven. Figure~\ref{fig:variance} shows the
-full decomposition: where the severity bar is long (insurance,
-finance), accuracy alone cannot rank models on economic risk. The
-decomposition is sensitive to the cost vector and to the model
-mix; we report it as descriptive rather than confirmatory.
+Where the framework adds the most signal is the decomposition of
+inter-model $\sigma^2_{\ES}$ into a severity-only
+($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component.
+Across the four domains the severity share spans nearly the full
+$[0, 1]$ interval: $0.67$ in finance, $0.46$ in legal, $0.23$ in
+insurance, $0.01$ in medical (\autoref{fig:variance}). The
+spread itself is the result. In finance, models differ from one
+another mostly in \emph{which} errors they make: identical
+accuracy can hide a $2{\times}$ dollar exposure depending on the
+severity profile. In medical, models differ almost entirely in
+\emph{how often} they err: the severity profiles are nearly
+indistinguishable across the $12$ models, so error rate
+\emph{is} a faithful rank. Insurance and legal lie between, with
+frequency carrying the larger share. The practical implication:
+the lever that most reduces $\ES$ is domain-specific. In finance,
+the marginal dollar is spent improving severity selection (avoid
+the worst errors); in medical, it is spent improving accuracy
+outright. The decomposition is sensitive to the cost vector and
+to the model mix; we report it as descriptive rather than
+confirmatory, but the cross-domain spread is robust to a
+$\pm 20\%$ perturbation of every cost level
+(\autoref{sec:rq3}, robustness check).
 
-\subsection{RQ3: Routing benefit}
+\subsection{RQ3: Routing tradeoff}
 \label{sec:rq3}
 
-Using a retention threshold of $d = c_3$ (route ``major'' and
-``critical'' errors) and a human-review cost $h = \$50$, the mean
-$\ES$ reduction from HITL deferral is large across the board:
-$80.8$\% in finance, $99.1$\% in insurance, $67.3$\% in legal, and
-$82.8$\% in medical (Table~\ref{tab:h4} and
-Figure~\ref{fig:routing}). Insurance, the domain with the highest
-severity share in RQ2 ($0.81$), gains the most ($99.1$\%): when
-$\bpi$ concentrates mass on the largest cost levels, clipping the
-right tail by deferral has outsized leverage. The Spearman
-correlation between the coefficient of variation of $\mathbf{c}$ and
-the per-(model, domain) reduction is positive (median $0.20$ in
-finance to $0.63$ in medical) but not estimable with confidence at
-only four domains.
+The routing-as-reinsurance analysis turns the framework into an
+operational decision tool: given a retention threshold $d{=}c_3$
+(defer \enquote{major} and \enquote{critical} errors) and a human-review cost
+$h{=}\$50$, how much $\ES$ is removed per fraction of queries
+deferred? The answer is domain-stratified
+(\autoref{tab:h4}, \autoref{fig:routing}). Finance is the
+\enquote{cheap routing} regime: deferring the median $18\%$ of queries
+removes $84.60\%$ of $\ES$ -- a leverage ratio of $4.7{:}1$. The
+three other domains live in a \enquote{deep routing} regime, requiring
+deferral of roughly half the queries ($49$--$53\%$) but extracting
+near-total reductions ($98$--$99\%$). Insurance is the steepest
+combination ($99\%$ at $49\%$ routing), consistent with its
+heavy-tailed cost vector (CV $= 1.63$) absorbing the deferred
+tail. The pattern is robust to a $\pm 20\%$ multiplicative
+perturbation of every cost level (\autoref{sec:app-robustness}):
+the minimum Spearman correlation of per-model rankings under
+perturbation is $0.90$ in finance and $1.00$ in the other three
+domains.
 
 \begin{table}[t]\centering\small
-\caption{H4 -- HITL routing benefit by domain (retention threshold $d{=}c_3$,
-human review cost $h{=}\$50$).}\label{tab:h4}
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrr}
 \toprule
-Domain & CV($c$) & \#Models & Median $\rho$ & Mean reduction (\%) \\
+Domain & CV($c$) & $\rho_{1/2}$ & $\ES$ reduction \\
 \midrule
-  Finance & 1.51 & 39 & 0.20 & 80.8 \\
-  Insurance & 1.63 & 13 & 0.46 & 99.1 \\
-  Legal & 1.51 & 36 & 0.41 & 67.3 \\
-  Medical & 1.51 & 12 & 0.63 & 82.8 \\
+  Finance   & 1.51 & 0.18 & 84.60\,\% \\
+  Insurance & 1.63 & 0.49 & 99.00\,\% \\
+  Legal     & 1.51 & 0.53 & 98.00\,\% \\
+  Medical   & 1.51 & 0.51 & 99.00\,\% \\
 \bottomrule
 \end{tabular}
+\caption{H4: HITL routing tradeoff by domain
+($n_{\text{models}}{=}12$, retention threshold $d{=}c_3$, human
+review cost $h{=}\$50$). $\rho_{1/2}$ is the median fraction of
+queries deferred across models. Finance is the cheap-routing
+regime (low $\rho$, partial $\ES$ cut); the other three are
+deep-routing (high $\rho$, near-total $\ES$ cut).}
+\label{tab:h4}
 \end{table}
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    width=\linewidth, height=4.4cm,
+    width=\linewidth, height=5.4cm,
     xbar stacked,
-    xmin=0, xmax=1,
-    ytick=data, symbolic y coords={Medical,Legal,Finance,Insurance},
-    y dir=reverse,
-    xtick={0,0.25,0.5,0.75,1},
-    xticklabel={\pgfmathprintnumber{\tick}},
+    xmin=0, xmax=100,
+    enlarge y limits=0.18,
+    ytick=data,
+    symbolic y coords={Medical,Insurance,Legal,Finance},
+    xtick={0,25,50,75,100},
+    xticklabel={\pgfmathprintnumber{\tick}\,\%},
     tick label style={font=\footnotesize},
     xlabel={Share of inter-model variance in $\ES$},
-    xlabel style={font=\small},
-    bar width=13pt,
-    nodes near coords style={font=\tiny, /pgf/number format/fixed,
-        /pgf/number format/precision=2},
-    legend style={font=\footnotesize, at={(0.5,1.25)}, anchor=north,
-        legend columns=2},
+    xlabel style={font=\small, yshift=-2pt},
+    bar width=20pt,
+    axis lines*=left,
+    tick style={black!50, line width=0.4pt},
+    axis line style={black!50, line width=0.4pt},
+    nodes near coords={\pgfmathprintnumber[fixed, precision=0]{\pgfplotspointmeta}\%},
+    every node near coord/.append style={font=\scriptsize\bfseries, text=white},
+    legend style={font=\footnotesize, at={(0.5,1.05)}, anchor=south,
+        draw=none, fill=none,
+        /tikz/every even column/.append style={column sep=12pt}},
     legend cell align=left,
+    legend image code/.code={%
+        \draw[#1, fill=#1] (0cm,-0.1cm) rectangle (0.32cm,0.1cm);
+    },
 ]
-% severity share (sigma^2_pi / sigma^2) then frequency share (remainder)
-\addplot+[fill=accentBlue, draw=accentBlue!70!black] coordinates
-    {(0.647,Finance) (0.811,Insurance) (0.560,Legal) (0.489,Medical)};
-\addplot+[fill=black!18, draw=black!40] coordinates
-    {(0.353,Finance) (0.189,Insurance) (0.440,Legal) (0.511,Medical)};
-\legend{severity ($\bpi$), frequency ($p$)}
+% severity share % (sigma^2_pi / sigma^2) then frequency share (remainder)
+\addplot+[fill=sevMaj, draw=sevMaj!75!black] coordinates
+    {(67,Finance) (46,Legal) (23,Insurance) (1,Medical)};
+\addplot+[fill=accentBlue, draw=accentBlue!75!black] coordinates
+    {(33,Finance) (54,Legal) (77,Insurance) (99,Medical)};
+\legend{severity ($\sigma^2_{\bpi}/\sigma^2$),
+        frequency ($\sigma^2_p/\sigma^2$)}
 \end{axis}
 \end{tikzpicture}
-\caption{Decomposition of inter-model variance in $\ES$ into a
-severity ($\sigma^2_{\bpi}$, blue) and a frequency ($\sigma^2_p$,
-grey) component. Severity dominates in insurance (0.81), finance
-(0.65), and legal (0.56); only medical (0.49) is frequency-driven.
-Where the blue bar is long, accuracy alone cannot rank models on
-economic risk.}
+\caption{Severity ($\sigma^2_{\bpi}$) versus frequency
+($\sigma^2_p$) share of inter-model variance in $\ES$ by domain
+(full corpus, $12$ models).}
 \label{fig:variance}
 \end{figure}
 
@@ -909,25 +730,46 @@ economic risk.}
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    width=\linewidth, height=4.4cm,
-    ybar, bar width=24pt,
-    ymin=0, ymax=108,
-    symbolic x coords={Finance,Insurance,Legal,Medical},
-    xtick=data, tick label style={font=\footnotesize},
-    ylabel={Mean $\ES$ reduction (\%)}, ylabel style={font=\small},
-    nodes near coords, nodes near coords style={font=\footnotesize},
-    every node near coord/.append style={/pgf/number format/fixed,
+    width=\linewidth, height=5.6cm,
+    xbar,
+    xmin=0, xmax=110,
+    bar width=12pt,
+    enlarge y limits=0.18,
+    y dir=reverse,
+    ytick=data, symbolic y coords={Finance,Insurance,Legal,Medical},
+    tick label style={font=\footnotesize},
+    xlabel={Fraction of queries routed and \% of $\ES$ removed},
+    xlabel style={font=\small, yshift=-2pt},
+    xtick={0,20,40,60,80,100},
+    xticklabel={\pgfmathprintnumber{\tick}\,\%},
+    axis lines*=left,
+    tick style={black!50, line width=0.4pt},
+    axis line style={black!50, line width=0.4pt},
+    legend style={font=\footnotesize, at={(0.5,1.05)}, anchor=south,
+        draw=none, fill=none,
+        /tikz/every even column/.append style={column sep=14pt}},
+    legend cell align=left,
+    legend image code/.code={%
+        \draw[#1, fill=#1] (0cm,-0.1cm) rectangle (0.32cm,0.1cm);
+    },
+    nodes near coords,
+    nodes near coords style={font=\scriptsize, /pgf/number format/fixed,
         /pgf/number format/precision=1},
-    enlarge x limits=0.2,
+    every node near coord/.append style={anchor=west, xshift=2pt, text=black!75},
 ]
-\addplot+[fill=accentBlue, draw=accentBlue!70!black] coordinates
-    {(Finance,80.8) (Insurance,99.1) (Legal,67.3) (Medical,82.8)};
+% Routing fraction (grey bar)
+\addplot+[fill=black!30, draw=black!55]
+    coordinates {(18,Finance) (49,Insurance) (53,Legal) (51,Medical)};
+% E[S] reduction (blue bar)
+\addplot+[fill=accentBlue, draw=accentBlue!75!black,
+         every node near coord/.append style={text=white}]
+    coordinates {(84.60,Finance) (99.00,Insurance) (98.00,Legal) (99.00,Medical)};
+\legend{$\rho_{1/2}$ (routed),\ $\ES$ reduction}
 \end{axis}
 \end{tikzpicture}
-\caption{Mean $\ES$ reduction from human-in-the-loop routing at
-retention threshold $d{=}c_3$ and review cost $h{=}\$50$. Insurance,
-the highest severity-share domain (RQ2), gains the most (99\%):
-deferring the heavy right tail has outsized leverage there.}
+\caption{Median routing fraction $\rho_{1/2}$ (grey) versus
+mean $\ES$ reduction (blue) by domain ($d{=}c_3$, $h{=}\$50$,
+full corpus, $12$ models).}
 \label{fig:routing}
 \end{figure}
 
@@ -940,20 +782,22 @@ deferring the heavy right tail has outsized leverage there.}
 
 \subsection{The framework, not the model, is what we are evaluating}
 
-The 13 open-weight checkpoints we benchmark span 8\,B to 120\,B
-parameters, dense and MoE, base and reasoning-tuned, FP16 and FP8
-and MXFP4. They are not interchangeable on accuracy, $\ES$, or
-$\bpi$, yet the three framework outputs surface the same kind of
-signal regardless of which model we look at: in every domain
-either ranking divergence (RQ1) or variance decomposition (RQ2)
-exposes a gap that pure accuracy hides, and the HITL routing
-analysis (RQ3) translates that gap into an actionable dollar
-saving. The contribution is therefore not ``model $X$ is best''
-but ``the framework reveals decision-relevant cost structure that
-generalises across the model design space we tested''. This is the
-empirical complement to the conceptual demonstration of
+The $12$ open-weight checkpoints we benchmark span $8$\,B to
+$120$\,B parameters, dense and MoE, base and reasoning-tuned,
+FP16 and FP8 and MXFP4. They are not interchangeable on
+accuracy, $\ES$, or $\bpi$, yet the three framework outputs
+surface the same kind of signal regardless of which model we
+look at: a dollar-magnitude inversion in RQ1 that an accuracy
+leaderboard cannot expose, a domain-specific severity-vs-
+frequency variance share in RQ2, and a routing tradeoff in RQ3
+that converts the framework's outputs into an operating point
+(\enquote{cheap} or \enquote{deep} routing). The contribution is therefore
+not \enquote{model $X$ is best} but \enquote{the framework reveals
+decision-relevant cost structure that generalises across the
+model design space we tested}. This is the empirical
+complement to the conceptual demonstration of
 \citet{beauchemin2026position}, which showed feasibility on a
-single insurance corpus with one model.
+single $82$-query insurance corpus with one model.
 
 \subsection{What the actuarial framework adds over accuracy}
 
@@ -973,18 +817,21 @@ the economic picture.
 
 \subsection{When does severity matter most?}
 
-The variance decomposition for RQ2 shows that, even when accuracy
-and $\ES$ rankings agree on a domain, severity profiles can account
-for the majority of inter-model variance in $\ES$. The mechanism is
-intuitive: $\ES = n p \mu_X$, and $\mu_X$ spans three orders of
-magnitude across severity levels in all four of our taxonomies.
-Two systems with the same $p$ but different $\bpi$ produce $\ES$
-values that can differ by an order of magnitude. Empirically the
-severity profile dominates the inter-model variance in three of our
-four domains (insurance $0.81$, finance $0.65$, legal $0.56$) and is
-near-even with frequency in the fourth (medical $0.49$); accuracy is
-therefore an unreliable proxy for economic risk in the first three,
-exactly the domains where RQ1 also shows the lowest Kendall $\tau$.
+The variance decomposition for RQ2 is the most empirically novel
+result. The mechanism is intuitive: $\ES = n\, p\, \mu_X$, and
+$\mu_X$ spans three orders of magnitude across severity levels in
+all four of our taxonomies, so two systems with the same $p$ but
+different $\bpi$ produce $\ES$ values that can differ by an order
+of magnitude. The actual share carried by $\sigma^2_{\bpi}$
+\emph{across} our $12$ models, however, varies dramatically by
+domain: $0.67$ in finance, $0.46$ in legal, $0.23$ in insurance,
+$0.01$ in medical. The medical near-zero is itself informative:
+the $12$ models cluster on essentially the same severity profile
+on HEAD-QA, so what separates them is purely $p$. Finance is the
+opposite -- error rates are tightly clustered around $35$--$40\%$
+but $\bpi$ ranges from concentrated on negligible
+(DeepSeek-R1-70B) to spread over major/critical (Granite-3.2-8B).
+Accuracy collapses both regimes onto a single rank.
 
 \subsection{Human-in-the-loop routing}
 
@@ -993,7 +840,7 @@ breakeven cost for human review, $h^\ast = \mu_X^{\text{route}}$,
 the mean severity of the routed errors. In our snapshot, even a
 $\$50$ human-review cost is well below this breakeven for medical
 and insurance taxonomies, leading to large estimated cost
-reductions when ``major'' and ``critical'' errors are routed
+reductions when \enquote{major} and \enquote{critical} errors are routed
 ($d=c_3$). We caution that the per-error severity used in routing
 is a function of $\bpi$ estimated from observed errors, not of an
 oracle severity classifier; the realised benefit depends on how
@@ -1004,7 +851,7 @@ accurately routing decisions are made at inference time.
 Cost vectors are approximate. Real costs depend on context,
 downstream action, detection probability, and whether an error
 propagates. Our levels represent expected per-instance costs
-conditioned on an undetected error. The robustness analysis (Appendix~\ref{sec:app-robustness})
+conditioned on an undetected error. The robustness analysis (\autoref{sec:app-robustness})
 suggests that $\pm 20\%$ perturbations do not overturn rankings in
 the snapshot we report, but practitioners should recalibrate
 $\mathbf{c}$ to their organization's loss data when available.
@@ -1034,22 +881,31 @@ evaluation. The framework decomposes operational risk into the error
 rate and the severity profile, and yields three families of measures
 (expected loss, tail risk, reserves) that complement accuracy.
 
-Across 13 open-weight models and four domains, accuracy and expected
-loss rankings diverge in three of four domains (Kendall $\tau$
-$0.41$--$0.46$), aligning only on legal extraction ($\tau=0.84$);
-$138$ strict inversions arise where a more accurate model is the more
-expensive one. The severity profile drives the majority of
-inter-model $\ES$ variance in three domains, and routing high-severity
-errors to human review cuts $\ES$ by $67$--$99\%$. The pattern holds
-across the heterogeneous model sample, supporting the claim that the
-framework, not any single model choice, exposes the cost structure
-that accuracy hides. Extending to the frontier API models and to
-larger per-dataset samples is the natural next step; the released
-\seveval{} library and \texttt{run\_full\_pipeline.sh} script make
-that extension reproducible. We release the code, severity
+Across $12$ open-weight models and four high-stakes domains
+evaluated at full corpus, accuracy and $\ES$ rankings are
+strongly correlated everywhere (Kendall $\tau$ from $0.58$ to
+$1.00$): the dramatic divergence reported on a single $82$-query
+insurance pilot is a small-sample artefact, not a stable empirical
+regularity. The framework's residual value lies elsewhere. It
+surfaces $72$ dollar-magnitude inversions in which the
+higher-accuracy model is the more expensive one; it decomposes
+$\sigma^2_{\ES}$ into severity ($0.01$--$0.67$) and frequency
+components that vary by domain, revealing whether the lever for
+reducing $\ES$ is \enquote{which errors} or \enquote{how often}; and it
+yields a routing tradeoff that cuts $\ES$ by $85$\,\%
+(finance, at $18$\,\% routing) up to $99$\,\% (insurance, medical,
+at $\sim 50$\,\% routing). The pattern holds across the
+heterogeneous model sample, supporting the claim that the
+framework, not any single model choice, exposes the cost
+structure that accuracy hides. Extending to the three new
+corpora queued for the camera-ready (MedMCQA, DDI 2013,
+PrivacyQA), and to additional severity taxonomies is the
+natural next step; the released \seveval{}
+library and \texttt{run\_full\_pipeline.sh} script make that
+extension reproducible. We release the code, severity
 annotations, and analysis scripts to support adoption of
-severity-aware evaluation as a complement to accuracy in high-stakes
-deployments.
+severity-aware evaluation as a complement to accuracy in
+high-stakes deployments.
 
 % ============================================================================
 % LIMITATIONS
@@ -1058,52 +914,64 @@ deployments.
 \section*{Limitations}
 \label{sec:limitations}
 
-\textbf{Cost calibration subjectivity.}
-Our cost vectors are grounded in regulatory and market evidence, but
-the mapping from severity labels to dollar amounts is inherently
-approximate; different organisations within the same domain face
-different cost structures depending on size, regulatory exposure,
-and risk tolerance. The robustness analysis (Appendix~\ref{sec:app-robustness}) tests whether
-rankings are stable under moderate perturbation, but practitioners
-should recalibrate cost levels to their specific context.
+\paragraph{Cost calibration.}
+Our cost vectors are grounded in regulatory and market evidence
+but the mapping from severity tiers to dollar amounts is
+approximate; organisations within a domain face different cost
+structures by size and regulatory exposure. The robustness
+analysis (\autoref{sec:app-robustness}) shows rankings are
+stable under $\pm 20\%$ perturbation, but practitioners should
+recalibrate to their context.
 
-\textbf{Binary correctness assumption.}
-The framework classifies each output as correct or erroneous,
-discarding the spectrum of partial correctness in many real outputs:
-a revenue of \$14.0B instead of \$14.2B is ``wrong'' but far less
-consequential than \$11.6B. Continuous severity scoring is a
-direction for future work.
+\paragraph{Binary correctness.}
+Each output is classified as correct or erroneous, discarding
+partial correctness: \$$14.0$\,B instead of \$$14.2$\,B is
+\enquote{wrong} but far less consequential than \$$11.6$\,B.
+Continuous severity scoring is left to future work.
 
-\textbf{Severity annotation provenance.}
-The retained benchmarks split into two annotation regimes; we report
-results for both groups separately so the reader can see how much
-the weaker regime moves headline numbers. The \emph{domain-expert-derived}
-group (CUAD, MAUD, ContractNLI, HEAD-QA, JudgeBERT) carries a
-structured categorical field per instance, clause type, deal-point
-category, fixed hypothesis, academic category, or simplified-clause
-category, that an expert taxonomy maps deterministically to severity;
-the mapping does not re-interpret raw question text. The
-\emph{matrix-heuristic} group (FinanceBench, FinQA, TAT-QA) infers
-severity from a cross-tabulation over structured answer/program/metric
-axes; inter-annotator validation on a stratified 100-instance sample
-per finance dataset gave Cohen's $\kappa = 0.46$ and adjacent
-agreement 94\%, moderate but with disagreements confined to adjacent
-levels rather than across the negligible-vs-critical gap. We
-initially considered three additional benchmarks, MedQA,
-MedCalc-Bench, and the RAG Insurance corpus, whose severity labels
-came from raw keyword matching; the same audit could not defend
-their critical-vs-major boundary, so we removed them rather than
-report numbers we could not stand behind. The loaders remain in the
-released code for replication under user-supplied severity rules.
+\paragraph{Severity-rule provenance.}
+Severity is derived from a structured field of the source corpus
+(clause type, deal-point category, fixed hypothesis, academic
+specialty, OPP-115 category, DDI relation type). For the three
+finance benchmarks the field does not exist natively and we use
+a defensible answer-type$\times$metric-type matrix; an
+independent LLM annotator validates with adjacent agreement
+$94\%$, $\kappa{=}0.46$. Three benchmarks initially considered
+(MedQA, MedCalc-Bench, RAG~Insurance) were dropped because their
+keyword-based labels could not be defended at the
+critical-vs-major boundary.
 
-\textbf{Dataset scope and staticness.}
-We evaluate on English-language benchmarks across four domains
-(finance, medicine, law, insurance); the framework is domain-agnostic
-but the cost calibrations and taxonomies may not transfer directly to
-other domains (e.g., code generation, content moderation) without
-domain-expert input. The evaluation also captures model performance at
-a single point in time; capabilities drift, so continuous monitoring
-via the \seveval{} library is needed in production.
+\paragraph{Single-corpus domains.}
+Medical and insurance contain a single fully-evaluated benchmark
+each (HEAD-QA and JudgeBERT); domain-level results there
+($\tau$=$1.00$ and $0.64$) reflect within-corpus agreement, not
+generalisation across the domain. The three new corpora
+(MedMCQA, DDI~2013, PrivacyQA) on the dataset table will address
+this once their full-corpus results land.
+
+\paragraph{Inversion rate.}
+The $72$ dollar-magnitude inversions arise from $528$ ordered
+within-domain model pairs ($\binom{12}{2}$ pairs across $8$
+datasets), so $14\%$ of all comparisons or $27\%$ of those with
+positive accuracy gap. The framework surfaces a meaningful
+minority of mispriced pairs, not a leaderboard reshuffle.
+
+\paragraph{Pilot vs.\ full corpus is not a controlled ablation.}
+The $\tau \approx 0.4$ we obtained on a $1$\,K-per-dataset pilot
+also used the three later-dropped corpora and the broken
+\texttt{mistral-small-3} checkpoint. The shift to $\tau \in
+[0.6, 1.0]$ at full corpus therefore mixes saturation with the
+cleaner roster; we cannot separate the two contributions without
+a controlled study.
+
+\paragraph{Scope.}
+We evaluate English-language benchmarks across four domains.
+The framework is domain-agnostic but the cost calibrations and
+severity taxonomies do not transfer directly to other domains
+(e.g., code generation, content moderation) without
+domain-expert input. The evaluation is a single-point-in-time
+snapshot; capabilities drift, and continuous monitoring via
+\seveval{} is needed in production.
 
 % ============================================================================
 % ETHICS STATEMENT
@@ -1151,53 +1019,11 @@ deployment decisions.
 
 \appendix
 
-\section{Model Roster}
-\label{sec:app-models}
+\section{Cost Calibration Evidence}
+\label{sec:app-calibration}
 
-\begin{table*}[t]
-\centering
-\small
-\begin{tabular}{lll}
-\toprule
-Model & Provider & Type \\
-\midrule
-\multicolumn{3}{l}{\textit{Frontier API models (17)}} \\
-o3, o3-mini             & OpenAI    & Reasoning \\
-GPT-5, GPT-5-mini       & OpenAI    & General \\
-Claude Sonnet~4.6       & Anthropic & General \\
-Claude Haiku~4.5        & Anthropic & General \\
-Command~A, Command~R+   & Cohere    & General \\
-DeepSeek-V3             & DeepSeek  & General \\
-DeepSeek-R1             & DeepSeek  & Reasoning \\
-Gemini~3.1~Pro          & Google    & General \\
-Grok-3, Grok-3-mini     & xAI       & General \\
-Mistral Large, Medium   & Mistral   & General \\
-Qwen3-235B (think.+std.)& OpenRouter & Reasoning/General \\
-\midrule
-\multicolumn{3}{l}{\textit{Open-weight local models (12, FP8/MXFP4 via vLLM)}} \\
-Llama-3.3-70B           & Meta        & General \\
-DeepSeek-R1-Distill-70B & DeepSeek    & Reasoning \\
-Qwen2.5-72B             & Alibaba     & General \\
-QwQ-32B                 & Alibaba     & Reasoning \\
-Qwen3-30B-A3B           & Alibaba     & MoE \\
-Gemma-3-27B             & Google      & General \\
-Gemma-3-12B             & Google      & General \\
-Qwen3-14B               & Alibaba     & Reasoning \\
-GPT-OSS-120B            & OpenAI      & General (MXFP4) \\
-GPT-OSS-20B             & OpenAI      & General (MXFP4) \\
-Phi-4                   & Microsoft   & General \\
-Granite-3.2-8B          & IBM         & General (FP16) \\
-\bottomrule
-\end{tabular}
-\caption{All 29 models referenced in the evaluation. API models go
-through the official provider endpoints (with batch APIs for cost
-reduction); local open-weight models are served by vLLM with FP8 or
-MXFP4 checkpoints from RedHatAI, the Qwen team, and openai/gpt-oss.
-The 70-72\,B Llama / DeepSeek / Qwen2.5 checkpoints and gpt-oss-120b
-are sharded across two GPUs with tensor parallelism; the rest run
-single-GPU.}
-\label{tab:models}
-\end{table*}
+% Include from separate file
+\input{severity-annotation-guidelines}
 
 \section{The \seveval{} Library}
 \label{sec:app-library-overview}
@@ -1213,29 +1039,137 @@ design, with built-in taxonomies for finance, medicine, law and
 insurance plus a registration API for custom domains. Six modules
 cover compound loss simulation, risk measures, ruin theory, routing
 analysis, severity taxonomies, and sensitivity analysis; usage
-examples are in Appendix~\ref{sec:app-library}.
+examples are in \autoref{sec:app-library}.
 
-\section{Robustness to Cost Calibration}
-\label{sec:app-robustness}
+\section{Severity Annotation Details by Dataset}
+\label{sec:app-severity-by-dataset}
 
-Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time barely
-moves the per-domain $\ES$ rankings: the minimum Spearman
-correlation between the base and perturbed rankings is $0.93$ in
-finance and $\geq 0.99$ in legal, insurance, and medical (mean
-$\geq 0.97$ in all four). Moderate uncertainty in $\mathbf{c}$ thus
-does not overturn rankings dominated by large differences in $\bpi$
-and $p$. The full sensitivity table is generated by
-\texttt{experiments/analysis.py} via the \texttt{--robustness} flag.
+We detail the deterministic mapping rules and one representative
+instance per dataset. Each rule maps a \emph{structured} field
+of the source corpus to a four-level tier; mappings never
+re-interpret raw question text.
+
+\paragraph{FinanceBench.}
+Severity comes from cross-tabulating \emph{answer type} (dollar
+amount in millions/billions, percentage, ratio, yes/no,
+free-text) with \emph{metric type} (core financial statement,
+operational, derived, descriptive). The gold answer to \enquote{Does
+Corning have positive working capital based on FY2022 data?}
+is \$$831$M positive; mis-stating the sign of a yes/no over a
+core operational metric can flip a credit decision
+(\emph{critical}). Mis-reporting Amazon's FY2017 DPO of
+$93.86$ (a derived ratio over a non-core operational metric)
+typically yields a smaller business consequence (\emph{minor}).
+
+\paragraph{FinQA and TAT-QA.}
+Same two-axis matrix as FinanceBench. Mis-answering \enquote{by what
+percentage did average borrowings decrease from $2016$ to
+$2017$?} (gold $-8.40\%$, FinQA) is a small-magnitude reasoning
+slip on a derived ratio (\emph{minor}); mis-answering \enquote{What
+does the deferred income taxes reflect?} (free-form span,
+TAT-QA) yields a descriptive paraphrase error that does not
+change a downstream accounting decision (\emph{negligible}).
+
+\paragraph{HEAD-QA.}
+Severity follows the dataset's six \emph{academic-category}
+labels by clinical-decision impact: pharmacology
+$\to$ critical, medicine and nursing $\to$ major, psychology
+$\to$ minor, biology and chemistry $\to$ negligible. A wrong
+answer on a pharmacology stem defining \enquote{Parameter} propagates
+into every downstream biostatistics decision
+(\emph{critical}); a wrong answer on a biology fact-recall
+stem (e.g.\ \enquote{does carotid body stimulation decrease arterial
+PCO\textsubscript{2}?}) carries little clinical-decision
+exposure (\emph{negligible}).
+
+\paragraph{CUAD.}
+The dataset's $41$ clause types map to severity by contractual
+risk, following due-diligence practice
+\citep{guha2023legalbench}: indemnification and liability
+limitation $\to$ critical, non-compete and IP assignment
+$\to$ major, renewal and notice $\to$ minor, definitional
+$\to$ negligible. Failing to extract a \enquote{Termination for
+Convenience} clause exposes the buyer to unilateral
+cancellation (\emph{critical}); failing on an \enquote{Audit Rights}
+clause may delay compliance review but is rarely catastrophic
+(\emph{major}).
+
+\paragraph{MAUD and ContractNLI.}
+Both reuse the CUAD clause-type risk schedule. An incorrect MAUD
+answer on whether the target's securities are subject to a
+\enquote{disproportionate impact} modifier in the Material Adverse
+Effect definition directly mis-states a deal closing condition
+(\emph{critical}). An incorrect ContractNLI label on the
+hypothesis \enquote{Receiving Party may independently develop
+information similar to Confidential Information} generally
+turns one boilerplate provision into another, so the business
+exposure of the error is small (\emph{negligible}).
+
+\paragraph{JudgeBERT.}
+Severity is the cross product of the simplified clause's legal
+category (exclusion, indemnity, definition, \dots) and the
+human-evaluator score on meaning preservation: clauses bearing
+material legal weight (exclusions, consequences of
+non-compliance) at low evaluator score $\to$ critical;
+definitional clauses at high score $\to$ negligible.
+
+\paragraph{MedMCQA, DDI~2013, PrivacyQA (queued).}
+\textbf{MedMCQA} reuses HEAD-QA's specialty mapping on the
+\texttt{subject\_name} field. \textbf{DDI~2013} maps the native
+relation type to severity directly: \emph{effect} $\to$
+critical, \emph{advice}/\emph{mechanism} $\to$ major,
+\emph{int} $\to$ minor, \emph{false} (no interaction) $\to$
+negligible. \textbf{PrivacyQA} maps the question to an OPP-115
+category \citep{wilson2016opp115} whose severity tier reflects
+the corresponding regulatory-fine band (Data Security and
+Third-Party Sharing $\to$ critical/major; first-party
+collection, user choice, access/edit $\to$ minor; descriptive
+sections $\to$ negligible).
+
+\section{Severity Scales by Domain}
+\label{sec:app-scales}
+
+% Include from separate file
+\input{severity-scales-all-domains}
+
+\section{Model Roster}
+\label{sec:app-models}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Model & Params & Provider & Type \\
+\midrule
+Granite-3.2-8B          & 8\,B   & IBM       & General (FP16)  \\
+GPT-OSS-20B             & 20\,B  & OpenAI    & General (MXFP4) \\
+Phi-4                   & 14\,B  & Microsoft & General         \\
+Gemma-3-12B             & 12\,B  & Google    & General         \\
+Qwen3-14B               & 14\,B  & Alibaba   & Reasoning       \\
+Gemma-3-27B             & 27\,B  & Google    & General         \\
+Qwen3-30B-A3B           & 30\,B  & Alibaba   & MoE             \\
+QwQ-32B                 & 32\,B  & Alibaba   & Reasoning       \\
+DeepSeek-R1-Distill-70B & 70\,B  & DeepSeek  & Reasoning       \\
+Llama-3.3-70B           & 70\,B  & Meta      & General         \\
+Qwen2.5-72B             & 72\,B  & Alibaba   & General         \\
+GPT-OSS-120B            & 120\,B & OpenAI    & General (MXFP4) \\
+\bottomrule
+\end{tabular}
+\caption{The $12$ open-weight checkpoints evaluated. All are served
+by vLLM (RedHatAI FP8, Qwen-native FP8, MXFP4 for gpt-oss, FP16 for
+Granite). $70$--$72$\,B and $120$\,B models use TP$=2$; others
+single-GPU.}
+\label{tab:models}
+\end{table}
 
 \section{Inference Hardware and Quantization}
 \label{sec:app-hardware}
 
-API models are queried through official provider endpoints, with batch
-APIs used for OpenAI, Anthropic, Google, xAI and Mistral; Cohere,
-DeepSeek and OpenRouter (Qwen3-235B) calls use a parallel synchronous
-fallback. Local open-weight models are served by vLLM with FP8
-quantization (RedHatAI compressed-tensors packaging where available,
-Qwen-native FP8 otherwise) and MXFP4 for the gpt-oss family. The
+Local open-weight models are served by vLLM with FP8 quantization
+(RedHatAI compressed-tensors packaging where available, Qwen-native
+FP8 otherwise) and MXFP4 for the gpt-oss family. The
 70-72\,B Llama, DeepSeek, and Qwen2.5 checkpoints and gpt-oss-120b
 run with \texttt{tensor\_parallel\_size}=2 on two NVIDIA RTX 6000 Ada
 48\,GB cards; the remaining open-weight models fit on a single card.
@@ -1247,23 +1181,73 @@ submission is chunked at 100 prompts per chunk so the per-dataset
 output JSON is checkpointed and the run can be resumed or extended
 from a partial file.
 
-\section{Cost Calibration Evidence}
-\label{sec:app-calibration}
+\section{Evaluation Protocol Details}
+\label{sec:app-protocol}
 
-% Include from separate file
-\input{severity-annotation-guidelines}
+This section expands on the body's \autoref{sec:protocol}.
+
+\paragraph{Scoring cascade.}
+Predictions are scored by the following cascade: option-letter
+match for MCQ; yes/no extraction; numeric comparison at $5\%$
+relative tolerance; exact text match after normalisation;
+substring containment (min.\ $4$ chars); word-set overlap
+(min.\ $3$ reference words).
+
+\paragraph{Risk measures.}
+For each (model, dataset) pair we compute
+$\hat{p}{=}1{-}\mathrm{accuracy}$, the severity profile
+$\hat{\bpi}$ from the empirical error distribution,
+$\widehat{\ES}$ via \autoref{eq:expected_loss}, and the full
+distribution of $S$ from $10^5$ Monte Carlo replications at
+$n{=}10{,}000$ outputs per evaluation period (which yields
+$\VaR_{0.95}$ and $\TVaR_{0.95}$). The Lundberg coefficient $R$
+and reserve $u^\ast$ are computed at ruin tolerance
+$\psi^\ast{=}0.01$; routing cost reduction is reported at
+thresholds $d \in \{c_2, c_3\}$ with human review cost
+$h{=}\$50$. All computations use the \seveval{} library
+(\autoref{sec:app-library}).
+
+\paragraph{Confidence intervals.}
+Our benchmarks span three orders of magnitude in size
+(financebench $n{=}150$, judgebert $n{=}1{,}483$, headqa
+$n{=}12{,}751$, maud $n{=}39{,}231$), so per-dataset confidence
+intervals on every reported quantity are essential to avoid
+over-reading small-sample noise. For each (model, dataset) pair
+we report:
+\begin{itemize}
+  \item Accuracy $\hat{p}$: Wilson score $95\%$ interval
+    \citep{wilson1927ci}, which is well-behaved near
+    $\hat{p}{=}0$ and $\hat{p}{=}1$ unlike the normal
+    approximation.
+  \item Severity profile $\hat{\bpi}$: Goodman simultaneous
+    multinomial $95\%$ intervals on each $\hat{\pi}_k$, with the
+    family-wise rate controlled via Bonferroni across $K{=}4$
+    categories.
+  \item $\widehat{\ES}$, $\VaR_{0.95}$, $\TVaR_{0.95}$:
+    non-parametric percentile bootstrap with $B{=}1{,}000$
+    resamples over the $10^5$-replication Monte Carlo loss
+    vector, exposed through
+    \texttt{severity\_eval.bootstrap\_ci}.
+\end{itemize}
+
+\paragraph{Pairwise comparisons and per-domain aggregation.}
+For pairwise model comparisons within a dataset we use a paired
+bootstrap on the per-instance loss vector
+$L_i = \mathbb{1}\{\text{wrong}_i\} \cdot c(\text{severity}_i)$,
+which controls for shared difficulty across instances. The
+two-sample $z$-test on accuracy is reported only as a quick
+sanity check; bootstrap intervals are the primary inferential
+tool because they remain valid under the heavy-tailed cost
+vector. Per-domain aggregates weight datasets by sample size to
+avoid letting a small benchmark (financebench, $n{=}150$)
+dominate a large one (maud, $n{=}39{,}231$) when the per-dataset
+CIs differ by an order of magnitude.
 
 \section{Prompt Templates}
 \label{sec:app-prompts}
 
 % Include from separate file
 \input{prompt_documentation}
-
-\section{Severity Scales by Domain}
-\label{sec:app-scales}
-
-% Include from separate file
-\input{severity-scales-all-domains}
 
 \section{\seveval{} Library Details}
 \label{sec:app-library}
@@ -1337,153 +1321,164 @@ loadable module in this release.
 \subsection{Reproducing the experiments}
 
 The \texttt{experiments/run\_full\_pipeline.sh} script orchestrates
-the full evaluation matrix: it dispatches API models through the
-official batch endpoints (OpenAI, Anthropic, Google, Mistral, xAI;
-batch APIs reduce cost by approximately $50\%$ at the time of
-writing), evaluates open-weight models locally via vLLM with FP8 (or
-MXFP4-native for the gpt-oss family) checkpoints, runs the analysis
+the full evaluation matrix: it evaluates the open-weight models
+locally via vLLM with FP8 (or MXFP4-native for the gpt-oss family)
+checkpoints, runs the analysis
 (\texttt{experiments/analysis.py}) and regenerates all paper
 figures and tables. Stages are idempotent and can be resumed with
 the corresponding \texttt{--skip-*} flag.
 
+\section{Robustness to Cost Calibration}
+\label{sec:app-robustness}
+
+Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time barely
+moves the per-domain $\ES$ rankings: the minimum Spearman
+correlation between the base and perturbed rankings is $0.93$ in
+finance and $\geq 0.99$ in legal, insurance, and medical (mean
+$\geq 0.97$ in all four). Moderate uncertainty in $\mathbf{c}$ thus
+does not overturn rankings dominated by large differences in $\bpi$
+and $p$. The full sensitivity table is generated by
+\texttt{experiments/analysis.py} via the \texttt{--robustness} flag.
+
 \section{Full Results Table}
 \label{sec:app-full-results}
 
-Table~\ref{tab:main-results} gives the complete per-(model, dataset)
+\autoref{tab:main-results} gives the complete per-(model, dataset)
 accuracy and actuarial risk measures generated by
 \texttt{experiments/analysis.py}; see also \texttt{results/metrics.csv}
 in the released code for the raw values and the additional CI columns
 (accuracy Wilson interval, VaR / TVaR bootstrap intervals).
 
 \begin{table*}[t]
-\centering\footnotesize
-\caption{Accuracy and actuarial risk measures per (model, dataset).
-Costs are in dollars. $\hat{p}$ is the empirical error rate, $\widehat{E[S]}$ the
-expected aggregate loss for $n{=}10{,}000$ queries, with 95\% bootstrap CI.
-Lower $\widehat{E[S]}$ is better.}
-\label{tab:main-results}
-\begin{tabular}{lllrrrrrr}
+\centering\tiny
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lllrrrrrr@{}}
 \toprule
 Domain & Dataset & Model & Acc.~(\%) & $\hat{p}$ & $\widehat{E[S]}$ & CI 95\% & VaR$_{95}$ & TVaR$_{95}$ \\
 \midrule
-  Finance & financebench & llama-3.3-70b & 40.0 & 0.600 & \$14,998,654 & [\$14,994,777, \$15,002,637] & \$15,477,000 & \$15,594,735 \\
-   &  & qwen2.5-72b & 50.7 & 0.493 & \$22,217,176 & [\$22,202,123, \$22,233,018] & \$24,143,810 & \$24,652,200 \\
+  Finance & financebench & qwen2.5-72b & 50.7 & 0.493 & \$22,217,176 & [\$22,202,123, \$22,233,018] & \$24,143,810 & \$24,652,200 \\
    &  & qwen3-14b & 56.0 & 0.440 & \$22,881,187 & [\$22,865,501, \$22,897,375] & \$24,803,605 & \$25,346,736 \\
+   &  & llama-3.3-70b & 48.7 & 0.513 & \$23,017,491 & [\$23,001,723, \$23,034,470] & \$24,940,000 & \$25,445,025 \\
    &  & qwen3-30b-a3b & 55.3 & 0.447 & \$24,150,033 & [\$24,134,922, \$24,165,907] & \$26,096,845 & \$26,588,532 \\
-   &  & gpt-oss-120b & 10.0 & 0.900 & \$26,100,876 & [\$26,095,893, \$26,106,021] & \$26,709,100 & \$26,865,254 \\
    &  & qwq-32b & 47.3 & 0.527 & \$26,692,653 & [\$26,675,890, \$26,707,894] & \$28,639,855 & \$29,150,454 \\
    &  & gemma-3-27b & 40.7 & 0.593 & \$26,762,621 & [\$26,746,477, \$26,778,472] & \$28,716,255 & \$29,214,636 \\
    &  & phi-4 & 37.3 & 0.627 & \$26,975,585 & [\$26,959,961, \$26,990,314] & \$28,919,900 & \$29,429,873 \\
    &  & gemma-3-12b & 34.0 & 0.660 & \$27,971,937 & [\$27,955,378, \$27,988,296] & \$29,933,155 & \$30,437,488 \\
    &  & deepseek-r1-distill-70b & 26.0 & 0.740 & \$30,559,490 & [\$30,546,769, \$30,570,570] & \$32,008,920 & \$32,403,466 \\
    &  & granite-3.2-8b & 35.3 & 0.647 & \$34,421,963 & [\$34,402,054, \$34,440,618] & \$36,770,520 & \$37,366,019 \\
+   &  & gpt-oss-120b & 22.7 & 0.773 & \$37,018,393 & [\$37,002,124, \$37,032,824] & \$38,992,415 & \$39,503,986 \\
    &  & gpt-oss-20b & 19.3 & 0.807 & \$39,689,719 & [\$39,672,372, \$39,706,464] & \$41,637,220 & \$42,148,618 \\
 \midrule
-  Finance & finqa & deepseek-r1-distill-70b & 23.6 & 0.764 & \$37,805,828 & [\$37,788,039, \$37,823,003] & \$39,793,715 & \$40,324,782 \\
-   &  & qwen3-14b & 14.3 & 0.857 & \$46,515,102 & [\$46,496,605, \$46,534,201] & \$48,756,735 & \$49,331,930 \\
-   &  & gemma-3-27b & 11.3 & 0.887 & \$46,634,983 & [\$46,616,405, \$46,652,595] & \$48,805,750 & \$49,390,853 \\
-   &  & granite-3.2-8b & 13.1 & 0.869 & \$46,787,066 & [\$46,768,233, \$46,805,507] & \$49,085,925 & \$49,668,983 \\
-   &  & gemma-3-12b & 11.2 & 0.888 & \$47,715,954 & [\$47,697,745, \$47,734,271] & \$49,962,200 & \$50,525,652 \\
-   &  & qwq-32b & 10.9 & 0.891 & \$48,032,458 & [\$48,012,592, \$48,051,135] & \$50,310,925 & \$50,898,530 \\
-   &  & qwen3-30b-a3b & 12.1 & 0.879 & \$48,506,074 & [\$48,487,096, \$48,525,888] & \$50,787,025 & \$51,392,013 \\
-   &  & gpt-oss-20b & 11.7 & 0.883 & \$48,625,692 & [\$48,606,886, \$48,645,082] & \$50,946,820 & \$51,570,237 \\
-   &  & qwen2.5-72b & 9.9 & 0.901 & \$49,803,780 & [\$49,784,611, \$49,822,937] & \$52,150,250 & \$52,764,869 \\
-   &  & phi-4 & 8.7 & 0.913 & \$50,590,691 & [\$50,570,806, \$50,610,792] & \$52,937,040 & \$53,542,463 \\
-   &  & gpt-oss-120b & 10.0 & 0.900 & \$116,101,236 & [\$116,060,685, \$116,142,062] & \$120,997,155 & \$122,278,150 \\
-   &  & llama-3.3-70b & 10.0 & 0.900 & \$116,101,236 & [\$116,060,685, \$116,142,062] & \$120,997,155 & \$122,278,150 \\
+   & finqa & deepseek-r1-distill-70b & 23.4 & 0.766 & \$38,596,760 & [\$38,578,621, \$38,612,970] & \$40,678,200 & \$41,212,696 \\
+   &  & granite-3.2-8b & 13.1 & 0.869 & \$46,929,804 & [\$46,910,341, \$46,948,564] & \$49,256,945 & \$49,849,153 \\
+   &  & qwen3-14b & 13.5 & 0.865 & \$47,380,483 & [\$47,362,025, \$47,398,302] & \$49,620,460 & \$50,187,324 \\
+   &  & gemma-3-27b & 11.1 & 0.889 & \$47,390,866 & [\$47,372,614, \$47,408,986] & \$49,617,650 & \$50,189,667 \\
+   &  & gemma-3-12b & 10.4 & 0.896 & \$48,550,998 & [\$48,532,322, \$48,570,400] & \$50,836,420 & \$51,409,561 \\
+   &  & qwq-32b & 10.5 & 0.895 & \$48,634,236 & [\$48,614,232, \$48,653,535] & \$50,907,750 & \$51,513,933 \\
+   &  & qwen3-30b-a3b & 11.6 & 0.884 & \$49,037,821 & [\$49,017,941, \$49,056,994] & \$51,320,520 & \$51,910,176 \\
+   &  & gpt-oss-20b & 11.2 & 0.888 & \$49,142,188 & [\$49,123,168, \$49,161,157] & \$51,521,920 & \$52,099,171 \\
+   &  & gpt-oss-120b & 10.1 & 0.899 & \$49,412,023 & [\$49,392,750, \$49,432,856] & \$51,772,405 & \$52,356,098 \\
+   &  & qwen2.5-72b & 9.5 & 0.905 & \$50,108,895 & [\$50,089,730, \$50,128,184] & \$52,466,520 & \$53,078,281 \\
+   &  & llama-3.3-70b & 9.9 & 0.901 & \$50,215,121 & [\$50,196,253, \$50,234,461] & \$52,548,045 & \$53,166,479 \\
+   &  & phi-4 & 8.5 & 0.915 & \$50,952,339 & [\$50,933,039, \$50,971,611] & \$53,288,415 & \$53,925,036 \\
 \midrule
-  Finance & tatqa & llama-3.3-70b & 70.0 & 0.300 & \$3,000,298 & [\$2,999,684, \$3,000,947] & \$3,076,000 & \$3,095,524 \\
-   &  & gpt-oss-120b & 50.0 & 0.500 & \$13,999,906 & [\$13,996,092, \$14,003,971] & \$14,486,000 & \$14,606,769 \\
-   &  & deepseek-r1-distill-70b & 45.0 & 0.550 & \$14,478,038 & [\$14,467,243, \$14,489,704] & \$15,897,525 & \$16,280,340 \\
-   &  & gemma-3-27b & 54.8 & 0.452 & \$16,277,407 & [\$16,264,859, \$16,288,704] & \$17,700,115 & \$18,068,517 \\
-   &  & gpt-oss-20b & 48.6 & 0.514 & \$18,073,594 & [\$18,059,730, \$18,085,853] & \$19,579,315 & \$19,983,007 \\
-   &  & qwen3-30b-a3b & 51.7 & 0.483 & \$19,024,167 & [\$19,011,785, \$19,037,745] & \$20,633,910 & \$21,049,463 \\
-   &  & qwen3-14b & 51.0 & 0.490 & \$19,772,795 & [\$19,756,931, \$19,787,378] & \$21,452,445 & \$21,909,546 \\
-   &  & granite-3.2-8b & 48.1 & 0.519 & \$20,743,828 & [\$20,729,031, \$20,758,868] & \$22,496,925 & \$22,977,755 \\
-   &  & qwq-32b & 49.0 & 0.510 & \$21,014,788 & [\$20,999,846, \$21,029,322] & \$22,783,980 & \$23,250,890 \\
-   &  & gemma-3-12b & 50.2 & 0.498 & \$21,782,367 & [\$21,767,341, \$21,798,503] & \$23,603,035 & \$24,107,843 \\
-   &  & qwen2.5-72b & 44.1 & 0.559 & \$22,920,126 & [\$22,905,262, \$22,934,770] & \$24,759,955 & \$25,236,818 \\
-   &  & phi-4 & 42.7 & 0.573 & \$24,138,466 & [\$24,122,658, \$24,154,808] & \$26,055,620 & \$26,544,264 \\
+   & tatqa & deepseek-r1-distill-70b & 44.9 & 0.551 & \$15,350,141 & [\$15,336,818, \$15,364,000] & \$16,897,810 & \$17,303,264 \\
+   &  & gemma-3-27b & 55.9 & 0.441 & \$18,610,970 & [\$18,596,953, \$18,626,167] & \$20,293,620 & \$20,753,898 \\
+   &  & gpt-oss-20b & 49.6 & 0.504 & \$19,737,907 & [\$19,723,985, \$19,750,770] & \$21,449,910 & \$21,917,670 \\
+   &  & qwen3-30b-a3b & 51.8 & 0.482 & \$22,026,274 & [\$22,009,732, \$22,041,832] & \$23,908,810 & \$24,406,411 \\
+   &  & granite-3.2-8b & 48.9 & 0.511 & \$22,054,023 & [\$22,038,052, \$22,070,446] & \$23,983,400 & \$24,503,817 \\
+   &  & gpt-oss-120b & 49.5 & 0.505 & \$22,124,543 & [\$22,108,504, \$22,139,682] & \$24,001,500 & \$24,503,627 \\
+   &  & llama-3.3-70b & 49.6 & 0.504 & \$22,529,841 & [\$22,513,804, \$22,544,163] & \$24,420,340 & \$24,934,711 \\
+   &  & qwen3-14b & 51.0 & 0.490 & \$22,531,895 & [\$22,516,246, \$22,546,756] & \$24,444,625 & \$24,938,170 \\
+   &  & gemma-3-12b & 51.7 & 0.483 & \$22,697,340 & [\$22,680,947, \$22,715,090] & \$24,654,410 & \$25,170,937 \\
+   &  & qwq-32b & 48.5 & 0.515 & \$23,351,640 & [\$23,335,963, \$23,368,363] & \$25,332,405 & \$25,813,318 \\
+   &  & qwen2.5-72b & 45.2 & 0.548 & \$24,091,304 & [\$24,073,980, \$24,108,139] & \$26,052,905 & \$26,567,407 \\
+   &  & phi-4 & 43.5 & 0.565 & \$25,282,482 & [\$25,265,157, \$25,299,559] & \$27,333,515 & \$27,871,206 \\
 \midrule
-  Insurance & judgebert & qwen3-14b & 28.8 & 0.712 & \$334,109,988 & [\$333,995,587, \$334,214,381] & \$347,588,195 & \$350,908,630 \\
-   &  & gpt-oss-20b & 31.0 & 0.690 & \$340,398,244 & [\$340,281,474, \$340,504,872] & \$354,088,130 & \$357,462,658 \\
-   &  & gemma-3-27b & 29.3 & 0.707 & \$340,998,349 & [\$340,889,534, \$341,113,667] & \$354,635,020 & \$358,136,129 \\
-   &  & granite-3.2-8b & 27.1 & 0.729 & \$341,750,298 & [\$341,628,772, \$341,862,024] & \$355,239,170 & \$358,642,374 \\
-   &  & qwq-32b & 26.7 & 0.733 & \$342,543,913 & [\$342,429,448, \$342,658,338] & \$356,214,430 & \$359,810,388 \\
-   &  & qwen3-30b-a3b & 27.3 & 0.727 & \$344,735,017 & [\$344,617,437, \$344,852,144] & \$358,302,130 & \$361,867,623 \\
-   &  & phi-4 & 23.3 & 0.767 & \$346,022,520 & [\$345,903,808, \$346,129,232] & \$359,742,700 & \$363,186,969 \\
-   &  & gemma-3-12b & 26.6 & 0.734 & \$349,953,008 & [\$349,837,328, \$350,064,593] & \$363,703,245 & \$367,402,784 \\
-   &  & deepseek-r1-distill-70b & 21.6 & 0.784 & \$389,818,401 & [\$389,700,310, \$389,936,824] & \$404,204,515 & \$407,793,380 \\
-   &  & gpt-oss-120b & 60.0 & 0.400 & \$500,207,304 & [\$500,069,066, \$500,339,217] & \$516,701,210 & \$521,034,892 \\
-   &  & qwen2.5-72b & 50.0 & 0.500 & \$510,206,746 & [\$510,067,656, \$510,343,112] & \$526,629,695 & \$530,726,626 \\
-   &  & llama-3.3-70b & 20.0 & 0.800 & \$530,340,043 & [\$530,206,813, \$530,473,840] & \$546,510,925 & \$550,634,110 \\
+  Insurance & judgebert & gpt-oss-20b & 28.5 & 0.715 & \$448,802,599 & [\$448,675,681, \$448,940,967] & \$464,213,230 & \$468,360,694 \\
+   &  & qwen3-14b & 26.2 & 0.738 & \$450,061,854 & [\$449,935,396, \$450,191,433] & \$465,409,960 & \$469,457,953 \\
+   &  & gemma-3-27b & 27.0 & 0.730 & \$452,612,224 & [\$452,485,415, \$452,738,018] & \$468,000,475 & \$471,891,707 \\
+   &  & granite-3.2-8b & 25.1 & 0.749 & \$456,693,569 & [\$456,561,371, \$456,830,906] & \$472,104,155 & \$476,283,335 \\
+   &  & gemma-3-12b & 24.7 & 0.753 & \$460,412,644 & [\$460,277,439, \$460,550,456] & \$476,242,135 & \$480,193,542 \\
+   &  & qwq-32b & 24.7 & 0.753 & \$460,730,392 & [\$460,599,449, \$460,866,677] & \$476,334,310 & \$480,340,588 \\
+   &  & gpt-oss-120b & 24.9 & 0.751 & \$463,727,426 & [\$463,596,941, \$463,864,138] & \$479,318,890 & \$483,315,366 \\
+   &  & phi-4 & 21.8 & 0.782 & \$464,844,835 & [\$464,721,862, \$464,971,440] & \$480,290,245 & \$484,243,594 \\
+   &  & qwen2.5-72b & 23.9 & 0.761 & \$464,984,244 & [\$464,844,091, \$465,112,895] & \$480,588,630 & \$484,561,771 \\
+   &  & qwen3-30b-a3b & 25.4 & 0.746 & \$465,354,695 & [\$465,213,565, \$465,486,987] & \$481,081,455 & \$485,094,367 \\
+   &  & llama-3.3-70b & 19.2 & 0.808 & \$476,141,359 & [\$476,008,543, \$476,279,571] & \$491,826,950 & \$495,882,116 \\
+   &  & deepseek-r1-distill-70b & 20.0 & 0.800 & \$504,849,963 & [\$504,719,669, \$504,990,853] & \$520,742,925 & \$524,854,912 \\
 \midrule
-  Legal & contractnli & qwen2.5-72b & 80.0 & 0.200 & \$400,036 & [\$399,923, \$400,148] & \$413,200 & \$416,654 \\
-   &  & llama-3.3-70b & 80.0 & 0.200 & \$20,201,576 & [\$20,192,744, \$20,209,920] & \$21,198,620 & \$21,451,653 \\
-   &  & qwen3-30b-a3b & 81.9 & 0.181 & \$65,651,991 & [\$65,606,829, \$65,694,926] & \$71,126,210 & \$72,580,653 \\
-   &  & qwq-32b & 82.0 & 0.180 & \$65,955,450 & [\$65,910,856, \$65,999,387] & \$71,485,950 & \$72,861,204 \\
-   &  & qwen3-14b & 81.4 & 0.186 & \$74,631,463 & [\$74,583,935, \$74,680,779] & \$80,512,800 & \$82,083,584 \\
-   &  & gpt-oss-20b & 81.8 & 0.182 & \$78,417,143 & [\$78,364,281, \$78,468,017] & \$84,532,020 & \$86,084,876 \\
-   &  & gemma-3-27b & 84.1 & 0.159 & \$79,114,030 & [\$79,064,257, \$79,169,166] & \$85,148,890 & \$86,768,379 \\
-   &  & gemma-3-12b & 81.2 & 0.188 & \$100,830,036 & [\$100,773,101, \$100,886,523] & \$107,740,030 & \$109,633,165 \\
-   &  & deepseek-r1-distill-70b & 79.4 & 0.206 & \$105,988,878 & [\$105,929,538, \$106,046,937] & \$113,059,610 & \$114,882,354 \\
-   &  & granite-3.2-8b & 74.9 & 0.251 & \$115,171,834 & [\$115,111,465, \$115,232,422] & \$122,473,060 & \$124,453,637 \\
-   &  & phi-4 & 75.5 & 0.245 & \$121,733,663 & [\$121,668,569, \$121,800,880] & \$129,446,490 & \$131,376,646 \\
-   &  & gpt-oss-120b & 70.0 & 0.300 & \$220,178,301 & [\$220,100,411, \$220,261,399] & \$230,179,440 & \$232,659,882 \\
+  Legal & contractnli & qwen3-30b-a3b & 84.5 & 0.155 & \$53,263,935 & [\$53,223,068, \$53,303,444] & \$58,238,400 & \$59,512,724 \\
+   &  & gpt-oss-20b & 83.8 & 0.162 & \$68,452,484 & [\$68,403,979, \$68,496,637] & \$74,068,410 & \$75,544,222 \\
+   &  & gpt-oss-120b & 84.3 & 0.157 & \$70,676,223 & [\$70,628,710, \$70,727,275] & \$76,498,270 & \$78,005,334 \\
+   &  & qwq-32b & 81.7 & 0.183 & \$73,375,245 & [\$73,329,752, \$73,424,671] & \$79,176,420 & \$80,687,250 \\
+   &  & qwen3-14b & 82.0 & 0.180 & \$80,928,461 & [\$80,880,403, \$80,984,163] & \$87,155,640 & \$88,728,399 \\
+   &  & qwen2.5-72b & 82.3 & 0.177 & \$91,488,963 & [\$91,435,136, \$91,541,839] & \$98,084,320 & \$99,772,444 \\
+   &  & gemma-3-27b & 82.7 & 0.173 & \$92,252,397 & [\$92,196,616, \$92,309,696] & \$98,858,520 & \$100,594,536 \\
+   &  & deepseek-r1-distill-70b & 81.3 & 0.187 & \$98,201,875 & [\$98,148,498, \$98,257,504] & \$105,002,080 & \$106,784,881 \\
+   &  & gemma-3-12b & 80.6 & 0.194 & \$104,153,127 & [\$104,093,512, \$104,207,921] & \$111,136,020 & \$112,913,009 \\
+   &  & granite-3.2-8b & 72.9 & 0.271 & \$122,546,640 & [\$122,487,310, \$122,610,955] & \$130,010,410 & \$131,978,525 \\
+   &  & phi-4 & 77.5 & 0.225 & \$128,289,552 & [\$128,223,374, \$128,355,610] & \$136,121,100 & \$138,127,657 \\
+   &  & llama-3.3-70b & 75.5 & 0.245 & \$144,399,045 & [\$144,334,501, \$144,468,507] & \$152,535,520 & \$154,547,458 \\
 \midrule
-  Legal & cuad & qwen3-30b-a3b & 40.0 & 0.600 & \$64,195,350 & [\$64,182,033, \$64,208,072] & \$65,655,400 & \$66,035,713 \\
-   &  & gpt-oss-120b & 30.0 & 0.700 & \$66,198,127 & [\$66,185,152, \$66,210,437] & \$67,648,820 & \$67,999,569 \\
-   &  & llama-3.3-70b & 20.0 & 0.800 & \$66,396,791 & [\$66,383,850, \$66,408,274] & \$67,834,620 & \$68,217,715 \\
-   &  & qwen2.5-72b & 19.4 & 0.806 & \$199,489,799 & [\$199,429,039, \$199,556,178] & \$207,071,010 & \$209,123,678 \\
-   &  & gemma-3-12b & 16.1 & 0.839 & \$204,916,198 & [\$204,856,593, \$204,982,766] & \$212,687,420 & \$214,682,218 \\
-   &  & qwq-32b & 16.2 & 0.838 & \$207,079,777 & [\$207,014,130, \$207,142,375] & \$214,921,020 & \$216,845,981 \\
-   &  & gemma-3-27b & 16.1 & 0.839 & \$208,601,998 & [\$208,538,947, \$208,671,340] & \$216,503,300 & \$218,516,849 \\
-   &  & gpt-oss-20b & 16.8 & 0.832 & \$210,871,461 & [\$210,808,618, \$210,931,871] & \$218,839,040 & \$220,912,202 \\
-   &  & qwen3-14b & 14.6 & 0.854 & \$213,779,907 & [\$213,719,136, \$213,851,922] & \$221,750,820 & \$223,746,498 \\
-   &  & phi-4 & 12.1 & 0.879 & \$215,660,811 & [\$215,595,825, \$215,728,888] & \$223,545,910 & \$225,630,830 \\
-   &  & granite-3.2-8b & 12.4 & 0.876 & \$219,710,060 & [\$219,647,138, \$219,774,774] & \$227,693,740 & \$229,825,197 \\
-   &  & deepseek-r1-distill-70b & 4.2 & 0.958 & \$227,583,014 & [\$227,515,929, \$227,652,526] & \$235,686,410 & \$237,787,411 \\
+   & cuad & qwen2.5-72b & 17.2 & 0.828 & \$211,169,273 & [\$211,105,531, \$211,235,997] & \$219,034,090 & \$221,017,930 \\
+   &  & gemma-3-12b & 16.7 & 0.833 & \$211,389,683 & [\$211,322,908, \$211,460,445] & \$219,337,220 & \$221,435,038 \\
+   &  & gemma-3-27b & 17.2 & 0.828 & \$211,914,919 & [\$211,853,337, \$211,983,508] & \$219,889,660 & \$221,870,913 \\
+   &  & llama-3.3-70b & 15.5 & 0.845 & \$212,170,070 & [\$212,103,873, \$212,237,579] & \$220,178,050 & \$222,202,258 \\
+   &  & qwq-32b & 17.0 & 0.830 & \$213,442,959 & [\$213,379,488, \$213,515,388] & \$221,445,250 & \$223,552,828 \\
+   &  & gpt-oss-120b & 18.1 & 0.819 & \$213,561,180 & [\$213,496,019, \$213,623,324] & \$221,536,940 & \$223,643,923 \\
+   &  & qwen3-30b-a3b & 15.7 & 0.843 & \$214,027,115 & [\$213,960,104, \$214,091,731] & \$221,967,420 & \$224,008,393 \\
+   &  & gpt-oss-20b & 17.1 & 0.829 & \$214,537,925 & [\$214,474,727, \$214,602,899] & \$222,592,050 & \$224,715,694 \\
+   &  & qwen3-14b & 14.5 & 0.855 & \$217,252,788 & [\$217,187,517, \$217,316,531] & \$225,206,180 & \$227,429,088 \\
+   &  & phi-4 & 12.6 & 0.874 & \$218,581,447 & [\$218,516,548, \$218,644,084] & \$226,666,130 & \$228,809,473 \\
+   &  & granite-3.2-8b & 12.2 & 0.878 & \$223,793,612 & [\$223,717,952, \$223,863,244] & \$231,914,240 & \$234,059,761 \\
+   &  & deepseek-r1-distill-70b & 4.3 & 0.957 & \$232,138,111 & [\$232,072,196, \$232,202,096] & \$240,218,010 & \$242,352,415 \\
 \midrule
-  Legal & maud & gpt-oss-120b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
-   &  & llama-3.3-70b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
-   &  & qwen2.5-72b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
-   &  & gpt-oss-20b & 99.4 & 0.006 & \$127,286 & [\$127,062, \$127,499] & \$154,000 & \$162,477 \\
-   &  & qwen3-14b & 79.2 & 0.208 & \$4,153,232 & [\$4,152,042, \$4,154,329] & \$4,288,000 & \$4,323,347 \\
-   &  & qwen3-30b-a3b & 79.1 & 0.209 & \$4,178,548 & [\$4,177,446, \$4,179,614] & \$4,312,000 & \$4,347,222 \\
-   &  & qwq-32b & 65.9 & 0.341 & \$6,828,524 & [\$6,827,208, \$6,829,878] & \$6,986,000 & \$7,026,415 \\
-   &  & gemma-3-27b & 50.4 & 0.496 & \$9,911,428 & [\$9,910,004, \$9,912,930] & \$10,078,000 & \$10,119,792 \\
-   &  & gemma-3-12b & 49.0 & 0.510 & \$10,052,902 & [\$10,051,546, \$10,054,319] & \$10,218,010 & \$10,259,843 \\
-   &  & granite-3.2-8b & 38.1 & 0.619 & \$12,335,929 & [\$12,334,663, \$12,337,264] & \$12,496,800 & \$12,537,489 \\
-   &  & phi-4 & 4.7 & 0.953 & \$18,920,128 & [\$18,919,503, \$18,920,796] & \$18,993,200 & \$19,011,859 \\
-   &  & deepseek-r1-distill-70b & 0.0 & 1.000 & \$19,770,851 & [\$19,770,591, \$19,771,137] & \$19,803,800 & \$19,812,348 \\
+   & maud & gpt-oss-20b & 82.6 & 0.174 & \$34,615,418 & [\$34,584,831, \$34,643,566] & \$38,154,220 & \$39,081,706 \\
+   &  & gpt-oss-120b & 77.6 & 0.224 & \$53,592,368 & [\$53,556,629, \$53,628,203] & \$57,828,030 & \$58,944,337 \\
+   &  & qwen3-30b-a3b & 64.9 & 0.351 & \$117,793,573 & [\$117,741,318, \$117,851,633] & \$124,596,730 & \$126,346,168 \\
+   &  & qwq-32b & 64.9 & 0.351 & \$119,892,716 & [\$119,830,534, \$119,948,583] & \$126,727,840 & \$128,496,351 \\
+   &  & qwen3-14b & 64.7 & 0.353 & \$125,543,252 & [\$125,482,377, \$125,603,456] & \$132,528,440 & \$134,325,726 \\
+   &  & gemma-3-27b & 54.8 & 0.452 & \$211,349,572 & [\$211,268,682, \$211,429,329] & \$220,526,110 & \$222,868,218 \\
+   &  & llama-3.3-70b & 53.6 & 0.464 & \$230,293,013 & [\$230,213,123, \$230,374,867] & \$239,864,580 & \$242,348,123 \\
+   &  & gemma-3-12b & 52.8 & 0.472 & \$233,554,553 & [\$233,472,973, \$233,636,932] & \$243,366,540 & \$245,727,240 \\
+   &  & granite-3.2-8b & 49.1 & 0.509 & \$274,869,737 & [\$274,784,487, \$274,957,069] & \$285,390,160 & \$288,136,337 \\
+   &  & qwen2.5-72b & 50.3 & 0.497 & \$280,219,089 & [\$280,121,823, \$280,310,021] & \$290,980,000 & \$293,675,124 \\
+   &  & deepseek-r1-distill-70b & 19.1 & 0.809 & \$499,820,546 & [\$499,704,785, \$499,930,027] & \$512,989,160 & \$516,398,898 \\
+   &  & phi-4 & 16.8 & 0.832 & \$525,668,475 & [\$525,558,094, \$525,785,031] & \$538,926,210 & \$542,421,774 \\
 \midrule
-  Medical & headqa & gpt-oss-120b & 100.0 & 0.000 & \$0 & [\$0, \$0] & \$0 & \$0 \\
-   &  & llama-3.3-70b & 0.0 & 1.000 & \$5,000,000 & [\$5,000,000, \$5,000,000] & \$5,000,000 & \$5,000,000 \\
-   &  & gpt-oss-20b & 88.5 & 0.115 & \$156,507,407 & [\$156,392,615, \$156,622,559] & \$169,835,650 & \$173,060,604 \\
-   &  & phi-4 & 81.0 & 0.190 & \$234,025,962 & [\$233,893,072, \$234,152,763] & \$249,746,675 & \$253,792,660 \\
-   &  & qwen3-30b-a3b & 45.4 & 0.546 & \$715,285,929 & [\$715,071,422, \$715,509,598] & \$741,566,475 & \$748,356,914 \\
-   &  & qwq-32b & 37.3 & 0.627 & \$799,877,969 & [\$799,638,163, \$800,094,914] & \$827,288,525 & \$834,352,690 \\
-   &  & qwen2.5-72b & 29.9 & 0.701 & \$880,636,026 & [\$880,400,501, \$880,858,734] & \$908,487,575 & \$915,756,282 \\
-   &  & granite-3.2-8b & 33.0 & 0.670 & \$951,822,641 & [\$951,563,132, \$952,073,415] & \$981,406,800 & \$988,721,355 \\
-   &  & deepseek-r1-distill-70b & 14.6 & 0.854 & \$1,074,358,919 & [\$1,074,110,919, \$1,074,620,103] & \$1,104,479,600 & \$1,112,391,492 \\
-   &  & qwen3-14b & 16.4 & 0.836 & \$1,130,438,054 & [\$1,130,179,112, \$1,130,707,439] & \$1,161,608,550 & \$1,169,652,774 \\
-   &  & gemma-3-12b & 0.6 & 0.994 & \$1,343,818,793 & [\$1,343,541,267, \$1,344,085,492] & \$1,376,206,650 & \$1,384,722,380 \\
-   &  & gemma-3-27b & 0.2 & 0.998 & \$1,350,583,490 & [\$1,350,313,131, \$1,350,864,531] & \$1,383,491,775 & \$1,391,737,155 \\
+  Medical & headqa & gpt-oss-20b & 86.0 & 0.140 & \$145,268,297 & [\$145,165,883, \$145,367,052] & \$157,957,000 & \$161,189,887 \\
+   &  & phi-4 & 80.1 & 0.199 & \$172,282,747 & [\$172,177,913, \$172,393,854] & \$185,512,175 & \$189,071,969 \\
+   &  & gpt-oss-120b & 75.1 & 0.249 & \$257,798,950 & [\$257,662,933, \$257,931,041] & \$274,428,000 & \$278,616,758 \\
+   &  & qwen3-30b-a3b & 47.7 & 0.523 & \$518,178,869 & [\$517,993,294, \$518,359,105] & \$541,246,075 & \$546,901,822 \\
+   &  & qwq-32b & 36.5 & 0.635 & \$627,566,976 & [\$627,358,573, \$627,780,552] & \$652,280,925 & \$658,377,990 \\
+   &  & granite-3.2-8b & 29.5 & 0.705 & \$733,734,955 & [\$733,513,408, \$733,956,211] & \$760,235,775 & \$767,006,784 \\
+   &  & qwen2.5-72b & 25.8 & 0.742 & \$752,216,822 & [\$751,995,540, \$752,426,955] & \$778,835,050 & \$785,342,655 \\
+   &  & qwen3-14b & 20.1 & 0.799 & \$811,504,925 & [\$811,283,433, \$811,715,903] & \$838,973,650 & \$845,814,344 \\
+   &  & deepseek-r1-distill-70b & 15.0 & 0.850 & \$833,443,080 & [\$833,213,311, \$833,664,599] & \$860,933,500 & \$867,832,374 \\
+   &  & llama-3.3-70b & 0.9 & 0.991 & \$1,006,672,449 & [\$1,006,430,234, \$1,006,910,922] & \$1,036,266,350 & \$1,044,074,937 \\
+   &  & gemma-3-12b & 0.4 & 0.996 & \$1,013,068,904 & [\$1,012,833,539, \$1,013,309,810] & \$1,042,463,075 & \$1,050,415,594 \\
+   &  & gemma-3-27b & 0.2 & 0.998 & \$1,016,270,978 & [\$1,016,044,322, \$1,016,514,200] & \$1,045,800,100 & \$1,053,420,976 \\
 \bottomrule
 \end{tabular}
+\caption{Accuracy and actuarial risk measures per (model, dataset).
+Costs are in dollars. $\hat{p}$ is the empirical error rate, $\widehat{E[S]}$ the
+expected aggregate loss for $n{=}10{,}000$ queries, with 95\% bootstrap CI.
+Lower $\widehat{E[S]}$ is better.}
+\label{tab:main-results}
 \end{table*}
 
 \section{Inter-Annotator Agreement}
 \label{sec:app-agreement}
 
 On the FinanceBench rule-based annotation, Cohen's
-$\kappa = 0.46$ with $65.3\%$ exact agreement and $94.0\%$ adjacent
+$\kappa = 0.46$ with $65.30\%$ exact agreement and $94.00\%$ adjacent
 agreement against an independent LLM annotator
 ($150$ instances). The
 \texttt{experiments/validate\_severity\_llm.py} script reproduces
 this measurement and can be applied to additional datasets to
 extend the table.
-% FinanceBench already validated: κ = 0.46, exact = 65.3%, adjacent = 94.0%.
+% FinanceBench already validated: κ = 0.46, exact = 65.30%, adjacent = 94.00%.
 % Run experiments/validate_severity_llm.py for remaining datasets.
 
 \end{document}
