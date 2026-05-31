@@ -231,7 +231,8 @@ prediction} \citep{elyaniv2010selective,geifman2017selective}, and
 post-hoc deferral estimators
 \citep{narasimhan2022posthoc,okati2021differentiable}; we recast
 it as excess-of-loss reinsurance. Large-scale LLM evaluation
-suites (HELM \citep{liang2023helm}, Open LLM Leaderboard
+suites (HELM \citep{liang2023helm}, MMLU
+\citep{hendrycks2021mmlu}, Open LLM Leaderboard
 \citep{beeching2023openllm}, Chatbot Arena
 \citep{chiang2024chatbot}) and domain-specific benchmarks
 \citep{islam2023financebench,chen2021finqa,jin2021medqa,kazi2024medcalc,hendrycks2021cuad,koreeda2021contractnli}
@@ -417,7 +418,7 @@ risk, not because the clause text is verbose. The rule-based
 approach is reproducible and removes per-instance annotator
 subjectivity. We validate each rule system against an
 independent LLM annotator (Claude Sonnet~4) using the severity
-rubric as a one-shot prompt, reporting Cohen's $\kappa$ and
+rubric as a one-shot prompt, reporting Cohen's $\kappa$ \citep{cohen1960} and
 adjacent agreement
 ($\pm 1$ level).
 
@@ -460,7 +461,8 @@ around three research questions:
 \begin{description}[leftmargin=0pt,labelindent=0pt]
   \item[RQ1 (Ranking divergence and inversions).] How closely aligned
     are model rankings by accuracy and by $\ES$ within a domain, and
-    do concrete pairs invert? We report Kendall $\tau$ between the
+    do concrete pairs invert? We report Kendall $\tau$
+    \citep{kendall1938} between the
     two rank orders together with its $p$-value, plus the count and
     dollar magnitude of strict inversions where
     $\mathrm{acc}(A) > \mathrm{acc}(B)$ but $\ES(A) > \ES(B)$.

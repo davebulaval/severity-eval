@@ -51,20 +51,23 @@ The cost levels are calibrated against the following empirical evidence:
 
 \paragraph{Negligible (\$100).}
 Corresponds to the per-record cost of a data quality error in financial
-systems. The \enquote{1-10-100} rule \citep{labovitz1992} estimates \$1 to
-prevent, \$10 to correct, and \$100 per record per year for uncorrected
-errors. IBM/Ponemon's 2024 Cost of a Data Breach report measures the
-average cost per compromised record at \$173 \citep{ponemon2024},
+systems. The \enquote{1-10-100} rule \citep{labovitz1992,redman1998cacm}
+estimates \$$1$ to prevent, \$$10$ to correct, and \$$100$ per
+record per year for uncorrected errors. IBM/Ponemon's 2024 Cost of a Data Breach report measures the
+average cost per intellectual-property record at \$$173$
+\citep{ponemon2024} (the closest tier-equivalent to a per-instance
+error cost),
 consistent with this level.
 
 \paragraph{Minor (\$1\,000).}
 Corresponds to a \enquote{little~r} restatement, an immaterial correction
 disclosed in subsequent filings without a Form~8-K Item~4.02 filing.
-\enquote{Little~r} restatements account for 76\% of all restatements as of
-2020 \citep{wilmerhale2022}. The IRS accuracy-related penalty of 20\%
+\enquote{Little~r} restatements account for $76\%$ of all
+restatements as of $2020$ \citep{sec2022munter,wilmerhale2022}. The IRS accuracy-related penalty of 20\%
 on a \$5\,000 understatement (\$1\,000) falls in this range. Gartner
 reports that one-third of accountants make several financial errors per
-week \citep{gartner2024accounting}, with individual error remediation
+week \citep{gartner2024accounting} (industry survey of $497$
+controllership professionals), with individual error remediation
 costs in the hundreds-to-low-thousands range.
 
 \paragraph{Major (\$10\,000).}
@@ -74,20 +77,22 @@ penalties range from \$10\,000 to \$97\,523 per firm
 \citep{sec2025latefiling}. The ORX consortium reports a mean operational
 risk loss event in banking of approximately \$250\,000 (EUR~231\,651)
 \citep{orx2023}, with the distribution's lower quartile near \$10\,000.
-TransAlta's 2003 spreadsheet copy-paste error cost \$24M
-\citep{prosperspark2023}.
+TransAlta's 2003 spreadsheet copy-paste error cost \$$24$\,M
+\citep{globe2003transalta,prosperspark2023}.
 
 \paragraph{Critical (\$100\,000).}
 The median FINRA disciplinary fine in 2024 was \$125\,000
-\citep{csglaw2024}. The SEC maximum penalty per single violation is
+\citep{eversheds2024finra,csglaw2024}. The SEC maximum penalty per single violation is
 \$775\,000 \citep{harvard2016sec}. \enquote{Big~R} restatements carry an
-average negative impact on net income of \$16M \citep{accountingtoday2024},
+average negative impact on net income of \$$16$M
+\citep{accountingtoday2024,auditanalytics2020,acito2019restatements},
 with associated stock price declines of 2--10\% \citep{gleason2008contagion}.
 The GAO documented over \$100B in aggregate market capitalization loss
 from restatements between 1997 and 2002 \citep{gao2003}. Securities
 class action median settlements are \$14M
-\citep{cornerstone2024}. JPMorgan's 2012 \enquote{London Whale} spreadsheet
-error resulted in \$6.2B in losses \citep{prosperspark2023}.
+\citep{cornerstone2024scasettlement,cornerstone2024,finnerty2006sca}. JPMorgan's 2012 \enquote{London Whale} spreadsheet
+error resulted in \$$6.2$\,B in losses
+\citep{senate2013whale,prosperspark2023}.
 
 \paragraph{Beyond the scale.}
 Our four-level scale deliberately caps at \$100\,000 per error instance
@@ -330,7 +335,7 @@ Source & Metric & Amount & Calibration \\
 \midrule
 \multicolumn{4}{l}{\textit{Per-record / per-error costs}} \\
 \quad 1-10-100 Rule & Cost of uncorrected data error & \$100/record/yr & Negligible \\
-\quad IBM/Ponemon 2024 & Cost per breached record & \$173 & Negligible \\
+\quad IBM/Ponemon 2024 & Cost per IP record & \$173 & Negligible \\
 \quad IRS accuracy penalty & 20\% of understatement & \$1\,000 (on \$5k) & Minor \\
 \midrule
 \multicolumn{4}{l}{\textit{Regulatory penalties}} \\
