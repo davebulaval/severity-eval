@@ -17,13 +17,13 @@
   note      = {In preparation},
 }
 
-%, Datasets, @misc{islam2023financebench,
-  title         = {{FinanceBench: A New Benchmark for Financial Question Answering}},
-  author        = {Islam, Pranab and Kannappan, Anand and Kiela, Douwe and Qian, Rebecca and Scherrer, Nino and Vidgen, Bertie},
-  year          = {2023},
-  eprint        = {2311.11944},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.CL},
+@techreport{islam2023financebench,
+  title       = {{FinanceBench: A New Benchmark for Financial Question Answering}},
+  author      = {Islam, Pranab and Kannappan, Anand and Kiela, Douwe and Qian, Rebecca and Scherrer, Nino and Vidgen, Bertie},
+  institution = {Patronus AI},
+  year        = {2023},
+  month       = {November},
+  url         = {https://www.patronus.ai/financebench.pdf},
 }
 
 @inproceedings{chen2021finqa,
@@ -37,7 +37,7 @@
 @inproceedings{zhu2021tatqa,
   title     = {{TAT-QA: A Question Answering Benchmark on a Hybrid of Tabular and Textual Content in Finance}},
   author    = {Zhu, Fengbin and Lei, Wenqiang and Huang, Youcheng and Wang, Chao and Zhang, Shuo and Lv, Jiancheng and Feng, Fuli and Chua, Tat-Seng},
-  booktitle = {Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers)},
+  booktitle = {Proceedings of the Annual Meeting of the Association for Computational Linguistics and the International Joint Conference on Natural Language Processing (Volume 1: Long Papers)},
   pages     = {3277--3287},
   year      = {2021},
 }
@@ -62,7 +62,7 @@
 @inproceedings{vilares2019headqa,
   title     = {{HEAD-QA: A Healthcare Dataset for Complex Reasoning}},
   author    = {Vilares, David and G\'{o}mez-Rodr\'{i}guez, Carlos},
-  booktitle = {Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics},
+  booktitle = {Proceedings of the Annual Meeting of the Association for Computational Linguistics},
   pages     = {960--966},
   year      = {2019},
 }
@@ -78,7 +78,9 @@
   title     = {{MAUD: An Expert-Annotated Legal NLP Dataset for Merger Agreement Understanding}},
   author    = {Wang, Steven H. and Scardigli, Antoine and Tang, Leonard and Chen, Wei and Levkin, Dmitry and Chen, Anya and Ball, Spencer and Woodside, Thomas and Zhang, Oliver and Hendrycks, Dan},
   booktitle = {Proceedings of the Conference on Empirical Methods in Natural Language Processing},
+  pages     = {16369--16382},
   year      = {2023},
+  doi       = {10.18653/v1/2023.emnlp-main.1019},
 }
 
 @inproceedings{koreeda2021contractnli,
@@ -96,18 +98,23 @@
   year      = {2023},
 }
 
-@article{beeching2023openllm,
-  title     = {{Open LLM Leaderboard}},
-  author    = {Beeching, Edward and Fourrier, Cl\'{e}mentine and Habib, Nathan and Han, Sheon and Lambert, Nathan and Rajani, Nazneen and Sanseviero, Omar and Tunstall, Lewis and Wolf, Thomas},
-  journal   = {Hugging Face},
-  year      = {2023},
+@misc{beeching2023openllm,
+  title        = {{Open LLM Leaderboard}},
+  author       = {Beeching, Edward and Fourrier, Cl\'{e}mentine and Habib, Nathan and Han, Sheon and Lambert, Nathan and Rajani, Nazneen and Sanseviero, Omar and Tunstall, Lewis and Wolf, Thomas},
+  howpublished = {Hugging Face Space},
+  year         = {2023},
+  url          = {https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard},
 }
 
-@article{chiang2024chatbot,
+@inproceedings{chiang2024chatbot,
   title     = {{Chatbot Arena: An Open Platform for Evaluating LLMs by Human Preference}},
-  author    = {Chiang, Wei-Lin and Zheng, Lianmin and Sheng, Ying and Angelopoulos, Anastasios N. and Li, Tianle and Li, Dacheng and Zhang, Hao and Zhu, Banghua and Jordan, Michael I. and Gonzalez, Joseph E. and Stoica, Ion},
-  journal   = {arXiv:2403.04132},
+  author    = {Chiang, Wei-Lin and Zheng, Lianmin and Sheng, Ying and Angelopoulos, Anastasios Nikolas and Li, Tianle and Li, Dacheng and Zhu, Banghua and Zhang, Hao and Jordan, Michael I. and Gonzalez, Joseph E. and Stoica, Ion},
+  booktitle = {Proceedings of the International Conference on Machine Learning},
+  series    = {PMLR},
+  volume    = {235},
+  pages     = {8359--8388},
   year      = {2024},
+  url       = {https://proceedings.mlr.press/v235/chiang24b.html},
 }
 
 %, NLP metrics, @book{manning2008ir,
@@ -128,7 +135,7 @@
 @inproceedings{papineni2002bleu,
   title     = {{BLEU: A Method for Automatic Evaluation of Machine Translation}},
   author    = {Papineni, Kishore and Roukos, Salim and Ward, Todd and Zhu, Wei-Jing},
-  booktitle = {Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics},
+  booktitle = {Proceedings of the Annual Meeting of the Association for Computational Linguistics},
   pages     = {311--318},
   year      = {2002},
 }
@@ -158,7 +165,7 @@
 @inproceedings{sellam2020bleurt,
   title     = {{BLEURT: Learning Robust Metrics for Text Generation}},
   author    = {Sellam, Thibault and Das, Dipanjan and Parikh, Ankur},
-  booktitle = {Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics},
+  booktitle = {Proceedings of the Annual Meeting of the Association for Computational Linguistics},
   pages     = {7881--7892},
   year      = {2020},
 }
@@ -223,6 +230,7 @@
   title     = {{AIRO: An Ontology for Representing AI Risks Based on the Proposed EU AI Act and ISO Risk Management Standards}},
   author    = {Golpayegani, Delaram and Pandit, Harshvardhan J. and Lewis, Dave},
   booktitle = {Towards a Knowledge-Aware AI: Proceedings of SEMANTiCS},
+  pages     = {51--65},
   year      = {2022},
   publisher = {IOS Press},
 }
@@ -236,21 +244,23 @@
   year      = {2024},
 }
 
-@article{weidinger2022taxonomy,
+@inproceedings{weidinger2022taxonomy,
   title     = {{Taxonomy of Risks Posed by Language Models}},
   author    = {Weidinger, Laura and Uesato, Jonathan and Rauh, Maribeth and Griffin, Conor and Huang, Po-Sen and Mellor, John and Glaese, Amelia and Cheng, Myra and Balle, Borja and Kasirzadeh, Atoosa and Biles, Courtney and Brown, Sasha and Kenton, Zac and Hawkins, Will and Stepleton, Tom and Birhane, Abeba and Hendricks, Lisa Anne and Rimell, Laura and Isaac, William and Haas, Julia and Legassick, Sean and Irving, Geoffrey and Gabriel, Iason},
   booktitle = {Proceedings of the ACM Conference on Fairness, Accountability, and Transparency},
   pages     = {214--229},
   year      = {2022},
+  doi       = {10.1145/3531146.3533088},
 }
 
 @article{kirk2024personalising,
-  title     = {{The Benefits, Risks and Bounds of Personalising the Alignment of Large Language Models to Individuals}},
+  title     = {{The Benefits, Risks and Bounds of Personalizing the Alignment of Large Language Models to Individuals}},
   author    = {Kirk, Hannah Rose and Vidgen, Bertie and R{\"o}ttger, Paul and Hale, Scott A.},
   journal   = {Nature Machine Intelligence},
   volume    = {6},
   pages     = {383--392},
   year      = {2024},
+  doi       = {10.1038/s42256-024-00820-y},
 }
 
 %, Actuarial and insurance, @book{klugman2012loss,
@@ -294,13 +304,14 @@
   year      = {2016},
 }
 
-@techreport{bosfed2025ai,
-  title       = {{AI and Operational Losses: Evidence from {U.S.} Bank Holding Companies}},
-  author      = {McLemore, Ping and others},
-  institution = {Federal Reserve Bank of Boston},
-  year        = {2025},
-  note        = {Presented at the 2025 Federal Reserve Stress Testing Research Conference; companion brief at Richmond Fed QSR Highlights.},
-  url         = {https://www.bostonfed.org/-/media/Documents/events/2025/stress-testing-research-conference/McLemore_AIandOpLosses.pdf},
+@article{bosfed2025ai,
+  title     = {{AI and Operational Losses: Evidence from {U.S.} Bank Holding Companies}},
+  author    = {McLemore, Ping and Mihov, Atanas},
+  journal   = {Review of Corporate Finance Studies},
+  year      = {2026},
+  doi       = {10.1093/rcfs/cfag003},
+  url       = {https://academic.oup.com/rcfs/advance-article-abstract/doi/10.1093/rcfs/cfag003/8489055},
+  note      = {Earlier working-paper version (2024) on SSRN:5544858; presented at the 2025 Federal Reserve Stress Testing Research Conference.},
 }
 
 %, Human-in-the-loop and deferral, @inproceedings{madras2018predict,
@@ -313,7 +324,7 @@
 @inproceedings{mozannar2020consistent,
   title     = {{Consistent Estimators for Learning to Defer to an Expert}},
   author    = {Mozannar, Hussein and Sontag, David},
-  booktitle = {Proceedings of the 37th International Conference on Machine Learning},
+  booktitle = {Proceedings of the International Conference on Machine Learning},
   pages     = {7076--7087},
   year      = {2020},
 }
@@ -367,28 +378,27 @@
 
 @inproceedings{xie2024finben,
   title     = {{FinBen: A Holistic Financial Benchmark for Large Language Models}},
-  author    = {Xie, Qianqian and Han, Weiguang and Lai, Yanzhao and Peng, Min and Huang, Jimin},
+  author    = {Xie, Qianqian and Han, Weiguang and Chen, Zhengyu and Xiang, Ruoyu and others},
   booktitle = {Advances in Neural Information Processing Systems, Datasets and Benchmarks Track},
   year      = {2024},
+  url       = {https://proceedings.neurips.cc/paper_files/paper/2024/hash/adb1d9fa8be4576d28703b396b82ba1b-Abstract-Datasets_and_Benchmarks_Track.html},
 }
 
 @inproceedings{zhu2024tatllm,
-  title     = {{TAT-LLM: A Specialized Language Model for Discrete Reasoning Over Tabular and Textual Data}},
+  title     = {{TAT-LLM: A Specialized Language Model for Discrete Reasoning Over Financial Tabular and Textual Data}},
   author    = {Zhu, Fengbin and Liu, Ziwei and Feng, Fuli and Wang, Chao and Li, Moxin and Chua, Tat-Seng},
-  booktitle = {Proceedings of the 5th ACM International Conference on AI in Finance},
+  booktitle = {Proceedings of the ACM International Conference on AI in Finance},
   year      = {2024},
   doi       = {10.1145/3677052.3698685},
-  eprint    = {2401.13223},
-  archivePrefix = {arXiv},
 }
 
-@misc{bedi2025medhelm,
-  title         = {{MedHELM: Holistic Evaluation of Large Language Models for Medical Tasks}},
-  author        = {Bedi, Suhana and Jain, Saurabh Sandeep and Pfohl, Stephen R. and Wornow, Michael and Goel, Akshay and Bishara, Andrew and Cui, Hejie and Liang, Percy and Jurafsky, Daniel and Pollard, Tom J. and Shah, Nigam H.},
-  year          = {2025},
-  eprint        = {2505.23802},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.CL},
+@article{bedi2025medhelm,
+  title   = {{Holistic Evaluation of Large Language Models for Medical Tasks with MedHELM}},
+  author  = {Bedi, Suhana and Cui, Hejie and Fuentes, Manuel and Unell, Alyssa and Wornow, Michael and others},
+  journal = {Nature Medicine},
+  year    = {2026},
+  doi     = {10.1038/s41591-025-04151-2},
+  url     = {https://www.nature.com/articles/s41591-025-04151-2},
 }
 
 @inproceedings{beauchemin2024quebec,
@@ -404,8 +414,6 @@
   author    = {Beauchemin, David and Albert-Rochette, Marc and Khoury, Richard and D{\'e}ziel, Pierre-Luc},
   booktitle = {Proceedings of the Conference on Empirical Methods in Natural Language Processing},
   year      = {2025},
-  eprint    = {2508.16870},
-  archivePrefix = {arXiv},
   url       = {https://aclanthology.org/2025.emnlp-main.5/},
 }
 
@@ -650,12 +658,13 @@
   number    = {5},
   pages     = {914--920},
   year      = {2013},
+  doi       = {10.1016/j.jbi.2013.07.011},
 }
 
 @inproceedings{ravichander2019privacyqa,
   title     = {{Question Answering for Privacy Policies: Combining Computational and Legal Perspectives}},
   author    = {Ravichander, Abhilasha and Black, Alan W. and Wilson, Shomir and Norton, Thomas and Russell, Hamza Harkous and Sadeh, Norman},
-  booktitle = {Proceedings of the Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing},
+  booktitle = {Proceedings of the Conference on Empirical Methods in Natural Language Processing and the International Joint Conference on Natural Language Processing},
   pages     = {4947--4958},
   year      = {2019},
 }
@@ -663,7 +672,7 @@
 @inproceedings{wilson2016opp115,
   title     = {{The Creation and Analysis of a Website Privacy Policy Corpus}},
   author    = {Wilson, Shomir and Schaub, Florian and Dara, Aswarth Abhilash and Liu, Frederick and Cherivirala, Sushain and Leon, Pedro Giovanni and Schaarup Andersen, Mads and Zimmeck, Sebastian and Sathyendra, Kanthashree Mysore and Russell, N. Cameron and Norton, Thomas B. and Hovy, Eduard and Reidenberg, Joel and Sadeh, Norman},
-  booktitle = {Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)},
+  booktitle = {Proceedings of the Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)},
   pages     = {1330--1340},
   year      = {2016},
 }
