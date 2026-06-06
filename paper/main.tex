@@ -513,19 +513,34 @@ disagreeing}, because at scale they largely do not.
 The framework's residual value is what an accuracy-only
 leaderboard cannot show: the cost of the rank that is correct.
 We detect $74$ strict accuracy-vs-$\ES$ inversions where
-$\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$.
-The largest is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B
-by $+0.7$ accuracy points yet costs $\$28.7$\,M more per
-$10{,}000$ outputs. On TAT-QA, qwen2.5-72b is $+0.2$ points
-over DeepSeek-R1-70B for $+\$8.7$\,M; on FinanceBench,
-granite-3.2-8b is $+9.3$ over DeepSeek-R1-70B yet costs
-$\$3.86$\,M more. The most visible \emph{rank flip} is in
-finance: DeepSeek-R1-70B is rank $9$ by accuracy and rank $1$
-by $\ES$, a $+8$-rank rise driven by a severity profile
-concentrated on negligible/minor levels
-(\autoref{fig:ranking_finance}). The takeaway is no longer
-\emph{\enquote{accuracy gets the leaderboard wrong}}; it is
-\emph{\enquote{accuracy doesn't tell you how much being wrong costs}}.
+$\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$,
+out of $726$ ordered model pairs ($10.2\%$ of all pairs). The
+gaps have a heavy right tail: median $\$1.9$\,M, $75$th
+percentile $\$5.4$\,M, max $\$28.7$\,M, summing to $\$0.32$\,B
+of mis-attributed exposure per $10{,}000$ outputs. The largest
+is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.7$
+accuracy points yet costs $\$28.7$\,M more; on ContractNLI,
+Llama-3.3-70B is $+2.5$ over Granite-3.2-8B for $+\$21.9$\,M;
+on TAT-QA, qwen2.5-72b is $+0.2$ over DeepSeek-R1-70B for
+$+\$8.7$\,M. The most visible \emph{rank flip} is in finance:
+DeepSeek-R1-70B is rank $4$ by accuracy and rank $1$ by $\ES$,
+driven by a severity profile concentrated on negligible/minor
+levels (\autoref{fig:ranking_finance}).
+
+\paragraph{Domain-level aggregation absorbs most inversions.}
+The $74$ inversions are at the per-(model, dataset) level. When
+ranks are aggregated to the domain (sample-weighted across the
+domain's datasets) only $13$ inversions remain: $11$ in finance
+(largest $\$7.5$\,M), $1$ in medical ($\$0.3$\,M), $1$ in
+insurance ($\$0.8$\,M), and $0$ in legal. This decomposition
+sharpens the picture: \emph{at the operational level on which
+production deployments are scoped, accuracy almost perfectly
+predicts cost ranking}. The framework's contribution is not
+overturning leaderboards; it is attaching a defensible dollar
+magnitude to the gap between two adjacent ranks. The takeaway
+is no longer \emph{\enquote{accuracy gets the leaderboard
+wrong}}; it is \emph{\enquote{accuracy doesn't tell you how much
+being wrong costs}}.
 
 \begin{table}[t]\centering
 \begin{tabular}{lrr}
@@ -615,22 +630,36 @@ inter-model $\sigma^2_{\ES}$ into a severity-only
 ($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component.
 Across the four domains the severity share spans nearly the full
 $[0, 1]$ interval: $0.81$ in finance, $0.37$ in legal, $0.06$ in
-insurance, $0.05$ in medical (\autoref{fig:variance}). The
-spread itself is the result. In finance, models differ from one
-another mostly in \emph{which} errors they make: identical
-accuracy can hide an order-of-magnitude dollar exposure depending
-on the severity profile. In medical and insurance, models differ
-almost entirely in \emph{how often} they err: the severity
-profiles are nearly indistinguishable across the $12$ models, so
-error rate \emph{is} a faithful rank. Legal lies between, with
-frequency carrying slightly the larger share. The practical
-implication: the lever that most reduces $\ES$ is domain-specific.
-In finance, the marginal dollar is spent improving severity
-selection (avoid the worst errors); in medical and insurance, it
-is spent improving accuracy outright. The decomposition is
-sensitive to the cost vector and to the model mix; we report it as
-descriptive rather than confirmatory, but the cross-domain spread
-is robust to a $\pm 20\%$ perturbation of every cost level
+insurance, $0.05$ in medical (\autoref{fig:variance}).
+
+\paragraph{Mechanism.}
+The spread is explained by the relative dispersion of the two
+inputs to $\ES = n\, p\, \mu_X$. Across the $12$ models within a
+domain, both the error rate $p$ and the mean severity
+$\mu_X = \sum_k c_k \pi_k$ vary; the dominant component is the
+one with the larger coefficient of variation. In finance, $p$ is
+tightly clustered (CV $0.03$, range $0.62$--$0.70$) while $\mu_X$
+moves twice as much (CV $0.07$) -- severity dominates. In
+medical the picture is inverted: $p$ has CV $0.74$ (range $0.01$
+on DDI to $0.36$ on HEAD-QA) while $\mu_X$ has CV $0.17$ --
+frequency dwarfs severity by an order of magnitude. Insurance
+follows the medical pattern ($p$-CV $0.67$, $\mu_X$-CV $0.17$);
+legal lands in the middle ($p$-CV $0.33$, $\mu_X$-CV $0.26$).
+
+\paragraph{Practical implication.}
+In finance, models differ mostly in \emph{which} errors they
+make: identical accuracy can hide an order-of-magnitude dollar
+exposure depending on the severity profile. In medical and
+insurance, models differ almost entirely in \emph{how often}
+they err: the severity profiles are nearly indistinguishable, so
+error rate \emph{is} a faithful rank. The lever that most
+reduces $\ES$ is therefore domain-specific: in finance, the
+marginal dollar is spent improving severity selection (avoid the
+worst errors); in medical and insurance, it is spent improving
+accuracy outright. Legal sits between. The decomposition is
+sensitive to the cost vector and to the model mix; we report it
+as descriptive rather than confirmatory, but the cross-domain
+spread is robust to a $\pm 20\%$ perturbation of every cost level
 (\autoref{sec:rq3}, robustness check).
 
 \subsection{RQ3: Routing tradeoff}
@@ -654,6 +683,21 @@ perturbation of every cost level (\autoref{sec:app-robustness}):
 the minimum Spearman correlation of per-model rankings under
 perturbation is $0.90$ in finance and $1.00$ in the other three
 domains.
+
+\paragraph{Tail risk premium.}
+The actuarial tail measures $\VaR_{0.95}$ and $\TVaR_{0.95}$
+track the per-model $\ES$ ranking almost perfectly within every
+domain (Kendall $\tau \geq 0.97$): they do not reshuffle models.
+What they add is the size of the reserve a deployment should hold
+above the expected loss. Median $\TVaR_{0.95}/\widehat{\ES}$
+ratios are $1.08$ in finance, $1.06$ in legal, $1.13$ in medical
+and $1.19$ in insurance, with the largest models in insurance
+reaching $1.25$. In dollar terms, a $\$465$\,M-$\ES$ JudgeBERT
+deployment carries an additional $\$15$--$\$20$\,M tail
+contingency at the $95\%$ level. The insurance domain's heavier
+ratio echoes its higher cost-vector CV: the same routing
+mechanism that removes $98\%$ of the mean also dampens the
+worst-case scenario disproportionately.
 
 \begin{table}[t]\centering
 \begin{tabular}{lrrr}
@@ -810,6 +854,22 @@ complement to the conceptual demonstration of
 \citet{beauchemin2026position}, which showed feasibility on a
 single $82$-query insurance corpus with one model.
 
+That said, one cross-model regularity is visible: the four
+reasoning-tuned checkpoints (DeepSeek-R1-Distill-70B, QwQ-32B,
+Qwen3-14B, Qwen3-30B-A3B) achieve lower mean $\widehat{\ES}$
+than the eight non-reasoning models in every domain
+($-\$112.8$\,M in medical, $-\$15.4$\,M in legal, $-\$6.5$\,M
+in insurance, $-\$2.2$\,M in finance, per $10{,}000$ outputs).
+The gap is largest where frequency dominates the variance
+(medical, insurance): in those regimes, reasoning-tuned models
+also have systematically lower $p$. This is descriptive rather
+than causal -- the sample of reasoning models is small and
+correlated with vendor (Alibaba, DeepSeek) -- but the alignment
+between the variance-share decomposition and the model-class
+gap is consistent with the mechanism: where errors are
+about \emph{how often}, the additional inference compute that
+reasoning models spend pays back as a lower expected loss.
+
 \subsection{What the actuarial framework adds over accuracy}
 
 The compound loss model produces three families of quantities that
@@ -828,22 +888,24 @@ the economic picture.
 
 \subsection{When does severity matter most?}
 
-The variance decomposition for RQ2 is the most empirically novel
-result. The mechanism is intuitive: $\ES = n\, p\, \mu_X$, and
-$\mu_X$ spans three orders of magnitude across severity levels in
-all four of our taxonomies, so two systems with the same $p$ but
-different $\bpi$ produce $\ES$ values that can differ by an order
-of magnitude. The actual share carried by $\sigma^2_{\bpi}$
-\emph{across} our $12$ models, however, varies dramatically by
-domain: $0.81$ in finance, $0.37$ in legal, $0.06$ in insurance,
-$0.05$ in medical. The medical near-zero is itself informative:
-the $12$ models cluster on essentially the same severity profile
-across HEAD-QA, MedMCQA and DDI~2013, so what separates them is
-purely $p$. Finance is the opposite -- error rates are tightly
-clustered around $35$--$40\%$ but $\bpi$ ranges from concentrated
-on negligible (DeepSeek-R1-70B) to spread over major/critical
-(Granite-3.2-8B). Accuracy collapses both regimes onto a single
-rank.
+The RQ2 mechanism (\autoref{sec:rq2}) has a direct
+implication for procurement and model-selection workflows.
+In \emph{severity-dominated} regimes (finance here, with
+$\sigma^2_{\bpi}$-share $0.81$), two models with the same
+accuracy can carry order-of-magnitude different dollar exposures:
+ranking on accuracy alone leaves money on the table and
+the model-selection committee must inspect $\bpi$. In
+\emph{frequency-dominated} regimes (medical $0.05$, insurance
+$0.06$), the $12$ models cluster on essentially the same
+severity profile across all datasets in the domain, so the
+error-rate ordering is already cost-faithful; the actuarial
+overhead pays back only on tail-risk and reserve computations
+(\autoref{sec:rq3}, tail-risk premium). Legal sits between
+($0.37$), with a smaller but non-trivial severity contribution.
+Whether a deployment is in the severity- or frequency-dominated
+regime is a domain property given the cost vector, not a
+property of the model -- which makes it a useful sanity check
+before committing to a more elaborate evaluation pipeline.
 
 \subsection{Human-in-the-loop routing}
 
