@@ -109,20 +109,24 @@ $82$-query insurance corpus. We provide the first multi-domain
 empirical evaluation: $12$ open-weight LLMs ($8$\,B--$120$\,B
 parameters) on $11$ benchmarks across finance, medicine, law,
 and insurance, with severity labels derived from each corpus's
-structured fields. At full-corpus scale, accuracy and $\ES$
+structured fields. At full corpus, accuracy and $\widehat{\ES}$
 rankings are positively correlated in every domain (Kendall
 $\tau$ from $0.58$ in finance to $0.97$ in legal); the
-small-sample divergence does not reproduce. The framework's
-remaining empirical contribution lies in $74$ dollar-magnitude
+small-sample divergence reproduces in finance and insurance at
+$n{=}1000$ per cell but not at full scale. An MQM-weighted
+baseline tracks our ranking with $\tau$ from $0.82$ to $1.00$,
+so the framework's value lies less in the ordering than in the
+interpretable dollar magnitudes: $74$ accuracy-vs-cost
 inversions (median $\$1.9$\,M, max $\$28.7$\,M per $10{,}000$
 outputs), a variance decomposition whose severity share moves
-from $0.05$ (medical) to $0.81$ (finance) with the
-cross-model coefficient-of-variation ratio of $p$ and $\mu_X$,
-and a routing tradeoff that cuts $\ES$ by $85$\,\% in finance
-at $18$\,\% deferral and by $92$--$98$\,\% in the other three
-domains at $41$--$53$\,\% deferral. We release \seveval{}, a
-HuggingFace-style Python library, with the annotations and
-calibration evidence.
+from $0.05$ (medical) to $0.81$ (finance) with the cross-model
+$p$/$\mu_X$ coefficient-of-variation ratio, a routing tradeoff
+that cuts $\widehat{\ES}$ by $85$\,\% in finance at $18$\,\%
+deferral and by $92$--$98$\,\% in the other three domains at
+$41$--$53$\,\% deferral, and per-domain Lundberg reserves from
+$\$0.8$\,M to $\$6.2$\,M per $10{,}000$ outputs per period. We
+release \seveval{}, a HuggingFace-style Python library, with
+annotations and calibration evidence.
 \end{abstract}
 
 % ============================================================================
@@ -165,30 +169,36 @@ adds signal beyond accuracy, and where it does not.
 Our three contributions:
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Rankings agree at scale, but dollar magnitudes
-    do not.} At full corpus, per-domain Kendall $\tau$ between
-    accuracy and $\ES$ rankings is $0.58$--$0.97$ (all
-    $p < 0.01$); the dramatic small-sample divergence does not
-    reproduce. The framework's residual value is in $74$
-    dollar-magnitude inversions ($\$0.32$\,B mis-attributed
-    across the table) that an accuracy-only leaderboard cannot
-    surface. Aggregating to the domain level collapses these to
-    $13$, concentrated almost entirely in finance.
+  \item \textbf{Rankings agree at scale; the framework's value
+    is in magnitudes.} At full corpus, per-domain Kendall $\tau$
+    between accuracy and $\ES$ rankings is $0.58$--$0.97$ (all
+    $p < 0.01$); the dramatic small-sample divergence reproduces
+    at $n{=}1000$ per cell in finance and insurance but not at
+    full scale, and never in medical or legal. An MQM-weighted
+    baseline tracks our ranking with per-domain $\tau$ from
+    $0.82$ to $1.00$. The framework's contribution is therefore
+    not the ordering but the dollar magnitudes: $74$ inversions
+    ($\$0.32$\,B mis-attributed) with median gap $\$1.9$\,M and
+    max $\$28.7$\,M, plus tail measures and reserves that no
+    weighted-mean baseline can produce.
   \item \textbf{The mechanism behind \emph{when} severity
-    matters.} The inter-model variance in $\ES$ splits into a
+    matters.} Inter-model variance in $\ES$ splits into a
     severity share that ranges from $5\%$ (medical) to $81\%$
     (finance); the split is driven by which input has the larger
     cross-model coefficient of variation ($p$-CV vs.\
     $\mu_X$-CV). This makes a domain a priori classifiable as
-    severity- or frequency-dominated, which in turn tells a
-    procurement committee whether $\bpi$ needs inspection.
-  \item \textbf{A routing tradeoff with two operating regimes.}
-    Modelled as excess-of-loss reinsurance, HITL routing cuts
-    $\ES$ by $85\%$ at $18\%$ deferral in finance (cheap
-    routing) and by $92$--$98\%$ at $41$--$53\%$ deferral in the
-    other three domains (deep routing). The tail premium
-    $\TVaR_{0.95}/\ES$ ranges from $1.06$ in legal to $1.25$ in
-    insurance, sizing reserves above the mean.
+    severity- or frequency-dominated, telling a procurement
+    committee whether $\bpi$ needs inspection.
+  \item \textbf{A routing tradeoff with two operating regimes
+    and per-domain reserves.} Modelled as excess-of-loss
+    reinsurance, HITL routing cuts $\ES$ by $85\%$ at $18\%$
+    deferral in finance (cheap routing) and by $92$--$98\%$ at
+    $41$--$53\%$ deferral in the other three domains (deep
+    routing). Tail premium $\TVaR_{0.95}/\ES$ ranges from
+    $1.06$ in legal to $1.25$ in insurance; Lundberg reserves
+    ($\psi^\ast{=}0.01$, $\theta{=}0.2$) range from $\$0.8$\,M
+    (finance) to $\$6.2$\,M (medical) per $10{,}000$ outputs
+    per period.
 \end{enumerate}
 
 \noindent We release \seveval{}, a HuggingFace-style Python
@@ -282,6 +292,21 @@ $\sigma_X^2 = \sum_k c_k^2 \pi_k - \mu_X^2$. The expected loss
 $\ES$ captures both error frequency ($p$) and economic impact
 ($\mu_X$): two systems with identical accuracy can differ arbitrarily
 in $\ES$ if $\bpi_A \neq \bpi_B$.
+
+\paragraph{What the cost model quantifies.}
+The severity tier of an instance reflects the cost of
+\emph{erring on that question} given its structured field (clause
+type, deal-point category, drug interaction type, etc.), not the
+cost of the specific wrong output a model produces. For
+extractive and classification tasks (CUAD, MAUD, ContractNLI,
+HEAD-QA, MedMCQA, DDI, PrivacyQA, JudgeBERT) the two coincide:
+missing an indemnification clause has the same cost regardless
+of what the model outputs instead. For the three generative
+finance benchmarks (FinanceBench, FinQA, TAT-QA) the
+question-level cost is a conservative upper bound: a $\$11.6$\,B
+revenue answer instead of $\$14.2$\,B is operationally severe,
+while $\$14.0$\,B is wrong but operationally benign. Per-output
+severity scoring is left to future work (see Limitations).
 
 \subsection{Risk Measures}
 
@@ -505,7 +530,7 @@ $182{,}822$ (MedMCQA).
 \label{sec:rq1}
 
 \paragraph{Rankings agree, contrary to the small-sample claim.}
-At full-corpus scale, accuracy and $\ES$ rankings are strongly
+At full-corpus scale, accuracy and $\ES$ rankings are positively
 correlated in every domain: per-domain Kendall $\tau$ is
 $0.58$ in finance ($p{=}0.009$), $0.73$ in insurance
 ($p{=}5{\times}10^{-4}$), $0.97$ in legal ($p{=}5{\times}10^{-8}$),
@@ -513,11 +538,17 @@ and $0.94$ in medical ($p{=}3{\times}10^{-7}$)
 (\autoref{tab:h1}). The dramatic divergence reported by
 \citet{beauchemin2026position} on an $82$-query insurance corpus,
 and the $\tau \approx 0.4$ we ourselves obtained on a
-$1$\,K-per-dataset pilot run, do not reproduce once the corpora
-are saturated: all four domains land in the high-correlation
-regime, with finance still the loosest at $\tau{=}0.58$. This is itself a contribution: \emph{the
-case for severity-aware evaluation cannot rest on rerankings
-disagreeing}, because at scale they largely do not.
+$1$\,K-per-dataset pilot run, do not reproduce at full corpus.
+A subsample-from-full ablation
+(\autoref{sec:app-subsample-ablation}) shows that the per-cell
+sample size is the dominant driver of the $\tau$ shift in
+finance and insurance: at $n{=}1000$ per cell the mean $\tau$
+drops to $0.52$ and $0.45$ respectively, recovering the pilot
+regime, while medical and legal remain at $\tau \geq 0.91$. The
+prior divergence claim is therefore a small-sample artefact in
+finance and insurance, not a property of the framework, and
+does not arise in medical or legal at any tested sample
+size.
 
 \paragraph{Dollar magnitudes are still missing from accuracy.}
 The framework's residual value is what an accuracy-only
@@ -537,7 +568,7 @@ DeepSeek-R1-70B is rank $4$ by accuracy and rank $1$ by $\ES$,
 driven by a severity profile concentrated on negligible/minor
 levels (\autoref{fig:ranking_finance}).
 
-\paragraph{Domain-level aggregation absorbs most inversions.}
+\paragraph{Domain-level aggregation reduces inversions to 13.}
 The $74$ inversions are at the per-(model, dataset) level. When
 ranks are aggregated to the domain (sample-weighted across the
 domain's datasets) only $13$ inversions remain: $11$ in finance
@@ -553,22 +584,23 @@ wrong}}; it is \emph{\enquote{accuracy doesn't tell you how much
 being wrong costs}}.
 
 \begin{table}[t]\centering
-\begin{tabular}{lrr}
+\begin{tabular}{lrrr}
 \toprule
-Domain & $\tau$ & $p$-value \\
+Domain & $\tau$ & $p$-value & 95\% bootstrap CI \\
 \midrule
-  Finance   & 0.58 & 0.009              \\
-  Insurance & 0.73 & $5{\times}10^{-4}$ \\
-  Legal     & 0.97 & $5{\times}10^{-8}$ \\
-  Medical   & 0.94 & $3{\times}10^{-7}$ \\
+  Finance   & 0.58 & 0.009              & $[0.05,\,0.97]$ \\
+  Insurance & 0.73 & $5{\times}10^{-4}$ & $[0.37,\,0.97]$ \\
+  Legal     & 0.97 & $5{\times}10^{-8}$ & $[0.81,\,1.00]$ \\
+  Medical   & 0.94 & $3{\times}10^{-7}$ & $[0.79,\,1.00]$ \\
 \bottomrule
 \end{tabular}
 \caption{Kendall $\tau$ between accuracy and $\widehat{\ES}$
 rankings per domain ($n_{\text{models}}{=}12$, full 11-corpus
-evaluation). Finance shows moderate correlation
-($\tau{=}0.58$); the other three domains are strongly correlated
-($\tau \geq 0.73$). The dramatic divergence on a single
-insurance corpus does not reproduce at scale.}
+evaluation, $10{,}000$ bootstrap resamples over models). The
+point estimate is moderate for finance ($\tau{=}0.58$) and
+strong for the other three domains ($\tau \geq 0.73$); the
+bootstrap CIs are wide for finance and insurance, consistent
+with the small number of ranked models.}
 \label{tab:h1}
 \end{table}
 
@@ -668,9 +700,15 @@ marginal dollar is spent improving severity selection (avoid the
 worst errors); in medical and insurance, it is spent improving
 accuracy outright. Legal sits between. The decomposition is
 sensitive to the cost vector and to the model mix; we report it
-as descriptive rather than confirmatory, but the cross-domain
-spread is robust to a $\pm 20\%$ perturbation of every cost level
-(\autoref{sec:rq3}, robustness check).
+as descriptive rather than confirmatory. Robustness checks:
+$\pm 20\%$ perturbation of every cost level
+(\autoref{sec:app-robustness}) does not change the cross-domain
+ordering, and excluding the two saturated corpora (DDI 2013,
+PrivacyQA) leaves $p$-CV and $\mu_X$-CV essentially unchanged
+in finance, medical, and legal; only insurance reduces to a
+single-corpus setting where $p$-CV drops from $0.67$ to $0.04$
+because JudgeBERT alone shows little per-model error-rate
+spread.
 
 \subsection{RQ3: Routing tradeoff}
 \label{sec:rq3}
@@ -789,7 +827,7 @@ is the cheap-routing regime; the others are deep-routing.}
 and a \textcolor{accentBlue}{frequency component
 $\sigma^2_p/\sigma^2$}. Each domain occupies its own spectrum;
 the dots are the two complementary shares. Severity dominates in
-finance; medical and insurance collapse almost entirely onto
+finance; medical and insurance concentrate almost entirely on
 frequency; legal sits between.}
 \label{fig:variance}
 \end{figure}
@@ -938,9 +976,9 @@ Modelling deferral as excess-of-loss reinsurance gives a closed-form
 breakeven cost for human review, $h^\ast = \mu_X^{\text{route}}$,
 the mean severity of the routed errors. In our snapshot, even a
 $\$50$ human-review cost is well below this breakeven for medical
-and insurance taxonomies, leading to large estimated cost
-reductions when \enquote{major} and \enquote{critical} errors are routed
-($d=c_3$). We caution that the per-error severity used in routing
+and insurance taxonomies, with estimated $\widehat{\ES}$
+reductions of $92\%$ (medical) and $98\%$ (insurance) when
+\enquote{major} and \enquote{critical} errors are routed ($d=c_3$). We caution that the per-error severity used in routing
 is a function of $\bpi$ estimated from observed errors, not of an
 oracle severity classifier; the realised benefit depends on how
 accurately routing decisions are made at inference time.
@@ -1004,7 +1042,7 @@ yields a routing tradeoff that cuts $\ES$ by $85$\,\% (finance,
 at $18$\,\% routing) up to $92$--$98$\,\% (medical, legal,
 insurance, at $41$--$53$\,\% routing). The pattern holds across
 the heterogeneous model sample, supporting the claim that the
-framework, not any single model choice, exposes the cost
+framework, not any single model choice, quantifies the cost
 structure that accuracy hides. Extending to additional severity
 taxonomies (code/security, content moderation) is the natural
 next step; the released \seveval{} library and
@@ -1485,6 +1523,93 @@ Insurance & $0.99$ & $1.00$ & $0.99$ \\
 domain. The medical, legal, and insurance rankings are stable
 across all tested spacings because frequency dominates inter-model
 variance and is unaffected by the cost-level ratio.
+
+\paragraph{Lundberg sensitivity grid.}
+The Lundberg reserve $u^\ast$ depends on the safety loading
+$\theta$ (a conventional choice in actuarial reserving;
+\citealp{klugman2012loss,dickson2016insurance}) and the ruin
+tolerance $\psi^\ast$. Median per-domain $u^\ast$ values
+($10^{6}$\,USD per $10{,}000$ outputs per period) across a
+$3 \times 3$ grid:
+
+\begin{center}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l ccc ccc ccc}
+\toprule
+& \multicolumn{3}{c}{Finance} & \multicolumn{3}{c}{Medical} & \multicolumn{3}{c}{Insurance} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+$\theta \backslash \psi^\ast$ & $.005$ & $.01$ & $.05$
+                              & $.005$ & $.01$ & $.05$
+                              & $.005$ & $.01$ & $.05$ \\
+\midrule
+$0.1$ & $1.6$ & $1.4$ & $0.9$ & $13.3$ & $11.6$ & $7.5$ & $6.2$ & $5.4$ & $3.5$ \\
+$0.2$ & $0.9$ & $0.8$ & $0.5$ & $7.1$  & $6.2$  & $4.0$ & $3.3$ & $2.9$ & $1.9$ \\
+$0.5$ & ---   & ---   & ---   & $3.3$  & $2.9$  & $1.9$ & $1.6$ & $1.4$ & $0.9$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{center}
+
+\noindent Reserves scale as expected with both $\theta$ and
+$\psi^\ast$. At $\theta = 0.5$ Lundberg's adjustment coefficient
+$R$ has no positive root in finance (the safety loading exceeds
+the achievable margin), so $u^\ast$ is undefined; reserves
+should instead be taken from the Monte Carlo tail of $S$.
+Reported values in the body use the actuarial defaults
+$\theta = 0.2$ and $\psi^\ast = 0.01$.
+
+\paragraph{Aggregation method sensitivity.}
+Kendall $\tau$ values in \autoref{tab:h1} use an
+\emph{unweighted} mean of per-(model, dataset) accuracy and
+expected loss within each domain. With a \emph{sample-weighted}
+mean (each dataset weighted by its corpus size), finance
+$\tau$ rises from $0.58$ to $0.67$; medical and insurance
+become $0.97$ each; legal is unchanged at $1.00$. The
+slopegraph in \autoref{fig:ranking_finance} uses
+sample-weighted aggregates; the table reports unweighted values
+because they match the analysis script's
+$\texttt{groupby("model").mean()}$ default. Both aggregations
+agree on the qualitative claim that finance is the loosest
+domain.
+
+\section{Subsample Ablation}
+\label{sec:app-subsample-ablation}
+
+To separate the effect of per-cell sample size from the effect of
+roster change (the pilot used $3$ later-dropped corpora and a
+broken $\texttt{mistral-small-3}$ checkpoint), we subsample the
+$132$ full-corpus prediction files uniformly without replacement
+to $n_{\text{sub}}$ predictions per (model, dataset) cell, with
+the same $12$ models and $11$ datasets in scope, and recompute
+the per-domain Kendall $\tau$. The procedure is repeated over
+$10$ random seeds.
+
+\begin{center}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+$n_{\text{sub}}$ & Finance & Medical & Legal & Insurance \\
+\midrule
+$200$  & $0.13 \pm 0.21$ & $0.84 \pm 0.05$ & $0.76 \pm 0.11$ & $0.11 \pm 0.19$ \\
+$500$  & $0.36 \pm 0.15$ & $0.90 \pm 0.03$ & $0.86 \pm 0.06$ & $0.32 \pm 0.20$ \\
+$1000$ & $0.52 \pm 0.08$ & $0.91 \pm 0.02$ & $0.92 \pm 0.03$ & $0.45 \pm 0.19$ \\
+full   & $0.58$          & $0.94$          & $0.97$          & $0.73$          \\
+\bottomrule
+\end{tabular}%
+}
+\end{center}
+
+\noindent At $n_{\text{sub}} = 1000$ (close to the original
+$1$\,K-per-dataset pilot) the per-domain $\tau$ reproduces the
+pilot $\tau \approx 0.4$ range in finance and insurance
+($0.52$ and $0.45$ mean across $10$ seeds), while medical and
+legal remain in the $\tau \geq 0.91$ regime. At
+$n_{\text{sub}} = 200$ finance and insurance approach zero
+correlation. The pilot divergence is therefore primarily a
+finite-sample effect in the two domains where the framework
+shows the most variance (finance: severity-driven, insurance:
+small model spread), not a property of the framework or of the
+specific datasets dropped.
 
 \section{Full Results Tables}
 \label{sec:app-full-results}

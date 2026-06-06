@@ -311,20 +311,50 @@ def aggregate_per_domain(metrics: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def test_h1_ranking_divergence(metrics: pd.DataFrame) -> dict:
-    """H1: Kendall tau between accuracy and E[S] rankings per domain."""
+def test_h1_ranking_divergence(
+    metrics: pd.DataFrame, weighted: bool = False
+) -> dict:
+    """H1: Kendall tau between accuracy and E[S] rankings per domain.
+
+    The aggregation across datasets within a domain affects the per-model
+    summary used to compute the rank correlation. We expose both choices:
+
+    - ``weighted=False`` (default, reported in the paper body): unweighted
+      mean of per-(model, dataset) accuracy and expected loss. This is the
+      pandas ``groupby("model").mean()`` convention.
+    - ``weighted=True`` (reported in Appendix G as a sensitivity check):
+      sample-weighted mean where each dataset contributes proportionally
+      to its corpus size ``n``. This matches the per-output aggregation
+      used in the Figure 1 slopegraph.
+
+    Both aggregations are reported because the choice changes the point
+    estimate of tau (e.g., finance: 0.58 unweighted vs 0.67 weighted) but
+    not the qualitative cross-domain ordering.
+    """
     out = {}
     n_divergent = 0
     for dom in metrics["taxonomy_domain"].unique():
         df = metrics[metrics["taxonomy_domain"] == dom].copy()
         if df["model"].nunique() < 3:
             continue
-        # Average over datasets within the same taxonomy domain.
-        agg = (
-            df.groupby("model")
-            .agg(accuracy=("accuracy", "mean"), expected_loss=("expected_loss", "mean"))
-            .reset_index()
-        )
+        if weighted:
+            # Sample-weighted mean within domain.
+            df["_acc_n"] = df["accuracy"] * df["n"]
+            df["_es_n"] = df["expected_loss"] * df["n"]
+            grp = df.groupby("model").agg(
+                _acc_n=("_acc_n", "sum"),
+                _es_n=("_es_n", "sum"),
+                _n=("n", "sum"),
+            )
+            grp["accuracy"] = grp["_acc_n"] / grp["_n"]
+            grp["expected_loss"] = grp["_es_n"] / grp["_n"]
+            agg = grp.reset_index()[["model", "accuracy", "expected_loss"]]
+        else:
+            agg = (
+                df.groupby("model")
+                .agg(accuracy=("accuracy", "mean"), expected_loss=("expected_loss", "mean"))
+                .reset_index()
+            )
         acc_rank = agg["accuracy"].rank(ascending=False)
         loss_rank = agg["expected_loss"].rank(ascending=True)
         tau, p = kendalltau(acc_rank, loss_rank)
@@ -335,6 +365,7 @@ def test_h1_ranking_divergence(metrics: pd.DataFrame) -> dict:
             "p_value": float(p),
             "divergent": divergent,
             "n_models": int(len(agg)),
+            "aggregation": "weighted" if weighted else "unweighted",
         }
     return {
         "per_domain": out,
