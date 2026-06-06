@@ -104,20 +104,25 @@ An Empirical Study with Actuarial Frequency-Severity Models}
 \begin{abstract}
 Accuracy treats every LLM error as equally costly. The actuarial
 frequency-severity framework of \citet{beauchemin2026position}
-fixes this in theory but was demonstrated on a single
+addresses this in theory but was demonstrated on a single
 $82$-query insurance corpus. We provide the first multi-domain
-empirical validation: $12$ open-weight LLMs ($8$\,B--$120$\,B
+empirical evaluation: $12$ open-weight LLMs ($8$\,B--$120$\,B
 parameters) on $11$ benchmarks across finance, medicine, law,
 and insurance, with severity labels derived from each corpus's
 structured fields. At full-corpus scale, accuracy and $\ES$
-rankings agree strongly in every domain (Kendall
-$\tau \in [0.58, 0.97]$), overturning the small-sample
-divergence claim. The framework's residual value lies in
-$74$ dollar-magnitude inversions, a variance decomposition whose
-severity share spans $5\%$ (medical) to $81\%$ (finance), and a
-routing tradeoff that cuts $\ES$ by $85$--$98\%$ at $18$--$53\%$
-human-review deferral. We release \seveval{}, a HuggingFace-style
-Python library, alongside the annotations.
+rankings are positively correlated in every domain (Kendall
+$\tau$ from $0.58$ in finance to $0.97$ in legal); the
+small-sample divergence does not reproduce. The framework's
+remaining empirical contribution lies in $74$ dollar-magnitude
+inversions (median $\$1.9$\,M, max $\$28.7$\,M per $10{,}000$
+outputs), a variance decomposition whose severity share moves
+from $0.05$ (medical) to $0.81$ (finance) with the
+cross-model coefficient-of-variation ratio of $p$ and $\mu_X$,
+and a routing tradeoff that cuts $\ES$ by $85$\,\% in finance
+at $18$\,\% deferral and by $92$--$98$\,\% in the other three
+domains at $41$--$53$\,\% deferral. We release \seveval{}, a
+HuggingFace-style Python library, with the annotations and
+calibration evidence.
 \end{abstract}
 
 % ============================================================================
@@ -147,9 +152,9 @@ compound loss $S = \sum_{i=1}^{N} X_i$ whose expected value, tail
 quantiles, and required reserves are computable in closed form
 or by Monte Carlo. That contribution was conceptual: feasibility
 on a single $82$-query insurance corpus, no validation across
-domains, models, or full-scale corpora -- and a dramatic
-accuracy-vs-cost ranking divergence whose stability at scale was
-unknown. We provide that validation: $12$ open-weight LLMs
+domains, models, or full-scale corpora; the dramatic
+accuracy-vs-cost ranking divergence reported there had unknown
+stability at scale. We provide that validation: $12$ open-weight LLMs
 ($8$\,B--$120$\,B parameters, dense, MoE, and reasoning-tuned)
 on $11$ benchmarks across finance, medicine, law, and insurance,
 $\sim$$440$\,K predictions over $132$ (model, dataset) cells
@@ -157,9 +162,7 @@ each evaluated on the \emph{full} test set. The aim is not to
 crown a best model; it is to characterise where the framework
 adds signal beyond accuracy, and where it does not.
 
-The picture that emerges is more nuanced than the conceptual
-paper anticipated. Our three contributions track the three
-ways the framework still adds value:
+Our three contributions:
 
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Rankings agree at scale, but dollar magnitudes
@@ -562,9 +565,10 @@ Domain & $\tau$ & $p$-value \\
 \end{tabular}
 \caption{Kendall $\tau$ between accuracy and $\widehat{\ES}$
 rankings per domain ($n_{\text{models}}{=}12$, full 11-corpus
-evaluation). All four domains are in the strongly correlated
-regime; finance is the loosest. The dramatic divergence on a
-single insurance corpus does not reproduce at scale.}
+evaluation). Finance shows moderate correlation
+($\tau{=}0.58$); the other three domains are strongly correlated
+($\tau \geq 0.73$). The dramatic divergence on a single
+insurance corpus does not reproduce at scale.}
 \label{tab:h1}
 \end{table}
 
@@ -702,9 +706,22 @@ and $1.19$ in insurance, with the largest models in insurance
 reaching $1.25$. In dollar terms, a $\$465$\,M-$\ES$ JudgeBERT
 deployment carries an additional $\$15$--$\$20$\,M tail
 contingency at the $95\%$ level. The insurance domain's heavier
-ratio echoes its higher cost-vector CV: the same routing
-mechanism that removes $98\%$ of the mean also dampens the
-worst-case scenario disproportionately.
+ratio reflects its higher cost-vector CV.
+
+\paragraph{Multi-period ruin reserve.}
+For a multi-period deployment with a net-revenue safety loading
+$\theta{=}0.2$ and a ruin tolerance $\psi^\ast{=}0.01$, the
+Lundberg reserve $u^\ast = -\ln(\psi^\ast)/R$ gives the dollar
+buffer that prevents bankruptcy with $99\%$ probability over an
+infinite horizon. Median $u^\ast$ values per $10{,}000$ outputs
+per period are $\$0.8$\,M (finance), $\$2.2$\,M (legal),
+$\$2.9$\,M (insurance) and $\$6.2$\,M (medical). The medical
+reserve is dominated by HEAD-QA, where the worst three models
+score under $1\%$ accuracy and push $\mu_X$ above $\$170$\,k.
+Reserves vary little across models within a domain (range $< 10\%$ of
+the median in all four), confirming that ruin-style reserves
+are driven primarily by the cost vector and the domain-wide
+error distribution rather than by model choice.
 
 \begin{table}[t]\centering
 \begin{tabular}{lrrr}
@@ -870,12 +887,14 @@ in insurance, $-\$2.2$\,M in finance, per $10{,}000$ outputs).
 The gap is largest where frequency dominates the variance
 (medical, insurance): in those regimes, reasoning-tuned models
 also have systematically lower $p$. This is descriptive rather
-than causal -- the sample of reasoning models is small and
-correlated with vendor (Alibaba, DeepSeek) -- but the alignment
-between the variance-share decomposition and the model-class
-gap is consistent with the mechanism: where errors are
-about \emph{how often}, the additional inference compute that
-reasoning models spend pays back as a lower expected loss.
+than causal: three of the four reasoning models are from
+Alibaba (Qwen3-14B, Qwen3-30B-A3B, QwQ-32B) and Qwen2.5-72B
+(same vendor, non-reasoning) lands among the more expensive
+models in medical, so vendor and post-training procedure are
+confounded with the reasoning label. The alignment between the
+variance-share decomposition and the model-class gap is
+consistent with the proposed mechanism but does not establish
+it.
 
 \subsection{What the actuarial framework adds over accuracy}
 
@@ -911,8 +930,8 @@ overhead pays back only on tail-risk and reserve computations
 ($0.37$), with a smaller but non-trivial severity contribution.
 Whether a deployment is in the severity- or frequency-dominated
 regime is a domain property given the cost vector, not a
-property of the model -- which makes it a useful sanity check
-before committing to a more elaborate evaluation pipeline.
+property of the model; this can be checked before committing to
+a more elaborate evaluation pipeline.
 
 \subsection{Human-in-the-loop routing}
 
@@ -941,13 +960,22 @@ $\mathbf{c}$ to their organization's loss data when available.
 
 The closest precedent in NLP is the MQM weighting scheme
 \citep{lommel2014mqm}, with weights $\{1, 5, 25\}$ for minor,
-major and critical errors. Our framework differs in three ways.
-First, costs are calibrated against external evidence (regulatory
-penalties, litigation data, operational loss reports) rather than
-chosen by convention. Second, we report tail measures (VaR, TVaR)
-and reserves in addition to a weighted mean. Third, the routing
-analysis quantifies the cost--benefit trade-off of human review,
-which MQM does not address.
+major and critical errors. Applied to our severity labels (with
+$0$ for negligible), MQM-weighted model rankings track our
+$\widehat{\ES}$ rankings closely: per-domain Kendall $\tau$
+between MQM and $\widehat{\ES}$ is $0.82$ (finance), $0.97$
+(medical), $1.00$ (legal) and $0.97$ (insurance). MQM correctly
+recovers most of the cost ordering when the weights are roughly
+proportional to actual cost ratios. The framework differs from
+MQM in three places where the difference is consequential rather
+than ordinal: costs are calibrated against external evidence
+(regulatory penalties, litigation data, operational loss
+reports) so the absolute dollar magnitudes of the $74$
+inversions are interpretable, not just their sign; tail measures
+($\VaR$, $\TVaR$) and Lundberg reserves cannot be derived from a
+weighted mean alone; and the routing analysis quantifies the
+cost-benefit trade-off of human review, which MQM does not
+address.
 
 % ============================================================================
 % 8. CONCLUSION
@@ -1034,8 +1062,14 @@ a quasi-trivial benchmark is added.
 The $74$ dollar-magnitude inversions arise from $726$ ordered
 within-domain model pairs ($\binom{12}{2}$ pairs across $11$
 datasets), so $10\%$ of all comparisons. The framework surfaces a
-meaningful minority of mispriced pairs, not a leaderboard
-reshuffle.
+minority of mispriced pairs, not a leaderboard reshuffle.
+
+\paragraph{Detection assumption.}
+$\widehat{\ES}$, $\TVaR$ and the routing analysis all assume
+errors are detected and routed at inference time. In production,
+detection probability is below $1$; the realised cost reduction
+from routing is therefore an upper bound. Calibrating an
+oracle-free severity classifier is left to future work.
 
 \paragraph{Pilot vs.\ full corpus is not a controlled ablation.}
 The $\tau \approx 0.4$ we obtained on a $1$\,K-per-dataset pilot
@@ -1414,14 +1448,44 @@ CIs differ by an order of magnitude.
 \section{Robustness to Cost Calibration}
 \label{sec:app-robustness}
 
-Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time barely
-moves the per-domain $\ES$ rankings: the minimum Spearman
+\paragraph{Single-coordinate $\pm 20\%$ perturbations.}
+Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time
+barely moves the per-domain $\ES$ rankings: the minimum Spearman
 correlation between the base and perturbed rankings is $0.93$ in
 finance and $\geq 0.99$ in legal, insurance, and medical (mean
-$\geq 0.97$ in all four). Moderate uncertainty in $\mathbf{c}$ thus
-does not overturn rankings dominated by large differences in $\bpi$
-and $p$. The full sensitivity table is generated by
-\texttt{experiments/analysis.py} via the \texttt{--robustness} flag.
+$\geq 0.97$ in all four). Moderate uncertainty in $\mathbf{c}$
+does not overturn rankings dominated by large differences in
+$\bpi$ and $p$. The full sensitivity table is generated by
+\texttt{experiments/analysis.py} via the \texttt{--robustness}
+flag.
+
+\paragraph{Spacing ratio sensitivity.}
+The default cost vectors use a $10$x geometric spacing
+($c_{k+1}/c_k = 10$, except insurance which uses $20, 5, 25$).
+We re-rank models under three alternative spacings: $5$x
+geometric, $20$x geometric, and a log-linear spacing
+($1, 4, 15, 60$ relative to $c_1$). Spearman correlations
+between each alternative and the default ranking are:
+
+\begin{center}
+\small
+\begin{tabular}{lrrr}
+\toprule
+Domain    & $5$x & $20$x & log-linear \\
+\midrule
+Finance   & $0.92$ & $0.99$ & $0.85$ \\
+Medical   & $0.99$ & $1.00$ & $0.99$ \\
+Legal     & $1.00$ & $1.00$ & $1.00$ \\
+Insurance & $0.99$ & $1.00$ & $0.99$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The log-linear spacing reshuffles finance the most
+($\rho{=}0.85$), consistent with the high severity-share in that
+domain. The medical, legal, and insurance rankings are stable
+across all tested spacings because frequency dominates inter-model
+variance and is unaffected by the cost-level ratio.
 
 \section{Full Results Tables}
 \label{sec:app-full-results}
