@@ -542,11 +542,11 @@ The $74$ inversions are at the per-(model, dataset) level. When
 ranks are aggregated to the domain (sample-weighted across the
 domain's datasets) only $13$ inversions remain: $11$ in finance
 (largest $\$7.5$\,M), $1$ in medical ($\$0.3$\,M), $1$ in
-insurance ($\$0.8$\,M), and $0$ in legal. This decomposition
-sharpens the picture: \emph{at the operational level on which
-production deployments are scoped, accuracy almost perfectly
-predicts cost ranking}. The framework's contribution is not
-overturning leaderboards; it is attaching a defensible dollar
+insurance ($\$0.8$\,M), and $0$ in legal. At the level on which
+production deployments are scoped (a domain, not a single
+dataset), accuracy and cost ranking agree to within a few model
+positions. The framework's contribution is therefore not
+overturning leaderboards: it attaches a defensible dollar
 magnitude to the gap between two adjacent ranks. The takeaway
 is no longer \emph{\enquote{accuracy gets the leaderboard
 wrong}}; it is \emph{\enquote{accuracy doesn't tell you how much
@@ -636,26 +636,25 @@ rise sharply when ranked by dollar cost: DeepSeek-R1-70B
 \subsection{RQ2: Severity vs.\ frequency variance}
 \label{sec:rq2}
 
-Where the framework adds the most signal is the decomposition of
-inter-model $\sigma^2_{\ES}$ into a severity-only
+We decompose inter-model $\sigma^2_{\ES}$ into a severity-only
 ($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component.
-Across the four domains the severity share spans nearly the full
+Across the four domains the severity share spans most of the
 $[0, 1]$ interval: $0.81$ in finance, $0.37$ in legal, $0.06$ in
 insurance, $0.05$ in medical (\autoref{fig:variance}).
 
 \paragraph{Mechanism.}
-The spread is explained by the relative dispersion of the two
-inputs to $\ES = n\, p\, \mu_X$. Across the $12$ models within a
-domain, both the error rate $p$ and the mean severity
+The spread reflects the relative dispersion of the two inputs to
+$\ES = n\, p\, \mu_X$. Across the $12$ models within a domain,
+both the error rate $p$ and the mean severity
 $\mu_X = \sum_k c_k \pi_k$ vary; the dominant component is the
 one with the larger coefficient of variation. In finance, $p$ is
 tightly clustered (CV $0.03$, range $0.62$--$0.70$) while $\mu_X$
-moves twice as much (CV $0.07$) -- severity dominates. In
-medical the picture is inverted: $p$ has CV $0.74$ (range $0.01$
-on DDI to $0.36$ on HEAD-QA) while $\mu_X$ has CV $0.17$ --
-frequency dwarfs severity by an order of magnitude. Insurance
-follows the medical pattern ($p$-CV $0.67$, $\mu_X$-CV $0.17$);
-legal lands in the middle ($p$-CV $0.33$, $\mu_X$-CV $0.26$).
+moves twice as much (CV $0.07$); severity dominates. In medical
+the relation reverses: $p$ has CV $0.74$ (range $0.01$ on DDI to
+$0.36$ on HEAD-QA) while $\mu_X$ has CV $0.17$, so frequency
+dominates by an order of magnitude. Insurance follows the
+medical pattern ($p$-CV $0.67$, $\mu_X$-CV $0.17$); legal lies
+between ($p$-CV $0.33$, $\mu_X$-CV $0.26$).
 
 \paragraph{Practical implication.}
 In finance, models differ mostly in \emph{which} errors they
@@ -683,7 +682,7 @@ $h{=}\$50$, how much $\ES$ is removed per fraction of queries
 deferred? The answer is domain-stratified
 (\autoref{tab:h4}, \autoref{fig:routing}). Finance is the
 \enquote{cheap routing} regime: deferring the median $18\%$ of queries
-removes $84.6\%$ of $\ES$ -- a leverage ratio of $4.7{:}1$. The
+removes $84.6\%$ of $\ES$, a leverage ratio of $4.7{:}1$. The
 three other domains live in a \enquote{deep routing} regime, requiring
 deferral of $41$--$53\%$ of the queries but extracting near-total
 reductions ($92$--$98\%$). Insurance is the steepest combination
