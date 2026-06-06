@@ -129,62 +129,69 @@ Python library, alongside the annotations.
 
 Accuracy treats every error as equally costly: a misclassified
 spam email and a misclassified cancer diagnosis count the same.
-As LLMs move into high-stakes deployments, that assumption
-breaks. A revenue answer of \$11.6\,B instead of \$14.2\,B
-shifts a trading decision; a missed sepsis cue delays
-intervention; mis-extracting an indemnity clause changes a
-contract's risk profile. The per-error cost of these failures
-spans orders of magnitude, yet accuracy assigns them all the
-same penalty.
+As LLMs enter high-stakes deployments, that assumption breaks.
+On JudgeBERT (French legal simplification), DeepSeek-R1-70B
+edges Llama-3.3-70B by $+0.7$ accuracy points yet costs
+$\$28.7$\,M more per $10{,}000$ outputs at calibrated severity
+weights; the leaderboard rewards the more expensive model. A
+revenue answer of \$$11.6$\,B instead of \$$14.2$\,B shifts a
+trading decision, and a missed sepsis cue delays intervention.
+Per-error costs span orders of magnitude, yet accuracy assigns
+them the same penalty.
 
-\citet{beauchemin2026position} proposed adopting actuarial
-frequency-severity models from insurance mathematics to address
-this. Their framework decomposes operational risk into a
-\emph{frequency} component (error rate $p$) and a \emph{severity}
-component (a distribution $\bpi$ over cost levels), yielding a
+\citet{beauchemin2026position} proposed importing actuarial
+frequency-severity models from insurance mathematics. The
+framework splits operational risk into an error rate $p$ and a
+severity distribution $\bpi$ over cost levels, yielding a
 compound loss $S = \sum_{i=1}^{N} X_i$ whose expected value, tail
-quantiles and reserves are computable in closed form or by Monte
-Carlo. That work was conceptual: feasibility on a single
-$82$-query insurance corpus, no empirical validation across
-domains or models.
+quantiles, and required reserves are computable in closed form
+or by Monte Carlo. That contribution was conceptual: feasibility
+on a single $82$-query insurance corpus, no validation across
+domains, models, or full-scale corpora -- and a dramatic
+accuracy-vs-cost ranking divergence whose stability at scale was
+unknown. We provide that validation: $12$ open-weight LLMs
+($8$\,B--$120$\,B parameters, dense, MoE, and reasoning-tuned)
+on $11$ benchmarks across finance, medicine, law, and insurance,
+$\sim$$440$\,K predictions over $132$ (model, dataset) cells
+each evaluated on the \emph{full} test set. The aim is not to
+crown a best model; it is to characterise where the framework
+adds signal beyond accuracy, and where it does not.
 
-This paper provides that validation. We evaluate $12$ open-weight
-LLMs (granite-3.2-8b through gpt-oss-120b, dense, MoE and
-reasoning-tuned) on $11$ benchmarks across four high-stakes
-domains, with severity labels derived from each corpus's
-structured fields. Each (model, dataset) cell uses the
-\emph{full} test corpus, totalling $\sim$$440$\,K predictions
-over $132$ cells. We do not aim to find the best model; we aim
-to characterise the cost picture the framework surfaces, and
-where it adds signal beyond accuracy.
+The picture that emerges is more nuanced than the conceptual
+paper anticipated. Our three contributions track the three
+ways the framework still adds value:
 
-Our contributions:
 \begin{enumerate}[leftmargin=*]
-  \item At full-corpus scale, accuracy and $\ES$ rankings agree
-    strongly in every domain (Kendall
-    $\tau \in [0.58, 0.97]$, all $p < 0.01$). The
-    \enquote{accuracy~$\neq$~economic-risk} claim of the conceptual
-    paper does not survive a saturated corpus.
-  \item Where rankings agree, dollar magnitudes still diverge.
-    We detect $74$ strict inversions $\mathrm{acc}(A) >
-    \mathrm{acc}(B)$ and $\ES(A) > \ES(B)$; the largest is
-    DeepSeek-R1-70B vs.\ Llama-3.3-70B on JudgeBERT, $+0.7$
-    accuracy points for $+\$28.7$\,M per $10{,}000$ outputs.
-  \item The variance decomposition of $\ES$ into severity vs.\
-    frequency components varies from $5\%$ (medical) to $81\%$
-    (finance) across domains. Reducing $\ES$ requires changing
-    \emph{which} errors a model makes in finance / legal, and
-    changing \emph{how often} it errs in medical / insurance.
-  \item HITL routing cuts $\ES$ by $85\%$ in finance at only
-    $18\%$ deferral (cheap-routing regime) and by $92$--$98\%$
-    in the other three domains at $41$--$53\%$ deferral
-    (deep-routing regime).
-  \item We release \seveval{}, a HuggingFace-style Python library
-    (\autoref{sec:app-library}), the rule-based
-    severity tables (\autoref{sec:severity-annotation}), and the
-    cost-calibration evidence
-    (\autoref{sec:app-calibration}).
+  \item \textbf{Rankings agree at scale, but dollar magnitudes
+    do not.} At full corpus, per-domain Kendall $\tau$ between
+    accuracy and $\ES$ rankings is $0.58$--$0.97$ (all
+    $p < 0.01$); the dramatic small-sample divergence does not
+    reproduce. The framework's residual value is in $74$
+    dollar-magnitude inversions ($\$0.32$\,B mis-attributed
+    across the table) that an accuracy-only leaderboard cannot
+    surface. Aggregating to the domain level collapses these to
+    $13$, concentrated almost entirely in finance.
+  \item \textbf{The mechanism behind \emph{when} severity
+    matters.} The inter-model variance in $\ES$ splits into a
+    severity share that ranges from $5\%$ (medical) to $81\%$
+    (finance); the split is driven by which input has the larger
+    cross-model coefficient of variation ($p$-CV vs.\
+    $\mu_X$-CV). This makes a domain a priori classifiable as
+    severity- or frequency-dominated, which in turn tells a
+    procurement committee whether $\bpi$ needs inspection.
+  \item \textbf{A routing tradeoff with two operating regimes.}
+    Modelled as excess-of-loss reinsurance, HITL routing cuts
+    $\ES$ by $85\%$ at $18\%$ deferral in finance (cheap
+    routing) and by $92$--$98\%$ at $41$--$53\%$ deferral in the
+    other three domains (deep routing). The tail premium
+    $\TVaR_{0.95}/\ES$ ranges from $1.06$ in legal to $1.25$ in
+    insurance, sizing reserves above the mean.
 \end{enumerate}
+
+\noindent We release \seveval{}, a HuggingFace-style Python
+library (\autoref{sec:app-library}), the rule-based severity
+tables (\autoref{sec:severity-annotation}), and the cost
+calibrations (\autoref{sec:app-calibration}).
 
 % ============================================================================
 % 2. RELATED WORK
