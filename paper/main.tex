@@ -140,7 +140,7 @@ Accuracy treats every error as equally costly: a misclassified
 spam email and a misclassified cancer diagnosis count the same.
 As LLMs enter high-stakes deployments, that assumption breaks.
 On JudgeBERT (French legal simplification), DeepSeek-R1-70B
-edges Llama-3.3-70B by $+0.7$ accuracy points yet costs
+edges Llama-3.3-70B by $+0.8$ accuracy points yet costs
 $\$28.7$\,M more per $10{,}000$ outputs at calibrated severity
 weights; the leaderboard rewards the more expensive model. A
 revenue answer of \$$11.6$\,B instead of \$$14.2$\,B shifts a
@@ -306,19 +306,19 @@ missing an indemnification clause has the same cost regardless
 of what the model outputs instead. For the three generative
 finance benchmarks, question-level and output-level severities
 are not strictly comparable. We probe the difference by
-re-labelling $360$ wrong FinanceBench predictions (12 models
-$\times$ 30 instances each) with an LLM annotator that sees the
-question, the gold answer, and the model's actual prediction
+re-labelling all $1090$ wrong FinanceBench predictions across
+the 12 models with an LLM annotator (Claude Sonnet 4) that sees
+the question, the gold answer, and the model's actual prediction
 (\autoref{sec:app-output-severity}). The pooled Cohen $\kappa$
-between the rule-based and output-based tiers is $0.04$
-(adjacent agreement $74\%$): the two labels measure orthogonal
-axes. $41\%$ of wrong outputs are judged less severe than the
+between the rule-based and output-based tiers is $0.01$
+(adjacent agreement $68\%$): the two labels measure orthogonal
+axes. $47\%$ of wrong outputs are judged less severe than the
 question type would suggest (paraphrase, digit rounding,
-operationally indistinguishable answer) and $35\%$ more severe
+operationally indistinguishable answer) and $37\%$ more severe
 (sign flip, order-of-magnitude error on a question whose
 question-type was classified \emph{minor}). At the per-model
 level the two labellings diverge non-trivially (Kendall
-$\tau = -0.41$ between rule and LLM mean tiers across the 12
+$\tau = -0.36$ between rule and LLM mean tiers across the 12
 models), so output-level annotation can reorder models, not
 just rescale a single E[S] estimate. The body's reported
 $\widehat{\ES}$ values use the rule-based label by design as a
@@ -575,7 +575,7 @@ out of $726$ ordered model pairs ($10.2\%$ of all pairs). The
 gaps have a heavy right tail: median $\$1.9$\,M, $75$th
 percentile $\$5.4$\,M, max $\$28.7$\,M, summing to $\$0.32$\,B
 of mis-attributed exposure per $10{,}000$ outputs. The largest
-is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.7$
+is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.8$
 accuracy points yet costs $\$28.7$\,M more; on ContractNLI,
 Llama-3.3-70B is $+2.5$ over Granite-3.2-8B for $+\$21.9$\,M;
 on TAT-QA, qwen2.5-72b is $+0.2$ over DeepSeek-R1-70B for
@@ -983,7 +983,7 @@ model ranking. It is what MQM cannot produce:
 \paragraph{Worked example.}
 A risk-management team comparing DeepSeek-R1-70B and Llama-3.3-70B
 for a JudgeBERT deployment sees DeepSeek-R1-70B win on accuracy
-by $0.7$ points. Under MQM, DeepSeek-R1-70B also ranks better.
+by $0.8$ points. Under MQM, DeepSeek-R1-70B also ranks better.
 The framework adds three numbers: $\widehat{\ES}$ for
 DeepSeek-R1-70B is $\$504.8$\,M vs. $\$476.1$\,M for
 Llama-3.3-70B per $10{,}000$ outputs (the higher-accuracy model
@@ -1021,17 +1021,17 @@ a more elaborate evaluation pipeline.
 
 The body's $\widehat{\ES}$ values use a rule-based severity tier
 derived from the question's structured field, not the model's
-specific wrong output. An LLM annotation pass on $360$ wrong
-FinanceBench predictions (\autoref{sec:app-output-severity})
-shows that the two labels measure orthogonal axes: Cohen
-$\kappa = 0.04$ between rule and output tiers, with $41\%$ of
-output tiers strictly below the rule (paraphrase, immaterial
-rounding) and $35\%$ strictly above (sign flip on a minor
-question-type, magnitude error on a descriptive answer). At the
-per-model level the rule and output severities give Kendall
-$\tau = -0.41$ on per-model means: output-level annotation can
-reorder models within a domain, not just rescale a point
-estimate. The body's results are therefore an importance-weighted
+specific wrong output. An LLM annotation pass on the full set of
+$1090$ wrong FinanceBench predictions
+(\autoref{sec:app-output-severity}) shows that the two labels
+measure orthogonal axes: Cohen $\kappa = 0.01$ between rule and
+output tiers, with $47\%$ of output tiers strictly below the
+rule (paraphrase, immaterial rounding) and $37\%$ strictly above
+(sign flip on a minor question-type, magnitude error on a
+descriptive answer). At the per-model level the rule and output
+severities give Kendall $\tau = -0.36$ on per-model means:
+output-level annotation can reorder models within a domain, not
+just rescale a point estimate. The body's results are therefore an importance-weighted
 exposure under a defensible default labelling; per-output
 annotation refines but does not contradict the cross-domain
 conclusions, since the rule label captures which questions are
@@ -1134,8 +1134,9 @@ independent LLM annotator validates the rule \emph{against the
 question type} with adjacent agreement $94\%$ and $\kappa{=}0.46$.
 A separate validation pass that labels severity \emph{from the
 model's actual wrong output} (\autoref{sec:app-output-severity})
-gives a pooled $\kappa = 0.04$ against the rule on $n = 360$
-pairs and reorders per-model means (Kendall $\tau = -0.41$): the
+gives a pooled $\kappa = 0.01$ against the rule on the full
+$n = 1090$ wrong predictions and reorders per-model means
+(Kendall $\tau = -0.36$): the
 two labellings measure orthogonal axes (question importance vs.\
 output deviation), and reported $\widehat{\ES}$ should be read
 as a question-importance-weighted exposure under a defensible
@@ -1672,17 +1673,15 @@ specific datasets dropped.
 \label{sec:app-output-severity}
 
 For each (model, instance) cell where the model is wrong on
-FinanceBench (the only domain where severity is derived from a
-defensible answer-type$\times$metric-type matrix rather than a
-native structured field), we re-label severity by sending the
-question, the gold answer, and the model's actual wrong
-prediction to Claude Sonnet 4 with the same four-tier rubric.
-The script \texttt{experiments/validate\_severity\_output\_llm.py}
-performs the labelling; results in
-\texttt{results/output\_severity\_validation.\{json,csv\}}.
-This run uses $30$ wrong instances per model
-($n = 360$ pairs); a full-corpus run is straightforward but not
-required for the directional finding.
+FinanceBench, we re-label severity by sending the question, the
+gold answer, and the model's actual wrong prediction to Claude
+Sonnet 4 with the same four-tier rubric. FinanceBench is the
+only domain where severity is derived from a defensible
+answer-type by metric-type matrix rather than from a native
+structured field. The labelling script is
+\texttt{experiments/validate\_severity\_output\_llm.py}; results
+land in \texttt{results/output\_severity\_validation.\{json,csv\}}.
+We label all wrong predictions across the 12 models, $n=1090$.
 
 \begin{center}
 \small
@@ -1690,44 +1689,46 @@ required for the directional finding.
 \toprule
 Rule $\backslash$ LLM & negl. & minor & major & critical \\
 \midrule
-negligible & $55$  & $7$   & $7$  & $12$  \\
-minor      & $120$ & $29$  & $35$ & $52$  \\
-major      & $23$  & $3$   & $3$  & $14$  \\
-critical   & $0$   & $0$   & $0$  & $0$   \\
+negligible & $96$  & $21$  & $15$ & $24$  \\
+minor      & $386$ & $47$  & $87$ & $189$ \\
+major      & $102$ & $8$   & $26$ & $65$  \\
+critical   & $16$  & $0$   & $0$  & $8$   \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\noindent Pooled Cohen $\kappa = 0.04$, adjacent agreement
-$73.9\%$. Per-model $\kappa$ ranges from $-0.03$ (DeepSeek-R1,
-QwQ-32B) to $0.10$ (Qwen2.5-72B), all well below the rule-vs-LLM
+\noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
+$68.3\%$. Per-model $\kappa$ ranges from $-0.017$ (Qwen3-30B-A3B)
+to $0.042$ (Llama-3.3-70B), well below the rule-vs-LLM
 $\kappa = 0.46$ obtained when both annotators score the question
 \emph{type} rather than the model's output
 (\autoref{sec:app-severity-by-dataset}). The directions of
-disagreement are roughly balanced: $40.6\%$ of LLM labels are
+disagreement are roughly balanced: $47.0\%$ of LLM labels are
 strictly lower-severity than the rule (paraphrases, immaterial
-digit changes, sign-preserving rounding), $35.3\%$ are
+digit changes, sign-preserving rounding), $36.8\%$ are
 strictly higher (sign flips on a yes/no question whose tier was
 \emph{minor}, magnitude errors on what the rule called a
-descriptive answer), and $24.2\%$ agree exactly. The two labels
+descriptive answer), and $16.2\%$ agree exactly. The two labels
 measure orthogonal axes: question-level severity is keyed to
 which answer-type$\times$metric-type combination is being
 asked; output-level severity is keyed to what the model
-actually produced relative to the gold. Per-model mean severity diverges between the two labels in
-non-trivial ways: gpt-oss-20b is the worst model under the rule
-(mean rule-tier $1.00$) but the joint-tied-best under the LLM
-($0.43$), because its $30$ wrong predictions sit on harder
-question types yet produce close-to-gold outputs. Conversely,
-gemma-3-12b is mid-pack by rule ($0.87$) but worst by LLM
-($1.93$). Kendall $\tau$ between the per-model mean rule and
-LLM severities is $-0.41$ on this sample: output-level
+actually produced relative to the gold. Per-model mean severity
+diverges between the two labels in non-trivial ways: the two
+gpt-oss models are the worst under the rule (mean rule-tier
+$1.17$--$1.19$) but the joint-best under the LLM ($0.49$),
+because their wrong predictions sit on harder question types yet
+produce close-to-gold outputs. Conversely, Granite-3.2-8B and
+the two Gemma models are mid-pack by rule ($1.05$--$1.07$) but
+worst by LLM ($1.64$--$1.94$). Kendall $\tau$ between per-model
+mean rule and LLM severities is $-0.364$: output-level
 annotation would not simply scale the rule-based $\widehat{\ES}$
 estimate; it can reorder models within the same domain. The
 body's reported $\widehat{\ES}$ values are therefore best read
 as a question-importance-weighted exposure under a defensible
-default labelling; a full per-output annotation pass is the
-natural next refinement (left to future work given the cost of
-the LLM judge calls).
+default labelling. (Note: the $24$ rule-critical predictions
+arise entirely from the FinanceBench cross-tabulation matrix;
+no FinanceBench question is natively labelled \emph{critical}
+without the dollar-large + core combination.)
 
 \section{Auxiliary Analyses}
 \label{sec:app-auxiliary}
