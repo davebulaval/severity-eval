@@ -297,3 +297,43 @@ def test_metric_backward_compat():
     assert isinstance(d, dict)
     assert d["accuracy"] == pytest.approx(0.7)
     assert d["expected_loss"] > 0
+
+
+# ------------------------------------------------------------------
+# SeverityReport.plot()
+# ------------------------------------------------------------------
+
+
+def test_plot_returns_two_named_figures(report):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+
+    figs = report.plot()
+    assert set(figs.keys()) == {"loss_distribution", "severity_profile"}
+    for name, f in figs.items():
+        assert isinstance(f, Figure), name
+
+
+def test_plot_writes_two_pdfs_to_output_dir(report, tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    figs = report.plot(output_dir=tmp_path)
+
+    assert len(figs) == 2
+    assert (tmp_path / "loss_distribution.pdf").exists()
+    assert (tmp_path / "severity_profile.pdf").exists()
+    assert (tmp_path / "loss_distribution.pdf").stat().st_size > 1000
+    assert (tmp_path / "severity_profile.pdf").stat().st_size > 1000
+
+
+def test_plot_severity_profile_bar_heights_match_report(report):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    figs = report.plot()
+    ax = figs["severity_profile"].axes[0]
+    heights = [b.get_height() for b in ax.containers[0]]
+    np.testing.assert_allclose(heights, report.severity_profile)
