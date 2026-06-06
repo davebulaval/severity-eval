@@ -977,16 +977,19 @@ a more elaborate evaluation pipeline.
 
 \subsection{Human-in-the-loop routing}
 
-Modelling deferral as excess-of-loss reinsurance gives a closed-form
-breakeven cost for human review, $h^\ast = \mu_X^{\text{route}}$,
-the mean severity of the routed errors. In our snapshot, even a
-$\$50$ human-review cost is well below this breakeven for medical
-and insurance taxonomies, with estimated $\widehat{\ES}$
-reductions of $92\%$ (medical) and $98\%$ (insurance) when
-\enquote{major} and \enquote{critical} errors are routed ($d=c_3$). We caution that the per-error severity used in routing
-is a function of $\bpi$ estimated from observed errors, not of an
-oracle severity classifier; the realised benefit depends on how
-accurately routing decisions are made at inference time.
+Modelling deferral as excess-of-loss reinsurance gives a
+closed-form breakeven cost for human review,
+$h^\ast = \mu_X^{\text{route}}$, the mean severity of the routed
+errors. At $d=c_3$, $h^\ast$ ranges from $\$21$\,k (finance) to
+$\$331$\,k (medical) across domains (legal $\$83$\,k, insurance
+$\$70$\,k, all medians across the $12$ models). The $\$50$
+human-review cost we assume is below the breakeven by
+$420\times$ in finance and $6600\times$ in medical, so the
+routing policy is profitable across a wide range of plausible
+review costs in every domain we evaluate. The per-error severity
+used in routing is a function of $\bpi$ estimated from observed
+errors, not an oracle classifier; the realised benefit depends on
+how accurately routing decisions are made at inference time.
 
 \subsection{Limitations of cost calibration}
 
