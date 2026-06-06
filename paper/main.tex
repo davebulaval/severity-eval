@@ -1085,9 +1085,17 @@ Severity is derived from a structured field of the source corpus
 specialty, OPP-115 category, DDI relation type). For the three
 finance benchmarks the field does not exist natively and we use
 a defensible answer-type$\times$metric-type matrix; an
-independent LLM annotator validates with adjacent agreement
-$94\%$, $\kappa{=}0.46$. Three benchmarks initially considered
-(MedQA, MedCalc-Bench, RAG~Insurance) were dropped because their
+independent LLM annotator validates the rule \emph{against the
+question type} with adjacent agreement $94\%$ and $\kappa{=}0.46$.
+A separate validation pass that labels severity \emph{from the
+model's actual wrong output} (\autoref{sec:app-output-severity})
+gives a pooled $\kappa = 0.04$ against the rule on $n = 360$
+pairs and reorders per-model means (Kendall $\tau = -0.41$): the
+two labellings measure orthogonal axes (question importance vs.\
+output deviation), and reported $\widehat{\ES}$ should be read
+as a question-importance-weighted exposure under a defensible
+default labelling. Three benchmarks initially considered (MedQA,
+MedCalc-Bench, RAG~Insurance) were dropped because their
 keyword-based labels could not be defended at the
 critical-vs-major boundary.
 
