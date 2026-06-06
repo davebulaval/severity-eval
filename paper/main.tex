@@ -146,7 +146,9 @@ weights; the leaderboard rewards the more expensive model. A
 revenue answer of \$$11.6$\,B instead of \$$14.2$\,B shifts a
 trading decision, and a missed sepsis cue delays intervention.
 Per-error costs span orders of magnitude, yet accuracy assigns
-them the same penalty.
+them the same penalty. This kind of dollar gap is what an
+accuracy-only leaderboard hides; quantifying it is the
+contribution this paper measures.
 
 \citet{beauchemin2026position} proposed importing actuarial
 frequency-severity models from insurance mathematics. The
@@ -808,6 +810,11 @@ is the cheap-routing regime; the others are deep-routing.}
   \foreach \y in {1,2,3,4} \draw[spine] (0,-\y) -- (6,-\y);
   % 50% reference tick (dotted)
   \draw[dotted, black!40] (3,-0.4) -- (3,-4.6);
+  % directional hints at axis extremities
+  \node[font=\scriptsize, text=accentBlue, anchor=south west, yshift=2pt] at (0,-0.1)
+    {$\leftarrow$ frequency-dominated};
+  \node[font=\scriptsize, text=sevMaj, anchor=south east, yshift=2pt] at (6,-0.1)
+    {severity-dominated $\rightarrow$};
   % axis tick labels at 0/50/100
   \node[font=\scriptsize, text=black!50] at (0,-4.8) {0\%};
   \node[font=\scriptsize, text=black!50] at (3,-4.8) {50\%};
@@ -938,21 +945,56 @@ have lower mean $\widehat{\ES}$ in every domain) is reported in
 confound made explicit; the framework's results do not depend
 on it.
 
-\subsection{What the actuarial framework adds over accuracy}
+\subsection{What the framework adds over accuracy and MQM}
 
-The compound loss model produces three families of quantities that
-accuracy alone does not provide. The expected loss $\ES$ summarises
-the per-period economic exposure under a given $\mathbf{c}$; the
-tail measures $\VaR_{0.95}$ and $\TVaR_{0.95}$ characterise the
-loss in adverse scenarios; the Lundberg reserve $u^\ast$ translates
-a target ruin tolerance into a dollar budget. These outputs are
-expressed in the same units that risk-management functions
-(Basel~II/III, SOX, COSO) already use, which can lower the
-translation cost between AI evaluation and enterprise risk
-processes. The actuarial decomposition therefore complements
-accuracy rather than replaces it: the error rate $p$ remains a
-primary input, but $\bpi$ and $\mathbf{c}$ are needed to recover
-the economic picture.
+The compound loss model produces three families of quantities
+that accuracy alone does not provide: the expected loss $\ES$
+summarises per-period economic exposure under a given
+$\mathbf{c}$, the tail measures $\VaR_{0.95}$ and $\TVaR_{0.95}$
+characterise loss in adverse scenarios, and the Lundberg reserve
+$u^\ast$ translates a target ruin tolerance into a dollar
+budget. These outputs are expressed in the same units that
+risk-management functions (Basel~II/III, SOX, COSO) already
+use.
+
+The closest precedent in NLP is the MQM weighting scheme
+\citep{lommel2014mqm}, with weights $\{1, 5, 25\}$ for minor,
+major and critical errors. Applied to our severity labels (with
+$0$ for negligible), MQM-weighted model rankings track our
+$\widehat{\ES}$ rankings closely: per-domain Kendall $\tau$
+between MQM and $\widehat{\ES}$ is $0.82$ in finance, $0.97$ in
+medical, $1.00$ in legal, and $0.97$ in insurance. \emph{MQM
+recovers most of the cost ordering when its weights happen to be
+roughly proportional to the actual cost ratios.} The framework's
+empirical contribution above MQM is therefore not the per-domain
+model ranking. It is what MQM cannot produce:
+
+\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+  \item dollar-denominated magnitudes calibrated against external
+    evidence (regulatory penalties, litigation data, operational
+    loss reports), so the $\$28.7$\,M JudgeBERT inversion is an
+    interpretable budget item, not an arbitrary unit count;
+  \item tail measures ($\VaR$, $\TVaR$) and Lundberg reserves,
+    which cannot be derived from a weighted mean;
+  \item the routing analysis that quantifies the cost-benefit
+    trade-off of human review at a chosen retention threshold.
+\end{itemize}
+
+\paragraph{Worked example.}
+A risk-management team comparing DeepSeek-R1-70B and Llama-3.3-70B
+for a JudgeBERT deployment sees DeepSeek-R1-70B win on accuracy
+by $0.7$ points. Under MQM, DeepSeek-R1-70B also ranks better.
+The framework adds three numbers: $\widehat{\ES}$ for
+DeepSeek-R1-70B is $\$504.8$\,M vs. $\$476.1$\,M for
+Llama-3.3-70B per $10{,}000$ outputs (the higher-accuracy model
+is in fact \$28.7\,M more expensive). $\TVaR_{0.95}$ is
+$\$524.9$\,M vs.\ $\$495.9$\,M, so the tail-risk margin is also
+worse for the higher-accuracy model. The Lundberg reserve at
+$\psi^\ast{=}0.01$, $\theta{=}0.2$ is $\$2.9$\,M, sizing the
+buffer the deployment must hold to keep one-year ruin
+probability below $1\%$. Neither MQM nor accuracy can deliver
+these three figures; together they convert "model A is better"
+into a budgeted comparison.
 
 \subsection{When does severity matter most?}
 
@@ -974,6 +1016,27 @@ Whether a deployment is in the severity- or frequency-dominated
 regime is a domain property given the cost vector, not a
 property of the model; this can be checked before committing to
 a more elaborate evaluation pipeline.
+
+\subsection{Question-level vs output-level severity}
+
+The body's $\widehat{\ES}$ values use a rule-based severity tier
+derived from the question's structured field, not the model's
+specific wrong output. An LLM annotation pass on $360$ wrong
+FinanceBench predictions (\autoref{sec:app-output-severity})
+shows that the two labels measure orthogonal axes: Cohen
+$\kappa = 0.04$ between rule and output tiers, with $41\%$ of
+output tiers strictly below the rule (paraphrase, immaterial
+rounding) and $35\%$ strictly above (sign flip on a minor
+question-type, magnitude error on a descriptive answer). At the
+per-model level the rule and output severities give Kendall
+$\tau = -0.41$ on per-model means: output-level annotation can
+reorder models within a domain, not just rescale a point
+estimate. The body's results are therefore an importance-weighted
+exposure under a defensible default labelling; per-output
+annotation refines but does not contradict the cross-domain
+conclusions, since the rule label captures which questions are
+high-stakes while the output label captures whether the model's
+specific failure realises that stake.
 
 \subsection{Human-in-the-loop routing}
 
@@ -1000,27 +1063,6 @@ conditioned on an undetected error. The robustness analysis (\autoref{sec:app-ro
 suggests that $\pm 20\%$ perturbations do not overturn rankings in
 the snapshot we report, but practitioners should recalibrate
 $\mathbf{c}$ to their organization's loss data when available.
-
-\subsection{Comparison with MQM scoring}
-
-The closest precedent in NLP is the MQM weighting scheme
-\citep{lommel2014mqm}, with weights $\{1, 5, 25\}$ for minor,
-major and critical errors. Applied to our severity labels (with
-$0$ for negligible), MQM-weighted model rankings track our
-$\widehat{\ES}$ rankings closely: per-domain Kendall $\tau$
-between MQM and $\widehat{\ES}$ is $0.82$ (finance), $0.97$
-(medical), $1.00$ (legal) and $0.97$ (insurance). MQM correctly
-recovers most of the cost ordering when the weights are roughly
-proportional to actual cost ratios. The framework differs from
-MQM in three places where the difference is consequential rather
-than ordinal: costs are calibrated against external evidence
-(regulatory penalties, litigation data, operational loss
-reports) so the absolute dollar magnitudes of the $74$
-inversions are interpretable, not just their sign; tail measures
-($\VaR$, $\TVaR$) and Lundberg reserves cannot be derived from a
-weighted mean alone; and the routing analysis quantifies the
-cost-benefit trade-off of human review, which MQM does not
-address.
 
 % ============================================================================
 % 8. CONCLUSION
@@ -1498,7 +1540,7 @@ CIs differ by an order of magnitude.
 % Include from separate file
 \input{prompt_documentation}
 
-\section{Robustness to Cost Calibration}
+\section{Robustness Analyses}
 \label{sec:app-robustness}
 
 \paragraph{Single-coordinate $\pm 20\%$ perturbations.}
@@ -1588,9 +1630,8 @@ $\texttt{groupby("model").mean()}$ default. Both aggregations
 agree on the qualitative claim that finance is the loosest
 domain.
 
-\section{Subsample Ablation}
+\paragraph{Subsample ablation.}
 \label{sec:app-subsample-ablation}
-
 To separate the effect of per-cell sample size from the effect of
 roster change (the pilot used $3$ later-dropped corpora and a
 broken $\texttt{mistral-small-3}$ checkpoint), we subsample the
@@ -1688,8 +1729,15 @@ default labelling; a full per-output annotation pass is the
 natural next refinement (left to future work given the cost of
 the LLM judge calls).
 
-\section{Model-Class Ablation: Reasoning vs Non-Reasoning}
+\section{Auxiliary Analyses}
+\label{sec:app-auxiliary}
+
+\subsection{Model-Class: Reasoning vs Non-Reasoning}
 \label{sec:app-model-class}
+
+\emph{This is an anecdotal observation and is not used as
+evidence anywhere else in the paper. It is included for
+completeness and to forestall the question.}
 
 The four reasoning-tuned checkpoints in our roster
 (DeepSeek-R1-Distill-70B, QwQ-32B, Qwen3-14B, Qwen3-30B-A3B)
@@ -1700,20 +1748,19 @@ finance, per $10{,}000$ outputs. The gap is largest in the two
 frequency-dominated domains (medical, insurance), where the
 reasoning models also have systematically lower error rate $p$.
 
-This observation is correlational and the reasoning sample is
-small (n=4) and vendor-correlated. Three of the four reasoning
-models are from Alibaba (Qwen3-14B, Qwen3-30B-A3B, QwQ-32B); the
-same vendor's non-reasoning checkpoint Qwen2.5-72B lands among
-the more expensive models in medical ($\widehat{\ES} = \$752$\,M),
-so vendor and post-training procedure are confounded with the
-reasoning label. A controlled within-vendor comparison would
-require evaluating the same base model with and without
-reasoning fine-tuning, which is not available in the open-weight
-checkpoints we used. The cross-model regularity is therefore
-reported as a descriptive ablation, not as a causal claim about
-inference-time compute.
+The reasoning sample is small ($n=4$) and vendor-correlated.
+Three of the four reasoning models are from Alibaba (Qwen3-14B,
+Qwen3-30B-A3B, QwQ-32B); the same vendor's non-reasoning
+checkpoint Qwen2.5-72B lands among the more expensive models in
+medical ($\widehat{\ES} = \$752$\,M), so vendor and
+post-training procedure are confounded with the reasoning label.
+A controlled within-vendor comparison would require evaluating
+the same base model with and without reasoning fine-tuning,
+which is not available in the open-weight checkpoints we used.
+We report the observation but do not use it to support any
+claim in the body.
 
-\section{Slopegraphs for All Four Domains}
+\subsection{Slopegraphs for All Four Domains}
 \label{sec:app-slopegraphs}
 
 \autoref{fig:ranking_finance} in the body shows the finance
