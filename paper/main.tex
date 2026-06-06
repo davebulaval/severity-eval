@@ -661,7 +661,10 @@ with the small number of ranked models.}
 \caption{Finance: accuracy rank (left) vs.\ $\widehat{\ES}$ rank
 (right) across 12 models, full corpus ($\tau{=}0.58$). Two models
 rise sharply when ranked by dollar cost: DeepSeek-R1-70B
-($4{\to}1$) and GPT-OSS-20B ($9{\to}3$).}
+($4{\to}1$) and GPT-OSS-20B ($9{\to}3$). Finance is the only
+domain where dataset-level inversions concentrate; the other
+three are near-monotone and reproduced as mini-slopegraphs in
+\autoref{fig:slopegraphs_all_domains}.}
 \label{fig:ranking_finance}
 \end{figure*}
 
@@ -915,23 +918,11 @@ complement to the conceptual demonstration of
 \citet{beauchemin2026position}, which showed feasibility on a
 single $82$-query insurance corpus with one model.
 
-That said, one cross-model regularity is visible: the four
-reasoning-tuned checkpoints (DeepSeek-R1-Distill-70B, QwQ-32B,
-Qwen3-14B, Qwen3-30B-A3B) achieve lower mean $\widehat{\ES}$
-than the eight non-reasoning models in every domain
-($-\$112.8$\,M in medical, $-\$15.4$\,M in legal, $-\$6.5$\,M
-in insurance, $-\$2.2$\,M in finance, per $10{,}000$ outputs).
-The gap is largest where frequency dominates the variance
-(medical, insurance): in those regimes, reasoning-tuned models
-also have systematically lower $p$. This is descriptive rather
-than causal: three of the four reasoning models are from
-Alibaba (Qwen3-14B, Qwen3-30B-A3B, QwQ-32B) and Qwen2.5-72B
-(same vendor, non-reasoning) lands among the more expensive
-models in medical, so vendor and post-training procedure are
-confounded with the reasoning label. The alignment between the
-variance-share decomposition and the model-class gap is
-consistent with the proposed mechanism but does not establish
-it.
+A descriptive cross-model observation (reasoning-tuned models
+have lower mean $\widehat{\ES}$ in every domain) is reported in
+\autoref{sec:app-model-class} as an ablation, with the vendor
+confound made explicit; the framework's results do not depend
+on it.
 
 \subsection{What the actuarial framework adds over accuracy}
 
@@ -1610,6 +1601,121 @@ finite-sample effect in the two domains where the framework
 shows the most variance (finance: severity-driven, insurance:
 small model spread), not a property of the framework or of the
 specific datasets dropped.
+
+\section{Model-Class Ablation: Reasoning vs Non-Reasoning}
+\label{sec:app-model-class}
+
+The four reasoning-tuned checkpoints in our roster
+(DeepSeek-R1-Distill-70B, QwQ-32B, Qwen3-14B, Qwen3-30B-A3B)
+achieve lower mean $\widehat{\ES}$ than the eight non-reasoning
+checkpoints in every domain: $-\$112.8$\,M in medical,
+$-\$15.4$\,M in legal, $-\$6.5$\,M in insurance, $-\$2.2$\,M in
+finance, per $10{,}000$ outputs. The gap is largest in the two
+frequency-dominated domains (medical, insurance), where the
+reasoning models also have systematically lower error rate $p$.
+
+This observation is correlational and the reasoning sample is
+small (n=4) and vendor-correlated. Three of the four reasoning
+models are from Alibaba (Qwen3-14B, Qwen3-30B-A3B, QwQ-32B); the
+same vendor's non-reasoning checkpoint Qwen2.5-72B lands among
+the more expensive models in medical ($\widehat{\ES} = \$752$\,M),
+so vendor and post-training procedure are confounded with the
+reasoning label. A controlled within-vendor comparison would
+require evaluating the same base model with and without
+reasoning fine-tuning, which is not available in the open-weight
+checkpoints we used. The cross-model regularity is therefore
+reported as a descriptive ablation, not as a causal claim about
+inference-time compute.
+
+\section{Slopegraphs for All Four Domains}
+\label{sec:app-slopegraphs}
+
+\autoref{fig:ranking_finance} in the body shows the finance
+slopegraph. The other three domains are reproduced below at the
+same model order (top to bottom by accuracy) but with smaller
+vertical scale. Medical, legal, and insurance show essentially
+no rank crossings: their Kendall $\tau$ values (Table~3) range
+from $0.73$ to $0.97$ and translate visually to near-monotone
+slopegraphs.
+
+\begin{figure*}[t]
+\centering
+\resizebox{0.9\textwidth}{!}{%
+\begin{tikzpicture}[
+    yscale=0.32, xscale=1.0,
+    every node/.style={font=\scriptsize},
+    flat/.style={draw=black!35, line width=0.5pt},
+    swap/.style={draw=sevNeg, line width=1.1pt},
+    dot/.style={circle, fill=black!60, inner sep=0.9pt},
+    panel/.style={anchor=north west},
+]
+  % ===== Medical (top-left): one swap (5,6) =====
+  \node[panel, font=\footnotesize\bfseries] at (0, 2) {Medical \scriptsize($\tau{=}0.94$)};
+  \draw[flat] (0,-1) -- (5,-1);    % gpt-oss-20b
+  \draw[flat] (0,-2) -- (5,-2);    % gpt-oss-120b
+  \draw[flat] (0,-3) -- (5,-3);    % phi-4
+  \draw[flat] (0,-4) -- (5,-4);    % deepseek-r1
+  \draw[swap] (0,-5) -- (5,-6);    % qwen3-30b-a3b swap
+  \draw[swap] (0,-6) -- (5,-5);    % qwq-32b swap
+  \draw[flat] (0,-7) -- (5,-7);    % llama-3.3-70b
+  \draw[flat] (0,-8) -- (5,-8);    % qwen3-14b
+  \draw[flat] (0,-9) -- (5,-9);    % qwen2.5-72b
+  \draw[flat] (0,-10) -- (5,-10);  % granite
+  \draw[flat] (0,-11) -- (5,-11);  % gemma-27b
+  \draw[flat] (0,-12) -- (5,-12);  % gemma-12b
+  \foreach \y in {1,...,12}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
+
+  % ===== Legal (top-right): no crossings =====
+  \node[panel, font=\footnotesize\bfseries] at (8, 2) {Legal \scriptsize($\tau{=}0.97$)};
+  \foreach \y in {1,...,12}{
+    \draw[flat] (8,-\y) -- (13,-\y);
+    \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){};
+  }
+
+  % ===== Insurance (bottom-left): one swap (4,5) =====
+  \node[panel, font=\footnotesize\bfseries] at (0, -14) {Insurance \scriptsize($\tau{=}0.73$)};
+  \draw[flat] (0,-17) -- (5,-17);  % gpt-oss-20b
+  \draw[flat] (0,-18) -- (5,-18);  % gpt-oss-120b
+  \draw[flat] (0,-19) -- (5,-19);  % phi-4
+  \draw[swap] (0,-20) -- (5,-21);  % deepseek swap
+  \draw[swap] (0,-21) -- (5,-20);  % qwen3-14b swap
+  \draw[flat] (0,-22) -- (5,-22);  % qwq-32b
+  \draw[flat] (0,-23) -- (5,-23);  % qwen2.5-72b
+  \draw[flat] (0,-24) -- (5,-24);  % qwen3-30b-a3b
+  \draw[flat] (0,-25) -- (5,-25);  % granite
+  \draw[flat] (0,-26) -- (5,-26);  % gemma-27b
+  \draw[flat] (0,-27) -- (5,-27);  % gemma-12b
+  \draw[flat] (0,-28) -- (5,-28);  % llama-3.3-70b
+  \foreach \y in {17,...,28}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
+
+  % ===== Finance (bottom-right): reference =====
+  \node[panel, font=\footnotesize\bfseries] at (8, -14) {Finance \scriptsize($\tau{=}0.58$, see Fig.~1)};
+  \draw[flat] (8,-17) -- (13,-18);   % gemma-3-27b
+  \draw[flat] (8,-18) -- (13,-20);   % qwen3-14b
+  \draw[flat] (8,-19) -- (13,-22);   % qwen3-30b-a3b
+  \draw[swap] (8,-20) -- (13,-17);   % deepseek rise
+  \draw[flat] (8,-21) -- (13,-23);
+  \draw[flat] (8,-22) -- (13,-21);
+  \draw[flat] (8,-23) -- (13,-24);
+  \draw[flat] (8,-24) -- (13,-25);
+  \draw[swap] (8,-25) -- (13,-19);   % gpt-oss-20b rise
+  \draw[flat] (8,-26) -- (13,-26);
+  \draw[flat] (8,-27) -- (13,-27);
+  \draw[flat] (8,-28) -- (13,-28);
+  \foreach \y in {17,...,28}{ \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){}; }
+  \node[font=\scriptsize, anchor=north] at (2.5,-29) {Accuracy $\to$ $\widehat{\ES}$};
+  \node[font=\scriptsize, anchor=north] at (10.5,-29) {Accuracy $\to$ $\widehat{\ES}$};
+\end{tikzpicture}%
+}
+\caption{Per-domain slopegraphs (small multiples). Each panel
+shows 12 models in accuracy rank order on the left and
+$\widehat{\ES}$ rank on the right; blue line segments mark the
+swaps. Legal has no rank crossings; medical and insurance have a
+single adjacent swap each; finance is the only domain with
+non-trivial line crossings, shown in detail in
+\autoref{fig:ranking_finance}.}
+\label{fig:slopegraphs_all_domains}
+\end{figure*}
 
 \section{Full Results Tables}
 \label{sec:app-full-results}
