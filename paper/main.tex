@@ -699,47 +699,17 @@ for the other three domains in
 \subsection{RQ2: Severity vs.\ frequency variance}
 \label{sec:rq2}
 
-We decompose inter-model $\sigma^2_{\ES}$ into a severity-only
-and a frequency-only component via the closed-form delta-method
-approximation
-$\text{share}_{\text{sev}} = CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$,
-where $CV$ denotes the coefficient of variation across the $14$
-models (12 LLMs plus random and majority baselines). The severity
-share is $0.11$ in finance, $0.27$ in legal, $0.06$ in insurance,
-and $0.19$ in medical (\autoref{fig:variance}). All four domains
-are frequency-dominated: $p$-CV exceeds $\mu_X$-CV by at least a
-factor of $2$ in every domain.
-
-\paragraph{Mechanism.}
-The shares reflect the relative dispersion of the two inputs to
-$\ES = n\, p\, \mu_X$ across the $14$ models within a domain.
-The contribution of each is the square of its coefficient of
-variation. Error rates vary more than mean severities across
-this roster because the baselines pin one end of each $p$ range
-(random near chance, majority near the dominant-class frequency)
-while LLMs fill the upper end; in finance $p$-CV is $0.17$
-against $\mu_X$-CV $0.06$, in legal $0.26$ vs $0.16$, in
-insurance $0.21$ vs $0.05$, and in medical $0.51$ vs $0.25$. A
-Monte Carlo variant of the decomposition
-(\autoref{sec:app-variance-mc}) that does not linearise gives
-the same direction in insurance and finance, and re-classifies
-medical as severity-dominated because the cost-tier interaction
-amplifies the spread of $\bpi$ at the critical end.
-
-\paragraph{Practical implication.}
-Across all four domains, models differ more in \emph{how often}
-they err than in the severity-tier mix of their errors, so error
-rate is the dominant lever for reducing $\ES$ at this granularity.
-The framework's value over accuracy alone is therefore not the
-identification of a severity-dominated regime but the dollar
-magnitude attached to each error rate, the tail measures and the
-routing curves. The decomposition is sensitive to the cost vector
-and to the model mix; we report it as descriptive rather than
-confirmatory. Robustness checks: $\pm 20\%$ perturbation of every
-cost level (\autoref{sec:app-robustness}) does not change the
-cross-domain ordering, and excluding the two baselines moves
-shares toward the LLM-only regime where finance and legal are
-balanced (App.~\ref{sec:app-variance-mc}).
+We decompose inter-model $\sigma^2_{\ES}$ via the closed-form
+delta-method approximation
+$\text{share}_{\text{sev}} = CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$
+over the $14$ models. Severity shares are $0.11$ in finance,
+$0.27$ in legal, $0.06$ in insurance, and $0.19$ in medical
+(\autoref{fig:variance}): all four domains are
+frequency-dominated when LLMs and baselines are pooled.
+\autoref{sec:app-rq2-mechanism} reports the per-domain
+$p$-CV vs.\ $\mu_X$-CV breakdown, the Monte Carlo variant that
+re-classifies medical as severity-dominated, and the LLM-only
+shares (finance and legal rise to $\sim$$0.50$).
 
 \subsection{RQ3: Routing tradeoff}
 \label{sec:rq3}
@@ -1096,12 +1066,12 @@ evaluation. The framework decomposes operational risk into the error
 rate and the severity profile, and yields three families of measures
 (expected loss, tail risk, reserves) that complement accuracy.
 
-Across $12$ open-weight models and four high-stakes domains
-evaluated at full corpus, accuracy and $\ES$ rankings are
-strongly correlated everywhere (Kendall $\tau$ from $0.58$ to
-$0.97$): the dramatic divergence reported on a single $82$-query
-insurance pilot is a small-sample artefact, not a stable empirical
-regularity. The framework's residual value lies elsewhere. It
+Across $12$ open-weight models, two trivial baselines, and four
+high-stakes domains evaluated at full corpus, accuracy and $\ES$
+rankings are strongly correlated everywhere (Kendall $\tau$ from
+$0.69$ to $0.96$): the dramatic divergence reported on a single
+$82$-query insurance pilot is a small-sample artefact, not a
+stable empirical regularity. The framework's residual value lies elsewhere. It
 surfaces $74$ dollar-magnitude inversions in which the
 higher-accuracy model is the more expensive one; it decomposes
 $\sigma^2_{\ES}$ into severity ($0.06$--$0.27$) and frequency
@@ -1576,6 +1546,28 @@ CIs differ by an order of magnitude.
 
 \section{Robustness Analyses}
 \label{sec:app-robustness}
+
+\paragraph{RQ2 mechanism.}
+\label{sec:app-rq2-mechanism}
+The closed-form CV-ratio shares reflect the relative dispersion
+of the two inputs to $\ES = n\,p\,\mu_X$ across the $14$ models
+within each domain. Error rates vary more than mean severities
+because the baselines pin one end of the $p$ range (random near
+chance, majority near the dominant-class frequency) while LLMs
+fill the upper end. Per-domain CVs: finance $p$-CV $0.17$
+against $\mu_X$-CV $0.06$; legal $0.26$ vs $0.16$; insurance
+$0.21$ vs $0.05$; medical $0.51$ vs $0.25$. Across all four
+domains models differ more in \emph{how often} they err than in
+the severity-tier mix of their errors, so error rate is the
+dominant lever for reducing $\ES$ at this granularity. The
+framework's value over accuracy alone is therefore not the
+identification of a severity-dominated regime but the dollar
+magnitude attached to each error rate, the tail measures and the
+routing curves. Excluding the two baselines moves shares toward
+the LLM-only regime where finance and legal rise to roughly
+$0.50$; the qualitative split (insurance/medical
+frequency-dominated, finance/legal balanced) holds under the
+$\pm 20\%$ cost perturbation reported below.
 
 \paragraph{Variance decomposition: Monte Carlo variant.}
 \label{sec:app-variance-mc}
