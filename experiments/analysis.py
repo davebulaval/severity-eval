@@ -144,7 +144,7 @@ def load_results(results_dir: Path, include_dropped: bool = False) -> pd.DataFra
 def compute_metrics(
     df: pd.DataFrame,
     n_queries: int = 10_000,
-    n_sim: int = 20_000,
+    n_sim: int = 100_000,
     alpha: float = 0.95,
     seed: int = 42,
     prompt_style: str | None = "original",
@@ -457,7 +457,7 @@ def test_h4_routing(
 def test_h2_variance_decomposition(
     metrics: pd.DataFrame,
     n_queries: int = 10_000,
-    n_sim: int = 10_000,
+    n_sim: int = 100_000,
 ) -> dict:
     """H2: which factor drives more variance in E[S]: severity or frequency?"""
     out = {}
@@ -583,7 +583,7 @@ def test_h2_variance_decomposition_analytic(metrics: pd.DataFrame) -> dict:
 def test_h5_robustness(
     metrics: pd.DataFrame,
     n_queries: int = 10_000,
-    n_sim: int = 10_000,
+    n_sim: int = 100_000,
     perturbation: float = 0.20,
 ) -> dict:
     """H5: Spearman correlation of E[S] rankings under cost perturbation."""

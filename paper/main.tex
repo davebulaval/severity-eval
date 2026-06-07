@@ -126,20 +126,20 @@ Accuracy treats every LLM error as equally costly. The actuarial
 frequency-severity framework of \citet{beauchemin2026position}
 addresses this in theory but was demonstrated on a single
 $82$-query insurance corpus. We provide the first multi-domain
-empirical evaluation: $12$ open-weight LLMs on $11$ benchmarks
-across finance, medicine, law, and insurance, with severity
-labels from each corpus's structured fields. At full corpus,
-accuracy and $\widehat{\ES}$ rankings are positively correlated
-in every domain (Kendall $\tau$ $0.58$--$0.97$); the framework's
-value lies in the dollar magnitudes the ordering hides. We find
-$74$ accuracy-vs-cost inversions worth \$0.28\,B mis-attributed
+empirical evaluation: $12$ open-weight LLMs plus two trivial
+baselines (random, majority) on $11$ benchmarks across finance,
+medicine, law, and insurance, with severity labels from each
+corpus's structured fields. At full corpus, accuracy and
+$\widehat{\ES}$ rankings are positively correlated in every
+domain (Kendall $\tau$ $0.69$--$0.96$); the framework's value
+lies in the dollar magnitudes the ordering hides. We find $74$
+accuracy-vs-cost inversions worth \$0.28\,B mis-attributed
 (median \$1.9\,M, max \$28.7\,M per $10{,}000$ outputs); the
-severity share of inter-model variance moves from $0.08$
-(medical) to $0.51$ (legal), classifying domains a priori as
-frequency- or severity-driven; and excess-of-loss routing cuts
-$\widehat{\ES}$ by $85\%$ in finance at $18\%$ deferral and by
-$92$--$98\%$ in the other three domains at $41$--$53\%$
-deferral. We release \seveval{}\footnote{Code, severity
+severity share of inter-model variance is $0.06$--$0.27$
+across the four domains, all frequency-dominated under the
+analytic CV-ratio decomposition; and excess-of-loss routing
+cuts $\widehat{\ES}$ by $85\%$ in finance at $18\%$ deferral
+and by $93$--$98\%$ in the other three domains. We release \seveval{}\footnote{Code, severity
 annotations, and evaluation results: \coderepo.}, a
 HuggingFace-style library, with annotations and calibration
 evidence.
@@ -530,15 +530,17 @@ around three research questions:
 \section{Results}
 \label{sec:results}
 
-We report results on the $132$ (model, dataset) cells, each
+We report results on the $154$ (model, dataset) cells, each
 evaluated on the \emph{full} test corpus. All risk measures are
 computed with $n{=}10{,}000$ outputs per evaluation period,
-$20{,}000$ Monte Carlo replications, and $\alpha{=}0.95$. The
-complete per-pair table is provided in
-\autoref{sec:app-full-results}. The headline numbers below
-come from $12$ open-weight local models on $11$ benchmarks, with
-per-cell sample sizes ranging from $150$ (FinanceBench) to
-$182{,}822$ (MedMCQA).
+$10^{5}$ Monte Carlo replications following
+\citet{klugman2012loss}, and $\alpha{=}0.95$. The complete
+per-pair table is provided in \autoref{sec:app-full-results}.
+The headline numbers below come from $12$ open-weight local
+models plus two trivial baselines (random uniform from the
+answer set, and majority-class predictor) on $11$ benchmarks,
+with per-cell sample sizes ranging from $150$ (FinanceBench)
+to $182{,}822$ (MedMCQA).
 
 \subsection{RQ1: Ranking alignment and dollar-magnitude inversions}
 \label{sec:rq1}
@@ -546,13 +548,14 @@ $182{,}822$ (MedMCQA).
 \paragraph{Rankings agree, contrary to the small-sample claim.}
 At full-corpus scale, accuracy and $\ES$ rankings are positively
 correlated in every domain: per-domain Kendall $\tau$ is
-$0.58$ in finance ($p{=}0.009$), $0.73$ in insurance
-($p{=}5{\times}10^{-4}$), $0.97$ in legal ($p{=}5{\times}10^{-8}$),
-and $0.94$ in medical ($p{=}3{\times}10^{-7}$)
-(\autoref{tab:h1}). The dramatic divergence reported by
-\citet{beauchemin2026position} on an $82$-query insurance corpus,
-and the $\tau \approx 0.4$ we ourselves obtained on a
-$1$\,K-per-dataset pilot run, do not reproduce at full corpus.
+$0.69$ in finance ($p{=}3{\times}10^{-4}$), $0.80$ in insurance
+($p{=}9{\times}10^{-6}$), $0.96$ in legal and medical
+($p{=}2{\times}10^{-9}$ each) (\autoref{tab:h1}, $14$~models
+including random and majority baselines). The dramatic divergence
+reported by \citet{beauchemin2026position} on an $82$-query
+insurance corpus, and the $\tau \approx 0.4$ we ourselves
+obtained on a $1$\,K-per-dataset pilot run, do not reproduce at
+full corpus.
 A subsample-from-full ablation
 (\autoref{sec:app-subsample-ablation}) shows that the per-cell
 sample size is the dominant driver of the $\tau$ shift in
@@ -569,7 +572,10 @@ The framework's residual value is what an accuracy-only
 leaderboard cannot show: the cost of the rank that is correct.
 We detect $74$ strict accuracy-vs-$\ES$ inversions where
 $\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$,
-out of $726$ ordered model pairs ($10.2\%$ of all pairs). The
+out of $1001$ ordered model pairs ($7.4\%$). All inversions
+involve two LLMs; the random and majority baselines are both
+worse than every LLM on accuracy and $\ES$, so they do not
+contribute new inversions. The
 gaps have a heavy right tail: median $\$1.9$\,M, $75$th
 percentile $\$5.3$\,M, max $\$28.7$\,M, summing to $\$0.28$\,B
 of mis-attributed exposure per $10{,}000$ outputs. The largest
@@ -602,18 +608,19 @@ being wrong costs}}.
 \toprule
 Domain & $\tau$ & $p$-value & 95\% bootstrap CI \\
 \midrule
-  Finance   & 0.58 & 0.009              & $[0.05,\,0.97]$ \\
-  Insurance & 0.73 & $5{\times}10^{-4}$ & $[0.37,\,0.97]$ \\
-  Legal     & 0.97 & $5{\times}10^{-8}$ & $[0.81,\,1.00]$ \\
-  Medical   & 0.94 & $3{\times}10^{-7}$ & $[0.79,\,1.00]$ \\
+  Finance   & 0.69 & $3{\times}10^{-4}$ & $[0.29,\,0.98]$ \\
+  Insurance & 0.80 & $9{\times}10^{-6}$ & $[0.53,\,0.98]$ \\
+  Legal     & 0.96 & $2{\times}10^{-9}$ & $[0.84,\,1.00]$ \\
+  Medical   & 0.96 & $2{\times}10^{-9}$ & $[0.84,\,1.00]$ \\
 \bottomrule
 \end{tabular}
 \caption{Kendall $\tau$ between accuracy and $\widehat{\ES}$
-rankings per domain ($n_{\text{models}}{=}12$, full 11-corpus
-evaluation, $10{,}000$ bootstrap resamples; $p$-values exact, no
-ties). Finance is moderate ($\tau{=}0.58$); the other three are
-strong ($\tau \geq 0.73$). Bootstrap CIs are wide for finance
-and insurance given the small number of ranked models.}
+rankings per domain ($n_{\text{models}}{=}14$: $12$ LLMs plus
+random and majority baselines, full 11-corpus evaluation,
+$10{,}000$ bootstrap resamples; $p$-values exact, no ties).
+Finance is moderate ($\tau{=}0.69$); the other three are strong
+($\tau \geq 0.80$). Bootstrap CIs are wider for finance and
+insurance given the smaller per-domain variance.}
 \label{tab:h1}
 \end{table}
 
@@ -687,48 +694,43 @@ We decompose inter-model $\sigma^2_{\ES}$ into a severity-only
 and a frequency-only component via the closed-form delta-method
 approximation
 $\text{share}_{\text{sev}} = CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$,
-where $CV$ denotes the coefficient of variation across the $12$
-models. The severity share is $0.48$ in finance, $0.51$ in
-legal, $0.27$ in insurance, and $0.08$ in medical
-(\autoref{fig:variance}). Frequency contributes more than
-severity in $3$ of the $4$ domains; severity and frequency
-contribute comparably in finance and legal.
+where $CV$ denotes the coefficient of variation across the $14$
+models (12 LLMs plus random and majority baselines). The severity
+share is $0.11$ in finance, $0.27$ in legal, $0.06$ in insurance,
+and $0.19$ in medical (\autoref{fig:variance}). All four domains
+are frequency-dominated: $p$-CV exceeds $\mu_X$-CV by at least a
+factor of $2$ in every domain.
 
 \paragraph{Mechanism.}
 The shares reflect the relative dispersion of the two inputs to
-$\ES = n\, p\, \mu_X$. Across the $12$ models within a domain,
-both the error rate $p$ and the mean severity
-$\mu_X = \sum_k c_k \pi_k$ vary; the contribution of each is the
-square of its coefficient of variation. In finance, both inputs
-are tightly clustered and move similarly ($p$-CV $0.062$ with $p$
-in $0.60$--$0.73$; $\mu_X$-CV $0.060$); their contributions are
-balanced. Legal has the same pattern at a larger scale ($p$-CV
-$0.158$, $\mu_X$-CV $0.162$). Insurance and medical are
-frequency-dominated: insurance has $p$-CV $0.077$ against
-$\mu_X$-CV $0.047$, and medical has $p$-CV $0.495$ (driven by
-the $p$ range from $0.05$ on gpt-oss-20b to $0.46$ on Gemma-3-12B)
-against $\mu_X$-CV $0.148$. A Monte Carlo variant of the
-decomposition (\autoref{sec:app-variance-mc}) that does not
-linearise gives qualitatively the same picture for insurance and
-preserves a frequency-dominated reading of medical at large
-$p$-CV, while showing more sensitivity to the cost-tier weights.
+$\ES = n\, p\, \mu_X$ across the $14$ models within a domain.
+The contribution of each is the square of its coefficient of
+variation. Error rates vary more than mean severities across
+this roster because the baselines pin one end of each $p$ range
+(random near chance, majority near the dominant-class frequency)
+while LLMs fill the upper end; in finance $p$-CV is $0.17$
+against $\mu_X$-CV $0.06$, in legal $0.26$ vs $0.16$, in
+insurance $0.21$ vs $0.05$, and in medical $0.51$ vs $0.25$. A
+Monte Carlo variant of the decomposition
+(\autoref{sec:app-variance-mc}) that does not linearise gives
+the same direction in insurance and finance, and re-classifies
+medical as severity-dominated because the cost-tier interaction
+amplifies the spread of $\bpi$ at the critical end.
 
 \paragraph{Practical implication.}
-In insurance and medical, where frequency dominates, models
-differ almost entirely in \emph{how often} they err and error
-rate is the lever that most reduces $\ES$. In finance and legal,
-the two inputs contribute comparably: the marginal effort is
-split between reducing error rate and reducing severity per
-error. The lever is therefore domain-specific: in insurance and
-medical, it is spent improving
-accuracy outright. In finance and legal, both axes matter.
-The decomposition is sensitive to the cost vector and to the
-model mix; we report it as descriptive rather than confirmatory.
-Robustness checks: $\pm 20\%$ perturbation of every cost level
-(\autoref{sec:app-robustness}) does not change the cross-domain
-ordering, and the qualitative split (insurance/medical
-frequency-dominated; finance/legal balanced) is preserved under
-the MC variant of the decomposition.
+Across all four domains, models differ more in \emph{how often}
+they err than in the severity-tier mix of their errors, so error
+rate is the dominant lever for reducing $\ES$ at this granularity.
+The framework's value over accuracy alone is therefore not the
+identification of a severity-dominated regime but the dollar
+magnitude attached to each error rate, the tail measures and the
+routing curves. The decomposition is sensitive to the cost vector
+and to the model mix; we report it as descriptive rather than
+confirmatory. Robustness checks: $\pm 20\%$ perturbation of every
+cost level (\autoref{sec:app-robustness}) does not change the
+cross-domain ordering, and excluding the two baselines moves
+shares toward the LLM-only regime where finance and legal are
+balanced (App.~\ref{sec:app-variance-mc}).
 
 \subsection{RQ3: Routing tradeoff}
 \label{sec:rq3}
@@ -821,36 +823,37 @@ the others are deep-routing.}
   \node[font=\scriptsize, text=black!50] at (6,-4.8) {100\%};
   % domain labels (left) -- sorted by severity share descending
   \node[anchor=east] at (-0.15,-1) {Legal};
-  \node[anchor=east] at (-0.15,-2) {Finance};
-  \node[anchor=east] at (-0.15,-3) {Insurance};
-  \node[anchor=east] at (-0.15,-4) {Medical};
-  % markers: x = share * 6 (axis 0..6 for 0..100%); analytic CV-ratio shares
-  % Legal 51/49
-  \node[sevdot]  at (3.06,-1) {};
-  \node[freqdot] at (2.94,-1) {};
-  \node[anchor=south east, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj]    at (3.06,-1) {51\%};
-  \node[anchor=south west, yshift=2pt, xshift=2pt, font=\scriptsize, text=accentBlue] at (2.94,-1) {49\%};
-  % Finance 48/52
-  \node[sevdot]  at (2.88,-2) {};
-  \node[freqdot] at (3.12,-2) {};
-  \node[anchor=south east, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj]    at (2.88,-2) {48\%};
-  \node[anchor=south west, yshift=2pt, xshift=2pt, font=\scriptsize, text=accentBlue] at (3.12,-2) {52\%};
-  % Insurance 27/73
-  \node[sevdot]  at (1.62,-3) {};
-  \node[freqdot] at (4.38,-3) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (1.62,-3) {27\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (4.38,-3) {73\%};
-  % Medical 8/92
-  \node[sevdot]  at (0.48,-4) {};
-  \node[freqdot] at (5.52,-4) {};
-  \node[anchor=south west, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj] at (0.48,-4) {8\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.52,-4) {92\%};
+  \node[anchor=east] at (-0.15,-2) {Medical};
+  \node[anchor=east] at (-0.15,-3) {Finance};
+  \node[anchor=east] at (-0.15,-4) {Insurance};
+  % markers: x = share * 6 (axis 0..6 for 0..100%); 14-model analytic shares
+  % Legal 27/73
+  \node[sevdot]  at (1.62,-1) {};
+  \node[freqdot] at (4.38,-1) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (1.62,-1) {27\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (4.38,-1) {73\%};
+  % Medical 19/81
+  \node[sevdot]  at (1.14,-2) {};
+  \node[freqdot] at (4.86,-2) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (1.14,-2) {19\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (4.86,-2) {81\%};
+  % Finance 11/89
+  \node[sevdot]  at (0.66,-3) {};
+  \node[freqdot] at (5.34,-3) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (0.66,-3) {11\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.34,-3) {89\%};
+  % Insurance 6/94
+  \node[sevdot]  at (0.36,-4) {};
+  \node[freqdot] at (5.64,-4) {};
+  \node[anchor=south west, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj] at (0.36,-4) {6\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.64,-4) {94\%};
 \end{tikzpicture}
 \caption{Inter-model variance in $\widehat{\ES}$ split into a
 \textcolor{sevMaj}{severity share} and a
 \textcolor{accentBlue}{frequency share} via the closed-form
-$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition. Legal and
-finance balanced; insurance and medical frequency-dominated.}
+$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition over the
+14 models. All four domains are frequency-dominated; legal and
+medical have the largest severity contribution.}
 \label{fig:variance}
 \end{figure}
 
@@ -999,20 +1002,21 @@ into a budgeted comparison.
 
 The RQ2 decomposition (\autoref{sec:rq2}) has a direct
 implication for procurement and model-selection workflows.
-In \emph{frequency-dominated} regimes (medical with severity
-share $0.08$, insurance $0.27$), the within-domain $p$-CV
-exceeds the $\mu_X$-CV ($\sim 3.3$x in medical, $\sim 1.6$x in
-insurance): the error-rate ordering is already
-close to cost-faithful, and the actuarial overhead pays back
-mostly on tail-risk and reserve computations (\autoref{sec:rq3}).
-In \emph{balanced} regimes (legal $0.51$, finance $0.48$),
-$p$-CV and $\mu_X$-CV are comparable: two models with the same
-accuracy can carry materially different dollar exposures, so
-the model-selection committee should inspect $\bpi$ in addition
-to error rate. The split is a domain property given the cost
-vector, not a
-property of the model; this can be checked before committing to
-a more elaborate evaluation pipeline.
+All four domains are frequency-dominated when baselines and
+LLMs are pooled (severity shares $0.06$--$0.27$): the within-domain
+$p$-CV exceeds the $\mu_X$-CV in every domain, so the
+error-rate ordering already correlates well with cost ordering,
+and the actuarial overhead pays back mostly on tail-risk and
+reserve computations (\autoref{sec:rq3}).
+At 14 models, no domain crosses into a severity-dominated
+regime; restricting to the 12 LLMs (excluding the random and
+majority baselines, App.~\ref{sec:app-variance-mc}) raises the
+severity share in finance and legal to roughly $0.5$, indicating
+that within the LLM cohort alone the two contributions are
+comparable. Whether $\bpi$ inspection is worth the overhead
+depends on whether deployment selection is among LLMs only or
+against a baseline floor; we report both regimes so practitioners
+can decide.
 
 \subsection{Question-level vs output-level severity}
 
@@ -1090,12 +1094,12 @@ insurance pilot is a small-sample artefact, not a stable empirical
 regularity. The framework's residual value lies elsewhere. It
 surfaces $74$ dollar-magnitude inversions in which the
 higher-accuracy model is the more expensive one; it decomposes
-$\sigma^2_{\ES}$ into severity ($0.08$--$0.51$) and frequency
-components that vary by domain, revealing whether the lever for
-reducing $\ES$ is \enquote{which errors} or \enquote{how often}; and it
-yields a routing tradeoff that cuts $\ES$ by $85$\,\% (finance,
-at $18$\,\% routing) up to $92$--$98$\,\% (medical, legal,
-insurance, at $41$--$53$\,\% routing). The pattern holds across
+$\sigma^2_{\ES}$ into severity ($0.06$--$0.27$) and frequency
+components, with all four domains frequency-dominated under the
+pooled LLM-plus-baseline roster; and it yields a routing tradeoff
+that cuts $\ES$ by $85$\,\% (finance, at $18$\,\% routing) up to
+$93$--$98$\,\% (medical, legal, insurance, at $41$--$53$\,\%
+routing). The pattern holds across
 the heterogeneous model sample, supporting the claim that the
 framework, not any single model choice, quantifies the cost
 structure that accuracy hides. Extending to additional severity
@@ -1164,9 +1168,9 @@ robustness checks that the per-domain ranking does not flip when
 a quasi-trivial benchmark is added.
 
 \paragraph{Inversion rate.}
-The $74$ dollar-magnitude inversions arise from $726$ ordered
-within-domain model pairs ($\binom{12}{2} = 66$ pairs across
-$11$ datasets), so $10.2\%$ of all comparisons. The framework
+The $74$ dollar-magnitude inversions arise from $1001$ ordered
+within-domain model pairs ($\binom{14}{2} = 91$ pairs across
+$11$ datasets), so $7.4\%$ of all comparisons. The framework
 surfaces a
 minority of mispriced pairs, not a leaderboard reshuffle.
 
