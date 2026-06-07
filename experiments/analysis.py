@@ -534,6 +534,52 @@ def test_h2_variance_decomposition(
     }
 
 
+def test_h2_variance_decomposition_analytic(metrics: pd.DataFrame) -> dict:
+    """Closed-form variance decomposition of inter-model Var(E[S]) via the
+    delta-method approximation Var(N p mu) ~ N^2 (mean_p^2 Var(mu) +
+    mean_mu^2 Var(p)). The two terms sum exactly under independence and
+    first-order linearisation; the severity share is CV(mu)^2 / (CV(p)^2 +
+    CV(mu)^2). No Monte Carlo noise, no interaction term; reported alongside
+    the MC decomposition as a sanity check that does not depend on cost
+    levels."""
+    out = {}
+    for dom in metrics["taxonomy_domain"].unique():
+        df = metrics[metrics["taxonomy_domain"] == dom]
+        if df["model"].nunique() < 3:
+            continue
+        agg = (
+            df.groupby("model")
+            .agg(
+                error_rate=("error_rate", "mean"),
+                mu_X=("mu_X", "mean"),
+            )
+            .reset_index()
+        )
+        p = agg["error_rate"].to_numpy()
+        mu = agg["mu_X"].to_numpy()
+        mean_p, mean_mu = float(p.mean()), float(mu.mean())
+        if mean_p == 0 or mean_mu == 0:
+            continue
+        cv_p = float(p.std()) / mean_p
+        cv_mu = float(mu.std()) / mean_mu
+        denom = cv_p**2 + cv_mu**2
+        if denom == 0:
+            continue
+        sev_share = cv_mu**2 / denom
+        out[dom] = {
+            "cv_p": cv_p,
+            "cv_mu": cv_mu,
+            "severity_share": sev_share,
+            "frequency_share": 1.0 - sev_share,
+            "severity_dominates": sev_share > 0.5,
+        }
+    n_dominates = sum(1 for v in out.values() if v["severity_dominates"])
+    return {
+        "per_domain": out,
+        "hypothesis_supported": n_dominates > len(out) / 2 if out else False,
+    }
+
+
 def test_h5_robustness(
     metrics: pd.DataFrame,
     n_queries: int = 10_000,
@@ -847,13 +893,21 @@ def main():
         print(f"  {dom}: tau={r['tau']:.3f}, p={r['p_value']:.4f} ({status})")
     print(f"  => H1 supported: {h1['hypothesis_supported']}")
 
-    print("\nH2: Variance decomposition")
+    print("\nH2: Variance decomposition (MC)")
     h2 = test_h2_variance_decomposition(metrics)
     for dom, r in h2["per_domain"].items():
         print(
             f"  {dom}: severity_share={r['severity_share']:.2f} (dominates={r['severity_dominates']})"
         )
     print(f"  => H2 supported: {h2['hypothesis_supported']}")
+
+    print("\nH2 (analytic CV-ratio sanity check)")
+    h2_an = test_h2_variance_decomposition_analytic(metrics)
+    for dom, r in h2_an["per_domain"].items():
+        print(
+            f"  {dom}: severity_share={r['severity_share']:.2f} "
+            f"(CV_p={r['cv_p']:.2f}, CV_mu={r['cv_mu']:.2f}, dominates={r['severity_dominates']})"
+        )
 
     print("\nH3: Ranking inversions")
     h3 = test_h3_inversions(metrics)
@@ -882,7 +936,7 @@ def main():
     # Persist hypothesis tests
     with open(args.output / "hypothesis_tests.json", "w") as f:
         json.dump(
-            {"h1": h1, "h2": h2, "h3": h3, "h4": h4, "h5": h5},
+            {"h1": h1, "h2": h2, "h2_analytic": h2_an, "h3": h3, "h4": h4, "h5": h5},
             f,
             indent=2,
             default=str,
