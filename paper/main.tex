@@ -45,6 +45,13 @@
 \definecolor{sevCrit}{HTML}{D55E00}
 \definecolor{accentBlue}{HTML}{0072B2}
 
+% Compact float spacing to recover body-page budget.
+\setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{4pt}
+\setlength{\belowcaptionskip}{0pt}
+
 % Capitalise \autoref output to match ACL style.
 \renewcommand{\sectionautorefname}{Section}
 \renewcommand{\subsectionautorefname}{Section}
@@ -119,28 +126,23 @@ Accuracy treats every LLM error as equally costly. The actuarial
 frequency-severity framework of \citet{beauchemin2026position}
 addresses this in theory but was demonstrated on a single
 $82$-query insurance corpus. We provide the first multi-domain
-empirical evaluation: $12$ open-weight LLMs ($8$\,B--$120$\,B
-parameters) on $11$ benchmarks across finance, medicine, law,
-and insurance, with severity labels derived from each corpus's
-structured fields. At full corpus, accuracy and $\widehat{\ES}$
-rankings are positively correlated in every domain (Kendall
-$\tau$ from $0.58$ in finance to $0.97$ in legal); the
-small-sample divergence reproduces in finance and insurance at
-$n{=}1000$ per cell but not at full scale. An MQM-weighted
-baseline tracks our ranking with $\tau$ from $0.82$ to $1.00$,
-so the framework's value lies less in the ordering than in the
-interpretable dollar magnitudes: $74$ accuracy-vs-cost
-inversions (median $\$1.9$\,M, max $\$28.7$\,M per $10{,}000$
-outputs), a variance decomposition whose severity share moves
-from $0.08$ (medical) to $0.51$ (legal) with the cross-model
-$p$/$\mu_X$ coefficient-of-variation ratio, a routing tradeoff
-that cuts $\widehat{\ES}$ by $85$\,\% in finance at $18$\,\%
-deferral and by $92$--$98$\,\% in the other three domains at
-$41$--$53$\,\% deferral, and per-domain Lundberg reserves from
-$\$0.8$\,M to $\$6.2$\,M per $10{,}000$ outputs per period. We
-release \seveval{}\footnote{Code, severity annotations, and
-evaluation results: \coderepo.}, a HuggingFace-style Python
-library, with annotations and calibration evidence.
+empirical evaluation: $12$ open-weight LLMs on $11$ benchmarks
+across finance, medicine, law, and insurance, with severity
+labels from each corpus's structured fields. At full corpus,
+accuracy and $\widehat{\ES}$ rankings are positively correlated
+in every domain (Kendall $\tau$ $0.58$--$0.97$); the framework's
+value lies in the dollar magnitudes the ordering hides. We find
+$74$ accuracy-vs-cost inversions worth \$0.28\,B mis-attributed
+(median \$1.9\,M, max \$28.7\,M per $10{,}000$ outputs); the
+severity share of inter-model variance moves from $0.08$
+(medical) to $0.51$ (legal), classifying domains a priori as
+frequency- or severity-driven; and excess-of-loss routing cuts
+$\widehat{\ES}$ by $85\%$ in finance at $18\%$ deferral and by
+$92$--$98\%$ in the other three domains at $41$--$53\%$
+deferral. We release \seveval{}\footnote{Code, severity
+annotations, and evaluation results: \coderepo.}, a
+HuggingFace-style Python library, with annotations and
+calibration evidence.
 \end{abstract}
 
 % ============================================================================
@@ -182,46 +184,35 @@ each evaluated on the \emph{full} test set. The aim is not to
 crown a best model; it is to characterise where the framework
 adds signal beyond accuracy, and where it does not.
 
-Our three contributions:
+Our three contributions are:
+(1)~\textbf{Rankings agree at scale; the value is in
+magnitudes.} Per-domain Kendall $\tau$ between accuracy and
+$\ES$ rankings is $0.58$--$0.97$ at full corpus (all
+$p<0.01$); the framework's contribution is not the ordering
+but the dollar magnitudes it surfaces: $74$ inversions
+worth $\$0.28$\,B mis-attributed (median $\$1.9$\,M, max
+$\$28.7$\,M), plus tail measures and Lundberg reserves
+(\$0.8\,M to \$6.2\,M per $10{,}000$ outputs) that no
+weighted-mean baseline can produce.
+(2)~\textbf{When severity matters, via the CV-ratio.}
+Inter-model variance splits into a severity share ranging
+from $8\%$ (medical) to $51\%$ (legal), driven by
+$p$-CV vs.\ $\mu_X$-CV. Insurance and medical are
+frequency-dominated; finance and legal are balanced.
+(3)~\textbf{Routing as excess-of-loss reinsurance.}
+HITL routing cuts $\ES$ by $85\%$ at $18\%$ deferral in
+finance and $92$--$98\%$ at $41$--$53\%$ in the other three
+domains; tail premium $\TVaR_{0.95}/\ES$ ranges $1.06$--$1.25$.
 
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{Rankings agree at scale; the framework's value
-    is in magnitudes.} At full corpus, per-domain Kendall $\tau$
-    between accuracy and $\ES$ rankings is $0.58$--$0.97$ (all
-    $p < 0.01$); the dramatic small-sample divergence reproduces
-    at $n{=}1000$ per cell in finance and insurance but not at
-    full scale, and never in medical or legal. An MQM-weighted
-    baseline tracks our ranking with per-domain $\tau$ from
-    $0.82$ to $1.00$. The framework's contribution is therefore
-    not the ordering but the dollar magnitudes: $74$ inversions
-    ($\$0.28$\,B mis-attributed) with median gap $\$1.9$\,M and
-    max $\$28.7$\,M, plus tail measures and reserves that no
-    weighted-mean baseline can produce.
-  \item \textbf{The mechanism behind \emph{when} severity
-    matters.} Inter-model variance in $\ES$ splits into a
-    severity share that ranges from $8\%$ (medical) to $51\%$
-    (legal); the split is driven by which input has the larger
-    cross-model coefficient of variation ($p$-CV vs.\
-    $\mu_X$-CV). Medical and insurance are frequency-dominated
-    (severity share below $30\%$); finance and legal are
-    balanced (around $50\%$), telling a procurement committee
-    whether $\bpi$ needs inspection.
-  \item \textbf{A routing tradeoff with two operating regimes
-    and per-domain reserves.} Modelled as excess-of-loss
-    reinsurance, HITL routing cuts $\ES$ by $85\%$ at $18\%$
-    deferral in finance (cheap routing) and by $92$--$98\%$ at
-    $41$--$53\%$ deferral in the other three domains (deep
-    routing). Tail premium $\TVaR_{0.95}/\ES$ ranges from
-    $1.06$ in legal to $1.25$ in insurance; Lundberg reserves
-    ($\psi^\ast{=}0.01$, $\theta{=}0.2$) range from $\$0.8$\,M
-    (finance) to $\$6.2$\,M (medical) per $10{,}000$ outputs
-    per period.
-\end{enumerate}
-
-\noindent We release \seveval{}, a HuggingFace-style Python
-library (\autoref{sec:app-library}), the rule-based severity
-tables (\autoref{sec:severity-annotation}), and the cost
-calibrations (\autoref{sec:app-calibration}).
+\noindent The paper is organised as follows:
+\autoref{sec:framework} recapitulates the framework;
+\autoref{sec:experiments} details the setup; \autoref{sec:results}
+reports rankings, variance, and routing; \autoref{sec:discussion}
+discusses what the framework adds over accuracy and MQM. We
+release \seveval{}, a HuggingFace-style Python library
+(\autoref{sec:app-library}), with severity tables
+(\autoref{sec:severity-annotation}) and cost calibrations
+(\autoref{sec:app-calibration}).
 
 % ============================================================================
 % 2. RELATED WORK
@@ -453,10 +444,8 @@ Legal     & \$200  & \$2k   & \$20k  & \$200k \\
 Insurance & \$100  & \$2k   & \$10k  & \$250k \\
 \bottomrule
 \end{tabular}}
-\caption{Cost vectors by domain. Each spans approximately three orders
-of magnitude, reflecting the heavy-tailed nature of error costs in
-high-stakes applications. Calibration sources are detailed in
-\autoref{sec:app-calibration}.}
+\caption{Cost vectors by domain (three orders of magnitude per
+domain; calibration in \autoref{sec:app-calibration}).}
 \label{tab:costs}
 \end{table}
 
@@ -627,13 +616,10 @@ Domain & $\tau$ & $p$-value & 95\% bootstrap CI \\
 \end{tabular}
 \caption{Kendall $\tau$ between accuracy and $\widehat{\ES}$
 rankings per domain ($n_{\text{models}}{=}12$, full 11-corpus
-evaluation, $10{,}000$ bootstrap resamples over models). $p$-values
-are exact (no ties; \texttt{scipy.stats.kendalltau} with
-\texttt{method='exact'} agrees with the asymptotic value to 4
-significant digits at $n=12$). The point estimate is moderate for
-finance ($\tau{=}0.58$) and strong for the other three domains
-($\tau \geq 0.73$); the bootstrap CIs are wide for finance and
-insurance, consistent with the small number of ranked models.}
+evaluation, $10{,}000$ bootstrap resamples; $p$-values exact, no
+ties). Finance is moderate ($\tau{=}0.58$); the other three are
+strong ($\tau \geq 0.73$). Bootstrap CIs are wide for finance
+and insurance given the small number of ranked models.}
 \label{tab:h1}
 \end{table}
 
@@ -691,16 +677,12 @@ insurance, consistent with the small number of ranked models.}
   \foreach \y in {1,...,12}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
 \end{tikzpicture}%
 }%
-\caption{Finance: accuracy rank (left) vs.\ $\widehat{\ES}$ rank
-(right) across 12 models, full corpus ($\tau{=}0.58$). Dollar
-labels are sample-weighted means across FinanceBench, FinQA, and
-TAT-QA ($n_{\text{tot}}=2960$); the unweighted means used in the
-appendix tables differ by up to $\$3$\,M per model
-(\autoref{sec:app-full-results}). Two models rise sharply when
-ranked by dollar cost: DeepSeek-R1-70B ($4{\to}1$) and GPT-OSS-20B
-($9{\to}3$). Finance is the only domain where dataset-level
-inversions concentrate; the other three are reproduced as
-mini-slopegraphs in \autoref{fig:slopegraphs_all_domains}.}
+\caption{Finance: accuracy rank (left) vs.\ $\widehat{\ES}$
+rank (right) across 12 models, full corpus ($\tau{=}0.58$,
+sample-weighted across the 3 datasets, $n_{\text{tot}}=2960$).
+DeepSeek-R1-70B ($4{\to}1$) and GPT-OSS-20B ($9{\to}3$) rise
+sharply when ranked by dollar cost. Mini-slopegraphs for the
+other three domains in \autoref{fig:slopegraphs_all_domains}.}
 \label{fig:ranking_finance}
 \end{figure*}
 
@@ -815,10 +797,9 @@ Domain & CV($c$) & $\rho_{1/2}$ & $\widehat{\ES}$ reduction \\
   Medical   & 1.51 & 0.51 & 92.0\,\% \\
 \bottomrule
 \end{tabular}
-\caption{HITL routing tradeoff by domain ($n_{\text{models}}{=}12$,
-retention threshold $d{=}c_3$, human review cost $h{=}\$50$).
-$\rho_{1/2}$ is the median fraction of queries deferred. Finance
-is the cheap-routing regime; the others are deep-routing.}
+\caption{HITL routing tradeoff by domain ($d{=}c_3$, $h{=}\$50$;
+$\rho_{1/2}$ = median deferred share). Finance is cheap-routing;
+the others are deep-routing.}
 \label{tab:h4}
 \end{table}
 
@@ -874,9 +855,8 @@ is the cheap-routing regime; the others are deep-routing.}
 \caption{Inter-model variance in $\widehat{\ES}$ split into a
 \textcolor{sevMaj}{severity share} and a
 \textcolor{accentBlue}{frequency share} via the closed-form
-$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition. The two
-shares sum to $1$. Legal and finance are roughly balanced;
-insurance and medical are frequency-dominated.}
+$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition. Legal and
+finance balanced; insurance and medical frequency-dominated.}
 \label{fig:variance}
 \end{figure}
 
@@ -929,11 +909,10 @@ insurance and medical are frequency-dominated.}
 \end{tikzpicture}
 \caption{Dumbbell of \textcolor{black!55}{routed share
 $\rho_{1/2}$} vs.\ \textcolor{accentBlue}{$\widehat{\ES}$
-reduction} by domain ($d{=}c_3$, $h{=}\$50$, full corpus,
-12~models). Finance shows the longest leverage gap: $18\%$ of
-queries deferred removes $85\%$ of expected loss. The other
-three domains need roughly half their queries deferred to extract
-near-total cuts.}
+reduction} by domain ($d{=}c_3$, $h{=}\$50$, full corpus). Finance
+shows the longest leverage gap ($18\%$ deferred $\to$ $85\%$ cut);
+the others need $\sim$half their queries deferred for similar
+cuts.}
 \label{fig:routing}
 \end{figure}
 
