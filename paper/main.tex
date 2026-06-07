@@ -141,8 +141,8 @@ $\widehat{\ES}$ by $85\%$ in finance at $18\%$ deferral and by
 $92$--$98\%$ in the other three domains at $41$--$53\%$
 deferral. We release \seveval{}\footnote{Code, severity
 annotations, and evaluation results: \coderepo.}, a
-HuggingFace-style Python library, with annotations and
-calibration evidence.
+HuggingFace-style library, with annotations and calibration
+evidence.
 \end{abstract}
 
 % ============================================================================
@@ -174,9 +174,9 @@ compound loss $S = \sum_{i=1}^{N} X_i$ whose expected value, tail
 quantiles, and required reserves are computable in closed form
 or by Monte Carlo. That contribution was conceptual: feasibility
 on a single $82$-query insurance corpus, no validation across
-domains, models, or full-scale corpora; the dramatic
-accuracy-vs-cost ranking divergence reported there had unknown
-stability at scale. We provide that validation: $12$ open-weight LLMs
+domains, models, or full-scale corpora; the accuracy-vs-cost
+ranking divergence reported there had unknown stability at scale.
+We provide that validation: $12$ open-weight LLMs
 ($8$\,B--$120$\,B parameters, dense, MoE, and reasoning-tuned)
 on $11$ benchmarks across finance, medicine, law, and insurance,
 $\sim$$440$\,K predictions over $132$ (model, dataset) cells
@@ -478,12 +478,8 @@ adjacent agreement
 We evaluate $12$ open-weight checkpoints chosen to span the
 deployed LLM design space: $8$\,B to $120$\,B parameters, dense
 and mixture-of-experts, base and reasoning-tuned, FP16, FP8 and
-MXFP4 quantizations. Concretely: Granite-3.2-8B, Phi-4,
-Gemma-3-12B/27B, Qwen3-14B/30B-A3B, QwQ-32B, GPT-OSS-20B/120B,
-Qwen2.5-72B, Llama-3.3-70B and DeepSeek-R1-Distill-70B. All
-inference runs on a $3\times$RTX~6000~Ada workstation via vLLM.
-The exact checkpoint identifiers, quantization details, and the
-inference hardware configuration are in
+MXFP4 quantizations. The full roster, checkpoint identifiers,
+quantization details, and hardware configuration are in
 \autoref{sec:app-models}.
 
 \subsection{Evaluation protocol}
@@ -1120,18 +1116,21 @@ high-stakes deployments.
 
 \paragraph{Cost calibration.}
 Our cost vectors are grounded in regulatory and market evidence
-but the mapping from severity tiers to dollar amounts is
-approximate; organisations within a domain face different cost
-structures by size and regulatory exposure. The robustness
-analysis (\autoref{sec:app-robustness}) shows rankings are
-stable under $\pm 20\%$ perturbation, but practitioners should
-recalibrate to their context.
+following standard actuarial practice
+\citep{klugman2012loss,basel2006}, but the mapping from severity
+tiers to dollar amounts is approximate; organisations within a
+domain face different cost structures by size and regulatory
+exposure. The robustness analysis (\autoref{sec:app-robustness})
+shows rankings are stable under $\pm 20\%$ perturbation, but
+practitioners should recalibrate to their context.
 
 \paragraph{Binary correctness.}
 Each output is classified as correct or erroneous, discarding
 partial correctness: \$$14.0$\,B instead of \$$14.2$\,B is
 \enquote{wrong} but far less consequential than \$$11.6$\,B.
-Continuous severity scoring is left to future work.
+Continuous severity scoring (e.g., BERTScore-style
+\citep{zhang2020bertscore} or BLEURT \citep{sellam2020bleurt})
+is left to future work.
 
 \paragraph{Severity-rule provenance.}
 Severity is derived from a structured field of the source corpus
@@ -1149,10 +1148,11 @@ $n = 1090$ wrong predictions and reorders per-model means
 quantities (question importance vs.\ output deviation), and
 reported $\widehat{\ES}$ should be read as a
 question-importance-weighted exposure under a defensible default
-labelling. Three benchmarks initially considered (MedQA,
-MedCalc-Bench, RAG~Insurance) were dropped because their
-keyword-based labels could not be defended at the
-critical-vs-major boundary.
+labelling. Three benchmarks initially considered
+(MedQA~\citep{jin2021medqa},
+MedCalc-Bench~\citep{kazi2024medcalc}, and RAG~Insurance) were
+dropped because their keyword-based labels could not be
+defended at the critical-vs-major boundary.
 
 \paragraph{Saturated corpora.}
 Two of the new corpora are near-saturation: DDI~2013 is solved
@@ -1175,7 +1175,9 @@ $\widehat{\ES}$, $\TVaR$ and the routing analysis all assume
 errors are detected and routed at inference time. In production,
 detection probability is below $1$; the realised cost reduction
 from routing is therefore an upper bound. Calibrating an
-oracle-free severity classifier is left to future work.
+oracle-free severity classifier connects to the learning-to-defer
+literature \citep{madras2018predict,mozannar2020consistent} and
+is left to future work.
 
 \paragraph{Pilot vs.\ full corpus is not a controlled ablation.}
 The $\tau \approx 0.4$ we obtained on a $1$\,K-per-dataset pilot
@@ -1207,15 +1209,22 @@ annotations assign economic cost estimates to error categories but do
 not make normative claims about the relative value of human outcomes
 (e.g., we do not equate a medical error with a financial error based
 on dollar amounts). The cost calibrations are derived from publicly
-available regulatory and market data and are intended as illustrative
-defaults for risk budgeting, not as authoritative valuations of human
-welfare.
+available regulatory and market data and follow established
+cost-sensitive evaluation practice
+\citep{elkan2001foundations,drummond2006cost,ling2008cost}; they
+are intended as illustrative defaults for risk budgeting, not as
+authoritative valuations of human welfare. We align the framework
+with AI risk-management guidelines
+\citep{nist2023rmf,euaiact2024,iso42001} and the broader taxonomy
+of language-model harms \citep{weidinger2022taxonomy}, but
+deployment decisions in high-stakes domains require additional
+domain-specific review beyond what any single metric can provide.
 
 We release all code, annotations, and evaluation results to support
 reproducibility. The \seveval{} library is released under an open-source
 license. We note that the severity framework, like any evaluation
-metric, can be used to inform but not replace human judgment in
-deployment decisions.
+metric, can be used to inform but not replace human judgment
+\citep{bergman2024stela} in deployment decisions.
 
 % ============================================================================
 % ACKNOWLEDGMENTS
