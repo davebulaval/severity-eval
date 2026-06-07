@@ -185,24 +185,22 @@ crown a best model; it is to characterise where the framework
 adds signal beyond accuracy, and where it does not.
 
 Our three contributions are:
-(1)~\textbf{Rankings agree at scale; the value is in
-magnitudes.} Per-domain Kendall $\tau$ between accuracy and
-$\ES$ rankings is $0.58$--$0.97$ at full corpus (all
-$p<0.01$); the framework's contribution is not the ordering
-but the dollar magnitudes it surfaces: $74$ inversions
-worth $\$0.28$\,B mis-attributed (median $\$1.9$\,M, max
-$\$28.7$\,M), plus tail measures and Lundberg reserves
-(\$0.8\,M to \$6.2\,M per $10{,}000$ outputs) that no
-weighted-mean baseline can produce.
-(2)~\textbf{When severity matters, via the CV-ratio.}
-Inter-model variance splits into a severity share ranging
-from $8\%$ (medical) to $51\%$ (legal), driven by
-$p$-CV vs.\ $\mu_X$-CV. Insurance and medical are
-frequency-dominated; finance and legal are balanced.
-(3)~\textbf{Routing as excess-of-loss reinsurance.}
-HITL routing cuts $\ES$ by $85\%$ at $18\%$ deferral in
-finance and $92$--$98\%$ at $41$--$53\%$ in the other three
-domains; tail premium $\TVaR_{0.95}/\ES$ ranges $1.06$--$1.25$.
+(1)~\textbf{The first multi-domain empirical validation} of the
+actuarial frequency-severity framework on LLMs, characterising
+where it adds signal over accuracy and over the closest NLP
+precedent (MQM-weighted scoring) and where it does not.
+(2)~\textbf{An open-source Python library, \seveval{}}, that
+wraps the framework as a HuggingFace-style
+\texttt{evaluate.Metric} so any LLM evaluation pipeline can
+compute $\widehat{\ES}$, $\widehat{\TVaR}_{0.95}$, Lundberg
+reserves, and human-in-the-loop routing curves with a single
+call.
+(3)~\textbf{Reusable domain artifacts}: rule-based
+severity-annotation tables for the $11$ corpora, four cost-vector
+calibrations grounded in Basel LDA, regulatory-penalty,
+clinical-incident, and litigation data, and full per-cell
+evaluation results, all released to support reuse and
+stress-testing.
 
 \noindent The paper is organised as follows:
 \autoref{sec:framework} recapitulates the framework;
