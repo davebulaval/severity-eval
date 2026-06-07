@@ -311,8 +311,8 @@ the 12 models with an LLM annotator (Claude Sonnet 4) that sees
 the question, the gold answer, and the model's actual prediction
 (\autoref{sec:app-output-severity}). The pooled Cohen $\kappa$
 between the rule-based and output-based tiers is $0.01$
-(adjacent agreement $68\%$): the two labels measure orthogonal
-axes. $47\%$ of wrong outputs are judged less severe than the
+(adjacent agreement $68\%$): the two labels target different
+quantities. $47\%$ of wrong outputs are judged less severe than the
 question type would suggest (paraphrase, digit rounding,
 operationally indistinguishable answer) and $37\%$ more severe
 (sign flip, order-of-magnitude error on a question whose
@@ -1039,7 +1039,9 @@ severities give Kendall $\tau = -0.36$ on per-model means. The
 practical consequence: on FinanceBench alone, the rank
 correlation between accuracy and $\widehat{\ES}$ is $\tau{=}0.85$
 under the rule label but drops to $\tau{=}0.12$ under the
-output label (12 models). Output-level annotation does not
+output label (12 models; the full finance-domain
+$\tau{=}0.58$ in Table~\ref{tab:h1} aggregates FinanceBench, FinQA,
+and TAT-QA). Output-level annotation does not
 contradict the cross-domain RQ1 finding that accuracy and
 $\widehat{\ES}$ rankings disagree -- it strengthens it on
 FinanceBench. It does, however, mean the finance per-model
@@ -1059,7 +1061,7 @@ errors. At $d=c_3$, $h^\ast$ ranges from $\$21$\,k (finance) to
 $\$331$\,k (medical) across domains (legal $\$83$\,k, insurance
 $\$70$\,k, all medians across the $12$ models). The $\$50$
 human-review cost we assume is below the breakeven by
-$420\times$ in finance and $6600\times$ in medical, so the
+$420\times$ in finance and $6620\times$ in medical, so the
 routing policy is profitable across a wide range of plausible
 review costs in every domain we evaluate. The per-error severity
 used in routing is a function of $\bpi$ estimated from observed
@@ -1148,11 +1150,11 @@ A separate validation pass that labels severity \emph{from the
 model's actual wrong output} (\autoref{sec:app-output-severity})
 gives a pooled $\kappa = 0.01$ against the rule on the full
 $n = 1090$ wrong predictions and reorders per-model means
-(Kendall $\tau = -0.36$): the
-two labellings measure orthogonal axes (question importance vs.\
-output deviation), and reported $\widehat{\ES}$ should be read
-as a question-importance-weighted exposure under a defensible
-default labelling. Three benchmarks initially considered (MedQA,
+(Kendall $\tau = -0.36$): the two labellings target different
+quantities (question importance vs.\ output deviation), and
+reported $\widehat{\ES}$ should be read as a
+question-importance-weighted exposure under a defensible default
+labelling. Three benchmarks initially considered (MedQA,
 MedCalc-Bench, RAG~Insurance) were dropped because their
 keyword-based labels could not be defended at the
 critical-vs-major boundary.
@@ -1721,7 +1723,7 @@ digit changes, sign-preserving rounding), $36.8\%$ are
 strictly higher (sign flips on a yes/no question whose tier was
 \emph{minor}, magnitude errors on what the rule called a
 descriptive answer), and $16.2\%$ agree exactly. The two labels
-measure orthogonal axes: question-level severity is keyed to
+target different quantities: question-level severity is keyed to
 which answer-type$\times$metric-type combination is being
 asked; output-level severity is keyed to what the model
 actually produced relative to the gold. Per-model mean severity
