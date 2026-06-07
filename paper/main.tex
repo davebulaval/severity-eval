@@ -180,7 +180,7 @@ Our three contributions:
     baseline tracks our ranking with per-domain $\tau$ from
     $0.82$ to $1.00$. The framework's contribution is therefore
     not the ordering but the dollar magnitudes: $74$ inversions
-    ($\$0.32$\,B mis-attributed) with median gap $\$1.9$\,M and
+    ($\$0.28$\,B mis-attributed) with median gap $\$1.9$\,M and
     max $\$28.7$\,M, plus tail measures and reserves that no
     weighted-mean baseline can produce.
   \item \textbf{The mechanism behind \emph{when} severity
@@ -573,7 +573,7 @@ We detect $74$ strict accuracy-vs-$\ES$ inversions where
 $\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$,
 out of $726$ ordered model pairs ($10.2\%$ of all pairs). The
 gaps have a heavy right tail: median $\$1.9$\,M, $75$th
-percentile $\$5.4$\,M, max $\$28.7$\,M, summing to $\$0.32$\,B
+percentile $\$5.3$\,M, max $\$28.7$\,M, summing to $\$0.28$\,B
 of mis-attributed exposure per $10{,}000$ outputs. The largest
 is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.8$
 accuracy points yet costs $\$28.7$\,M more; on ContractNLI,
@@ -1762,14 +1762,17 @@ completeness and to forestall the question.}
 The four reasoning-tuned checkpoints in our roster
 (DeepSeek-R1-Distill-70B, QwQ-32B, Qwen3-14B, Qwen3-30B-A3B)
 achieve lower mean $\widehat{\ES}$ than the eight non-reasoning
-checkpoints in every domain: $-\$112.8$\,M in medical,
-$-\$15.4$\,M in legal, $-\$6.5$\,M in insurance, $-\$2.2$\,M in
-finance, per $10{,}000$ outputs. The gap is largest in the two
-frequency-dominated domains (medical, insurance), where the
-reasoning models also have systematically lower error rate $p$.
-The four-out-of-four sign consistency would have a sign-test
-$p$-value of $2^{-4}=0.0625$ under the strict null, which is
-suggestive but not conclusive given the sample size.
+checkpoints in three of the four domains: $-\$28.5$\,M in
+medical, $-\$12.2$\,M in legal, $-\$2.7$\,M in finance, per
+$10{,}000$ outputs (unweighted mean across the reasoning vs.\
+non-reasoning groups, computed from
+\texttt{results/metrics\_by\_domain.csv}). Insurance is the
+exception: the reasoning mean is $\$1.3$\,M \emph{higher} than
+the non-reasoning mean, driven by DeepSeek-R1-Distill-70B at
+$\$256.0$\,M, which exceeds three of the eight non-reasoning
+checkpoints on that domain. The three-of-four sign consistency
+corresponds to a sign-test $p$-value of $\binom{4}{3}/2^4=0.25$
+under the strict null, which is not informative at $n=4$.
 
 The reasoning sample is small ($n=4$) and vendor-correlated.
 Three of the four reasoning models are from Alibaba (Qwen3-14B,
