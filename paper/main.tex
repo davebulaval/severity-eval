@@ -134,12 +134,12 @@ $\widehat{\ES}$ rankings are positively correlated in every
 domain (Kendall $\tau$ $0.69$--$0.96$); the framework's value
 lies in the dollar magnitudes the ordering hides. We find $74$
 accuracy-vs-cost inversions worth \$0.28\,B mis-attributed
-(median \$1.9\,M, max \$28.7\,M per $10{,}000$ outputs); the
+(median \$1.90\,M, max \$28.69\,M per $10{,}000$ outputs); the
 severity share of inter-model variance is $0.06$--$0.27$
 across the four domains, all frequency-dominated under the
 analytic CV-ratio decomposition; and excess-of-loss routing
-cuts $\widehat{\ES}$ by $85\%$ in finance at $18\%$ deferral
-and by $93$--$98\%$ in the other three domains. We release \seveval{}\footnote{Code, severity
+cuts $\widehat{\ES}$ by $84.59\%$ in finance at $19.73\%$
+deferral and by $93.28$--$98.32\%$ in the other three domains. We release \seveval{}\footnote{Code, severity
 annotations, and evaluation results: \coderepo.}, a
 HuggingFace-style library, with annotations and calibration
 evidence.
@@ -156,10 +156,10 @@ Accuracy treats every error as equally costly: a misclassified
 spam email and a misclassified cancer diagnosis count the same.
 As LLMs enter high-stakes deployments, that assumption breaks.
 On JudgeBERT (French legal simplification), DeepSeek-R1-70B
-edges Llama-3.3-70B by $+0.8$ accuracy points yet costs
-$\$28.7$\,M more per $10{,}000$ outputs at calibrated severity
+edges Llama-3.3-70B by $+0.74$ accuracy points yet costs
+$\$28.69$\,M more per $10{,}000$ outputs at calibrated severity
 weights; the leaderboard rewards the more expensive model. A
-revenue answer of \$$11.6$\,B instead of \$$14.2$\,B shifts a
+revenue answer of \$$11.60$\,B instead of \$$14.20$\,B shifts a
 trading decision, and a missed sepsis cue delays intervention.
 Per-error costs span orders of magnitude, yet accuracy assigns
 them the same penalty. This kind of dollar gap is what an
@@ -576,14 +576,14 @@ out of $1001$ ordered model pairs ($7.4\%$). All inversions
 involve two LLMs; the random and majority baselines are both
 worse than every LLM on accuracy and $\ES$, so they do not
 contribute new inversions. The
-gaps have a heavy right tail: median $\$1.9$\,M, $75$th
-percentile $\$5.3$\,M, max $\$28.7$\,M, summing to $\$0.28$\,B
+gaps have a heavy right tail: median $\$1.90$\,M, $75$th
+percentile $\$5.23$\,M, max $\$28.69$\,M, summing to $\$0.28$\,B
 of mis-attributed exposure per $10{,}000$ outputs. The largest
-is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.8$
-accuracy points yet costs $\$28.7$\,M more; on ContractNLI,
-Llama-3.3-70B is $+2.5$ over Granite-3.2-8B for $+\$21.9$\,M;
-on TAT-QA, qwen2.5-72b is $+0.2$ over DeepSeek-R1-70B for
-$+\$8.7$\,M. The most visible \emph{rank flip} is in finance:
+is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.74$
+accuracy points yet costs $\$28.69$\,M more; on ContractNLI,
+Llama-3.3-70B is $+2.53$ over Granite-3.2-8B for $+\$21.85$\,M;
+on TAT-QA, qwen2.5-72b is $+0.24$ over DeepSeek-R1-70B for
+$+\$8.73$\,M. The most visible \emph{rank flip} is in finance:
 DeepSeek-R1-70B is rank $4$ by accuracy and rank $1$ by $\ES$,
 driven by a severity profile concentrated on negligible/minor
 levels (\autoref{fig:ranking_finance}).
@@ -592,8 +592,8 @@ levels (\autoref{fig:ranking_finance}).
 The $74$ inversions are at the per-(model, dataset) level. When
 ranks are aggregated to the domain (sample-weighted across the
 domain's datasets) only $13$ inversions remain: $11$ in finance
-(largest $\$7.5$\,M), $1$ in medical ($\$0.3$\,M), $1$ in
-insurance ($\$0.8$\,M), and $0$ in legal. At the level on which
+(largest $\$7.50$\,M), $1$ in medical ($\$0.30$\,M), $1$ in
+insurance ($\$0.80$\,M), and $0$ in legal. At the level on which
 production deployments are scoped (a domain, not a single
 dataset), accuracy and cost ranking agree to within a few model
 positions. The framework's contribution is therefore not
@@ -637,53 +637,62 @@ insurance given the smaller per-domain variance.}
   \node[font=\footnotesize\bfseries, anchor=south west] at (-3.4,-0.1) {Accuracy};
   \node[font=\footnotesize\bfseries, anchor=south east] at (12.4,-0.1) {Expected loss $\widehat{\ES}$ per 10\,k outputs};
   % Sample-size-weighted finance ranks (n=2960 = 150+1147+1663 per model).
-  \draw[flat] (0,-1) -- (9,-2);
-  \draw[flat] (0,-2) -- (9,-4);
-  \draw[flat] (0,-3) -- (9,-6);
-  \draw[rise] (0,-4) -- (9,-1);
-  \draw[flat] (0,-5) -- (9,-7);
-  \draw[flat] (0,-6) -- (9,-5);
-  \draw[flat] (0,-7) -- (9,-8);
-  \draw[flat] (0,-8) -- (9,-9);
-  \draw[rise] (0,-9) -- (9,-3);
+  % 14 models: 12 LLMs + majority + random at the bottom.
+  \draw[flat] (0,-1)  -- (9,-2);
+  \draw[flat] (0,-2)  -- (9,-4);
+  \draw[flat] (0,-3)  -- (9,-6);
+  \draw[rise] (0,-4)  -- (9,-1);
+  \draw[flat] (0,-5)  -- (9,-7);
+  \draw[flat] (0,-6)  -- (9,-5);
+  \draw[flat] (0,-7)  -- (9,-8);
+  \draw[flat] (0,-8)  -- (9,-9);
+  \draw[rise] (0,-9)  -- (9,-3);
   \draw[flat] (0,-10) -- (9,-10);
   \draw[flat] (0,-11) -- (9,-11);
   \draw[flat] (0,-12) -- (9,-12);
+  \draw[flat] (0,-13) -- (9,-13);
+  \draw[flat] (0,-14) -- (9,-14);
   % left labels: accuracy rank order, value before name
-  \node[left] at (-0.2,-1)  {37.8\%\enskip Gemma-3-27B};
-  \node[left] at (-0.2,-2)  {36.7\%\enskip Qwen3-14B};
-  \node[left] at (-0.2,-3)  {36.4\%\enskip Qwen3-30B-A3B};
-  \node[left] at (-0.2,-4)  {35.6\%\enskip \textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
-  \node[left] at (-0.2,-5)  {34.8\%\enskip Gemma-3-12B};
-  \node[left] at (-0.2,-6)  {34.4\%\enskip Granite-3.2-8B};
-  \node[left] at (-0.2,-7)  {34.2\%\enskip Llama-3.3-70B};
-  \node[left] at (-0.2,-8)  {33.7\%\enskip QwQ-32B};
-  \node[left] at (-0.2,-9)  {33.2\%\enskip \textcolor{sevNeg}{\bfseries GPT-OSS-20B}};
-  \node[left] at (-0.2,-10) {32.9\%\enskip GPT-OSS-120B};
-  \node[left] at (-0.2,-11) {31.6\%\enskip Qwen2.5-72B};
-  \node[left] at (-0.2,-12) {29.6\%\enskip Phi-4};
+  \node[left] at (-0.2,-1)  {37.77\%\enskip Gemma-3-27B};
+  \node[left] at (-0.2,-2)  {36.72\%\enskip Qwen3-14B};
+  \node[left] at (-0.2,-3)  {36.39\%\enskip Qwen3-30B-A3B};
+  \node[left] at (-0.2,-4)  {35.61\%\enskip \textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
+  \node[left] at (-0.2,-5)  {34.76\%\enskip Gemma-3-12B};
+  \node[left] at (-0.2,-6)  {34.36\%\enskip Granite-3.2-8B};
+  \node[left] at (-0.2,-7)  {34.16\%\enskip Llama-3.3-70B};
+  \node[left] at (-0.2,-8)  {33.72\%\enskip QwQ-32B};
+  \node[left] at (-0.2,-9)  {33.21\%\enskip \textcolor{sevNeg}{\bfseries GPT-OSS-20B}};
+  \node[left] at (-0.2,-10) {32.87\%\enskip GPT-OSS-120B};
+  \node[left] at (-0.2,-11) {31.62\%\enskip Qwen2.5-72B};
+  \node[left] at (-0.2,-12) {29.59\%\enskip Phi-4};
+  \node[left] at (-0.2,-13) {1.69\%\enskip \textit{Majority}};
+  \node[left] at (-0.2,-14) {0.00\%\enskip \textit{Random}};
   % right labels: E[S] rank order, name then value
-  \node[right] at (9.2,-1)  {\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}\enskip \$25.1\,M};
-  \node[right] at (9.2,-2)  {Gemma-3-27B\enskip \$30.2\,M};
-  \node[right] at (9.2,-3)  {\textcolor{sevNeg}{\bfseries GPT-OSS-20B}\enskip \$32.1\,M};
-  \node[right] at (9.2,-4)  {Qwen3-14B\enskip \$32.2\,M};
-  \node[right] at (9.2,-5)  {Granite-3.2-8B\enskip \$32.3\,M};
-  \node[right] at (9.2,-6)  {Qwen3-30B-A3B\enskip \$32.6\,M};
-  \node[right] at (9.2,-7)  {Gemma-3-12B\enskip \$33.0\,M};
-  \node[right] at (9.2,-8)  {Llama-3.3-70B\enskip \$33.3\,M};
-  \node[right] at (9.2,-9)  {QwQ-32B\enskip \$33.3\,M};
-  \node[right] at (9.2,-10) {GPT-OSS-120B\enskip \$33.5\,M};
-  \node[right] at (9.2,-11) {Qwen2.5-72B\enskip \$34.1\,M};
-  \node[right] at (9.2,-12) {Phi-4\enskip \$35.3\,M};
-  \foreach \y in {1,...,12}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
+  \node[right] at (9.2,-1)  {\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}\enskip \$25.13\,M};
+  \node[right] at (9.2,-2)  {Gemma-3-27B\enskip \$30.17\,M};
+  \node[right] at (9.2,-3)  {\textcolor{sevNeg}{\bfseries GPT-OSS-20B}\enskip \$32.13\,M};
+  \node[right] at (9.2,-4)  {Qwen3-14B\enskip \$32.17\,M};
+  \node[right] at (9.2,-5)  {Granite-3.2-8B\enskip \$32.31\,M};
+  \node[right] at (9.2,-6)  {Qwen3-30B-A3B\enskip \$32.59\,M};
+  \node[right] at (9.2,-7)  {Gemma-3-12B\enskip \$32.98\,M};
+  \node[right] at (9.2,-8)  {Llama-3.3-70B\enskip \$33.28\,M};
+  \node[right] at (9.2,-9)  {QwQ-32B\enskip \$33.31\,M};
+  \node[right] at (9.2,-10) {GPT-OSS-120B\enskip \$33.45\,M};
+  \node[right] at (9.2,-11) {Qwen2.5-72B\enskip \$34.07\,M};
+  \node[right] at (9.2,-12) {Phi-4\enskip \$35.31\,M};
+  \node[right] at (9.2,-13) {\textit{Majority}\enskip \$42.55\,M};
+  \node[right] at (9.2,-14) {\textit{Random}\enskip \$42.70\,M};
+  \foreach \y in {1,...,14}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
 \end{tikzpicture}%
 }%
 \caption{Finance: accuracy rank (left) vs.\ $\widehat{\ES}$
-rank (right) across 12 models, full corpus ($\tau{=}0.58$,
-sample-weighted across the 3 datasets, $n_{\text{tot}}=2960$).
-DeepSeek-R1-70B ($4{\to}1$) and GPT-OSS-20B ($9{\to}3$) rise
-sharply when ranked by dollar cost. Mini-slopegraphs for the
-other three domains in \autoref{fig:slopegraphs_all_domains}.}
+rank (right) across 14 models including baselines, full corpus
+($\tau{=}0.69$, sample-weighted across the 3 datasets,
+$n_{\text{tot}}=2960$). DeepSeek-R1-70B ($4{\to}1$) and
+GPT-OSS-20B ($9{\to}3$) rise sharply when ranked by dollar cost;
+random and majority sit at the bottom on both axes. Mini-slopegraphs
+for the other three domains in
+\autoref{fig:slopegraphs_all_domains}.}
 \label{fig:ranking_finance}
 \end{figure*}
 
@@ -741,14 +750,15 @@ operational decision tool: given a retention threshold $d{=}c_3$
 $h{=}\$50$, how much $\ES$ is removed per fraction of queries
 deferred? The answer is domain-stratified
 (\autoref{tab:h4}, \autoref{fig:routing}). Finance is the
-\enquote{cheap routing} regime: deferring the median $18\%$ of queries
-removes $84.6\%$ of $\ES$, a leverage ratio of $4.7{:}1$. The
-three other domains live in a \enquote{deep routing} regime, requiring
-deferral of $41$--$53\%$ of the queries but extracting near-total
-reductions ($92$--$98\%$). Insurance is the steepest combination
-($98\%$ at $41\%$ routing), consistent with its heavy-tailed cost
-vector (CV $= 1.63$) absorbing the deferred
-tail. The pattern is robust to a $\pm 20\%$ multiplicative
+\enquote{cheap routing} regime: deferring the median $19.73\%$
+of queries removes $84.59\%$ of $\ES$, a leverage ratio of
+$4.29{:}1$. The three other domains live in a \enquote{deep
+routing} regime, requiring deferral of $41.36$--$53.15\%$ of the
+queries but extracting near-total reductions
+($93.28$--$98.32\%$). Insurance is the steepest combination
+($98.32\%$ at $41.36\%$ routing), consistent with its
+heavy-tailed cost vector ($\text{CV} = 1.63$) absorbing the
+deferred tail. The pattern is robust to a $\pm 20\%$ multiplicative
 perturbation of every cost level (\autoref{sec:app-robustness}):
 the minimum Spearman correlation of per-model rankings under
 perturbation is $0.90$ in finance and $1.00$ in the other three
@@ -773,8 +783,8 @@ $\theta{=}0.2$ and a ruin tolerance $\psi^\ast{=}0.01$, the
 Lundberg reserve $u^\ast = -\ln(\psi^\ast)/R$ gives the dollar
 buffer that prevents bankruptcy with $99\%$ probability over an
 infinite horizon. Median $u^\ast$ values per $10{,}000$ outputs
-per period are $\$0.8$\,M (finance), $\$2.2$\,M (legal),
-$\$2.9$\,M (insurance) and $\$6.2$\,M (medical). The medical
+per period are $\$0.80$\,M (finance), $\$2.20$\,M (legal),
+$\$2.90$\,M (insurance) and $\$6.20$\,M (medical). The medical
 reserve is dominated by HEAD-QA, where the worst three models
 score under $1\%$ accuracy and push $\mu_X$ above $\$170$\,k.
 Reserves vary little across models within a domain (range $< 10\%$ of
@@ -787,10 +797,10 @@ error distribution rather than by model choice.
 \toprule
 Domain & CV($c$) & $\rho_{1/2}$ & $\widehat{\ES}$ reduction \\
 \midrule
-  Finance   & 1.51 & 0.18 & 84.6\,\% \\
-  Insurance & 1.63 & 0.41 & 98.3\,\% \\
-  Legal     & 1.51 & 0.53 & 98.0\,\% \\
-  Medical   & 1.51 & 0.51 & 92.0\,\% \\
+  Finance   & 1.51 & 0.20 & 84.59\,\% \\
+  Insurance & 1.63 & 0.41 & 98.32\,\% \\
+  Legal     & 1.51 & 0.53 & 98.04\,\% \\
+  Medical   & 1.51 & 0.52 & 93.28\,\% \\
 \bottomrule
 \end{tabular}
 \caption{HITL routing tradeoff by domain ($d{=}c_3$, $h{=}\$50$;
@@ -877,39 +887,39 @@ medical have the largest severity contribution.}
   \node[anchor=east] at (-0.15,-2) {Insurance};
   \node[anchor=east] at (-0.15,-3) {Legal};
   \node[anchor=east] at (-0.15,-4) {Medical};
-  % Finance: 18 -> 85
-  \draw[gap] (1.08,-1) -- (5.10,-1);
-  \node[routedot] at (1.08,-1) {};
-  \node[reddot]   at (5.10,-1) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (1.08,-1) {18\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.10,-1) {85\%};
-  % Insurance: 41 -> 98
-  \draw[gap] (2.46,-2) -- (5.88,-2);
-  \node[routedot] at (2.46,-2) {};
-  \node[reddot]   at (5.88,-2) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (2.46,-2) {41\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.88,-2) {98\%};
-  % Legal: 53 -> 98
-  \draw[gap] (3.18,-3) -- (5.88,-3);
-  \node[routedot] at (3.18,-3) {};
+  % Finance: 19.73 -> 84.59
+  \draw[gap] (1.18,-1) -- (5.08,-1);
+  \node[routedot] at (1.18,-1) {};
+  \node[reddot]   at (5.08,-1) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (1.18,-1) {19.73\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.08,-1) {84.59\%};
+  % Insurance: 41.36 -> 98.32
+  \draw[gap] (2.48,-2) -- (5.90,-2);
+  \node[routedot] at (2.48,-2) {};
+  \node[reddot]   at (5.90,-2) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (2.48,-2) {41.36\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.90,-2) {98.32\%};
+  % Legal: 53.15 -> 98.04
+  \draw[gap] (3.19,-3) -- (5.88,-3);
+  \node[routedot] at (3.19,-3) {};
   \node[reddot]   at (5.88,-3) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (3.18,-3) {53\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.88,-3) {98\%};
-  % Medical: 51 -> 92
-  \draw[gap] (3.06,-4) -- (5.52,-4);
-  \node[routedot] at (3.06,-4) {};
-  \node[reddot]   at (5.52,-4) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (3.06,-4) {51\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.52,-4) {92\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (3.19,-3) {53.15\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.88,-3) {98.04\%};
+  % Medical: 51.65 -> 93.28
+  \draw[gap] (3.10,-4) -- (5.60,-4);
+  \node[routedot] at (3.10,-4) {};
+  \node[reddot]   at (5.60,-4) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (3.10,-4) {51.65\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.60,-4) {93.28\%};
   % x-axis tick marks at 0/50/100
   \foreach \x/\v in {0/0, 3/50, 6/100} \node[font=\scriptsize, text=black!50] at (\x,-4.7) {\v\%};
 \end{tikzpicture}
 \caption{Dumbbell of \textcolor{black!55}{routed share
 $\rho_{1/2}$} vs.\ \textcolor{accentBlue}{$\widehat{\ES}$
 reduction} by domain ($d{=}c_3$, $h{=}\$50$, full corpus). Finance
-shows the longest leverage gap ($18\%$ deferred $\to$ $85\%$ cut);
-the others need $\sim$half their queries deferred for similar
-cuts.}
+shows the longest leverage gap ($19.73\%$ deferred $\to$
+$84.59\%$ cut); the others need $\sim$half their queries
+deferred for similar cuts.}
 \label{fig:routing}
 \end{figure}
 
@@ -985,14 +995,14 @@ model ranking. It is what MQM cannot produce:
 \paragraph{Worked example.}
 A risk-management team comparing DeepSeek-R1-70B and Llama-3.3-70B
 for a JudgeBERT deployment sees DeepSeek-R1-70B win on accuracy
-by $0.8$ points. Under MQM, DeepSeek-R1-70B also ranks better.
+by $0.74$ points. Under MQM, DeepSeek-R1-70B also ranks better.
 The framework adds three numbers: $\widehat{\ES}$ for
-DeepSeek-R1-70B is $\$504.8$\,M vs. $\$476.1$\,M for
+DeepSeek-R1-70B is $\$504.80$\,M vs.\ $\$476.11$\,M for
 Llama-3.3-70B per $10{,}000$ outputs (the higher-accuracy model
-is in fact \$28.7\,M more expensive). $\TVaR_{0.95}$ is
-$\$524.9$\,M vs.\ $\$495.9$\,M, so the tail-risk margin is also
+is in fact $\$28.69$\,M more expensive). $\TVaR_{0.95}$ is
+$\$524.86$\,M vs.\ $\$495.78$\,M, so the tail-risk margin is also
 worse for the higher-accuracy model. The Lundberg reserve at
-$\psi^\ast{=}0.01$, $\theta{=}0.2$ is $\$2.9$\,M, sizing the
+$\psi^\ast{=}0.01$, $\theta{=}0.2$ is $\$2.90$\,M, sizing the
 buffer the deployment must hold to keep one-year ruin
 probability below $1\%$. Neither MQM nor accuracy can deliver
 these three figures; together they convert "model A is better"
@@ -1097,9 +1107,9 @@ higher-accuracy model is the more expensive one; it decomposes
 $\sigma^2_{\ES}$ into severity ($0.06$--$0.27$) and frequency
 components, with all four domains frequency-dominated under the
 pooled LLM-plus-baseline roster; and it yields a routing tradeoff
-that cuts $\ES$ by $85$\,\% (finance, at $18$\,\% routing) up to
-$93$--$98$\,\% (medical, legal, insurance, at $41$--$53$\,\%
-routing). The pattern holds across
+that cuts $\ES$ by $84.59\,\%$ (finance, at $19.73\,\%$ routing)
+up to $93.28$--$98.32\,\%$ (medical, legal, insurance, at
+$41.36$--$53.15\,\%$ routing). The pattern holds across
 the heterogeneous model sample, supporting the claim that the
 framework, not any single model choice, quantifies the cost
 structure that accuracy hides. Extending to additional severity
