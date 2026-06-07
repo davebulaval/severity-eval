@@ -81,6 +81,20 @@
 \newcommand{\bpi}{\boldsymbol{\pi}}
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 
+% Code/data release URL. Tied to the acl package's [review]/[final] flag:
+% under [review] the anonymous mirror is shown, under [final] (camera-ready)
+% the deanonymised GitHub URL is rendered automatically. TODO before
+% submission: replace XXXX with the real anonymous.4open.science short hash.
+\makeatletter
+\newcommand{\coderepo}{%
+  \ifacl@anonymize
+    \url{https://anonymous.4open.science/r/severity-eval-XXXX}%
+  \else
+    \url{https://github.com/davebulaval/severity-eval}%
+  \fi
+}
+\makeatother
+
 \title{Severity-Aware Evaluation of Large Language Models:\\
 An Empirical Study with Actuarial Frequency-Severity Models}
 
@@ -125,8 +139,9 @@ that cuts $\widehat{\ES}$ by $85$\,\% in finance at $18$\,\%
 deferral and by $92$--$98$\,\% in the other three domains at
 $41$--$53$\,\% deferral, and per-domain Lundberg reserves from
 $\$0.8$\,M to $\$6.2$\,M per $10{,}000$ outputs per period. We
-release \seveval{}, a HuggingFace-style Python library, with
-annotations and calibration evidence.
+release \seveval{}\footnote{Code, severity annotations, and
+evaluation results: \coderepo.}, a HuggingFace-style Python
+library, with annotations and calibration evidence.
 \end{abstract}
 
 % ============================================================================
