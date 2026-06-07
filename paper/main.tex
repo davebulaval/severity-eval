@@ -572,7 +572,7 @@ The framework's residual value is what an accuracy-only
 leaderboard cannot show: the cost of the rank that is correct.
 We detect $74$ strict accuracy-vs-$\ES$ inversions where
 $\mathrm{acc}(A) > \mathrm{acc}(B)$ \emph{and} $\ES(A) > \ES(B)$,
-out of $1001$ ordered model pairs ($7.4\%$). All inversions
+out of $1001$ ordered model pairs ($7.39\%$). All inversions
 involve two LLMs; the random and majority baselines are both
 worse than every LLM on accuracy and $\ES$, so they do not
 contribute new inversions. The
@@ -984,7 +984,7 @@ model ranking. It is what MQM cannot produce:
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
   \item dollar-denominated magnitudes calibrated against external
     evidence (regulatory penalties, litigation data, operational
-    loss reports), so the $\$28.7$\,M JudgeBERT inversion is an
+    loss reports), so the $\$28.69$\,M JudgeBERT inversion is an
     interpretable budget item, not an arbitrary unit count;
   \item tail measures ($\VaR$, $\TVaR$) and Lundberg reserves,
     which cannot be derived from a weighted mean;
@@ -1021,7 +1021,7 @@ reserve computations (\autoref{sec:rq3}).
 At 14 models, no domain crosses into a severity-dominated
 regime; restricting to the 12 LLMs (excluding the random and
 majority baselines, App.~\ref{sec:app-variance-mc}) raises the
-severity share in finance and legal to roughly $0.5$, indicating
+severity share in finance and legal to roughly $0.50$, indicating
 that within the LLM cohort alone the two contributions are
 comparable. Whether $\bpi$ inspection is worth the overhead
 depends on whether deployment selection is among LLMs only or
@@ -1140,8 +1140,8 @@ practitioners should recalibrate to their context.
 
 \paragraph{Binary correctness.}
 Each output is classified as correct or erroneous, discarding
-partial correctness: \$$14.0$\,B instead of \$$14.2$\,B is
-\enquote{wrong} but far less consequential than \$$11.6$\,B.
+partial correctness: \$$14.00$\,B instead of \$$14.20$\,B is
+\enquote{wrong} but far less consequential than \$$11.60$\,B.
 Continuous severity scoring (e.g., BERTScore-style
 \citep{zhang2020bertscore} or BLEURT \citep{sellam2020bleurt})
 is left to future work.
@@ -1180,7 +1180,7 @@ a quasi-trivial benchmark is added.
 \paragraph{Inversion rate.}
 The $74$ dollar-magnitude inversions arise from $1001$ ordered
 within-domain model pairs ($\binom{14}{2} = 91$ pairs across
-$11$ datasets), so $7.4\%$ of all comparisons. The framework
+$11$ datasets), so $7.39\%$ of all comparisons. The framework
 surfaces a
 minority of mispriced pairs, not a leaderboard reshuffle.
 
@@ -1658,9 +1658,9 @@ $\theta \backslash \psi^\ast$ & $.005$ & $.01$ & $.05$
                               & $.005$ & $.01$ & $.05$
                               & $.005$ & $.01$ & $.05$ \\
 \midrule
-$0.1$ & $1.6$ & $1.4$ & $0.9$ & $13.3$ & $11.6$ & $7.5$ & $6.2$ & $5.4$ & $3.5$ \\
-$0.2$ & $0.9$ & $0.8$ & $0.5$ & $7.1$  & $6.2$  & $4.0$ & $3.3$ & $2.9$ & $1.9$ \\
-$0.5$ & ---   & ---   & ---   & $3.3$  & $2.9$  & $1.9$ & $1.6$ & $1.4$ & $0.9$ \\
+$0.10$ & $1.60$ & $1.40$ & $0.90$ & $13.30$ & $11.60$ & $7.50$ & $6.20$ & $5.40$ & $3.50$ \\
+$0.20$ & $0.90$ & $0.80$ & $0.50$ & $7.10$  & $6.20$  & $4.00$ & $3.30$ & $2.90$ & $1.90$ \\
+$0.50$ & ---   & ---   & ---   & $3.30$  & $2.90$  & $1.90$ & $1.60$ & $1.40$ & $0.90$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -1755,17 +1755,17 @@ critical   & $16$  & $0$   & $0$  & $8$   \\
 \end{center}
 
 \noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
-$68.3\%$. Per-model $\kappa$ ranges from $-0.017$ (Qwen3-30B-A3B)
+$68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (Qwen3-30B-A3B)
 to $0.042$ (Llama-3.3-70B), well below the rule-vs-LLM
 $\kappa = 0.46$ obtained when both annotators score the question
 \emph{type} rather than the model's output
 (\autoref{sec:app-severity-by-dataset}). The directions of
-disagreement are roughly balanced: $47.0\%$ of LLM labels are
+disagreement are roughly balanced: $47.00\%$ of LLM labels are
 strictly lower-severity than the rule (paraphrases, immaterial
-digit changes, sign-preserving rounding), $36.8\%$ are
+digit changes, sign-preserving rounding), $36.80\%$ are
 strictly higher (sign flips on a yes/no question whose tier was
 \emph{minor}, magnitude errors on what the rule called a
-descriptive answer), and $16.2\%$ agree exactly. The two labels
+descriptive answer), and $16.20\%$ agree exactly. The two labels
 target different quantities: question-level severity is keyed to
 which answer-type$\times$metric-type combination is being
 asked; output-level severity is keyed to what the model
@@ -1805,14 +1805,14 @@ completeness and to forestall the question.}
 The four reasoning-tuned checkpoints in our roster
 (DeepSeek-R1-Distill-70B, QwQ-32B, Qwen3-14B, Qwen3-30B-A3B)
 achieve lower mean $\widehat{\ES}$ than the eight non-reasoning
-checkpoints in three of the four domains: $-\$28.5$\,M in
-medical, $-\$12.2$\,M in legal, $-\$2.7$\,M in finance, per
+checkpoints in three of the four domains: $-\$28.49$\,M in
+medical, $-\$12.17$\,M in legal, $-\$2.73$\,M in finance, per
 $10{,}000$ outputs (unweighted mean across the reasoning vs.\
 non-reasoning groups, computed from
-\texttt{results/metrics\_by\_domain.csv}). Insurance is the
-exception: the reasoning mean is $\$1.3$\,M \emph{higher} than
+\path{results/metrics_by_domain.csv}). Insurance is the
+exception: the reasoning mean is $\$1.27$\,M \emph{higher} than
 the non-reasoning mean, driven by DeepSeek-R1-Distill-70B at
-$\$256.0$\,M, which exceeds three of the eight non-reasoning
+$\$255.99$\,M, which exceeds three of the eight non-reasoning
 checkpoints on that domain. The three-of-four sign consistency
 corresponds to a sign-test $p$-value of $\binom{4}{3}/2^4=0.25$
 under the strict null, which is not informative at $n=4$.
