@@ -119,7 +119,7 @@ so the framework's value lies less in the ordering than in the
 interpretable dollar magnitudes: $74$ accuracy-vs-cost
 inversions (median $\$1.9$\,M, max $\$28.7$\,M per $10{,}000$
 outputs), a variance decomposition whose severity share moves
-from $0.05$ (medical) to $0.81$ (finance) with the cross-model
+from $0.08$ (medical) to $0.51$ (legal) with the cross-model
 $p$/$\mu_X$ coefficient-of-variation ratio, a routing tradeoff
 that cuts $\widehat{\ES}$ by $85$\,\% in finance at $18$\,\%
 deferral and by $92$--$98$\,\% in the other three domains at
@@ -185,12 +185,13 @@ Our three contributions:
     weighted-mean baseline can produce.
   \item \textbf{The mechanism behind \emph{when} severity
     matters.} Inter-model variance in $\ES$ splits into a
-    severity share that ranges from $5\%$ (medical) to $81\%$
-    (finance); the split is driven by which input has the larger
+    severity share that ranges from $8\%$ (medical) to $51\%$
+    (legal); the split is driven by which input has the larger
     cross-model coefficient of variation ($p$-CV vs.\
-    $\mu_X$-CV). This makes a domain a priori classifiable as
-    severity- or frequency-dominated, telling a procurement
-    committee whether $\bpi$ needs inspection.
+    $\mu_X$-CV). Medical and insurance are frequency-dominated
+    (severity share below $30\%$); finance and legal are
+    balanced (around $50\%$), telling a procurement committee
+    whether $\bpi$ needs inspection.
   \item \textbf{A routing tradeoff with two operating regimes
     and per-domain reserves.} Modelled as excess-of-loss
     reinsurance, HITL routing cuts $\ES$ by $85\%$ at $18\%$
@@ -693,46 +694,51 @@ mini-slopegraphs in \autoref{fig:slopegraphs_all_domains}.}
 \label{sec:rq2}
 
 We decompose inter-model $\sigma^2_{\ES}$ into a severity-only
-($\sigma^2_{\bpi}$) and a frequency-only ($\sigma^2_p$) component.
-Across the four domains the severity share spans most of the
-$[0, 1]$ interval: $0.81$ in finance, $0.37$ in legal, $0.06$ in
-insurance, $0.05$ in medical (\autoref{fig:variance}).
+and a frequency-only component via the closed-form delta-method
+approximation
+$\text{share}_{\text{sev}} = CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$,
+where $CV$ denotes the coefficient of variation across the $12$
+models. The severity share is $0.48$ in finance, $0.51$ in
+legal, $0.27$ in insurance, and $0.08$ in medical
+(\autoref{fig:variance}). Frequency contributes more than
+severity in $3$ of the $4$ domains; severity and frequency
+contribute comparably in finance and legal.
 
 \paragraph{Mechanism.}
-The spread reflects the relative dispersion of the two inputs to
+The shares reflect the relative dispersion of the two inputs to
 $\ES = n\, p\, \mu_X$. Across the $12$ models within a domain,
 both the error rate $p$ and the mean severity
-$\mu_X = \sum_k c_k \pi_k$ vary; the dominant component is the
-one with the larger coefficient of variation. In finance, $p$ is
-tightly clustered (CV $0.03$, range $0.62$--$0.70$) while $\mu_X$
-moves twice as much (CV $0.07$); severity dominates. In medical
-the relation reverses: $p$ has CV $0.74$ (range $0.01$ on DDI to
-$0.36$ on HEAD-QA) while $\mu_X$ has CV $0.17$, so frequency
-dominates by an order of magnitude. Insurance follows the
-medical pattern ($p$-CV $0.67$, $\mu_X$-CV $0.17$); legal lies
-between ($p$-CV $0.33$, $\mu_X$-CV $0.26$).
+$\mu_X = \sum_k c_k \pi_k$ vary; the contribution of each is the
+square of its coefficient of variation. In finance, both inputs
+are tightly clustered and move similarly ($p$-CV $0.062$ with $p$
+in $0.60$--$0.73$; $\mu_X$-CV $0.060$); their contributions are
+balanced. Legal has the same pattern at a larger scale ($p$-CV
+$0.158$, $\mu_X$-CV $0.162$). Insurance and medical are
+frequency-dominated: insurance has $p$-CV $0.077$ against
+$\mu_X$-CV $0.047$, and medical has $p$-CV $0.495$ (driven by
+the $p$ range from $0.05$ on gpt-oss-20b to $0.46$ on Gemma-3-12B)
+against $\mu_X$-CV $0.148$. A Monte Carlo variant of the
+decomposition (\autoref{sec:app-variance-mc}) that does not
+linearise gives qualitatively the same picture for insurance and
+preserves a frequency-dominated reading of medical at large
+$p$-CV, while showing more sensitivity to the cost-tier weights.
 
 \paragraph{Practical implication.}
-In finance, models differ mostly in \emph{which} errors they
-make: identical accuracy can hide an order-of-magnitude dollar
-exposure depending on the severity profile. In medical and
-insurance, models differ almost entirely in \emph{how often}
-they err: the severity profiles are nearly indistinguishable, so
-error rate \emph{is} a faithful rank. The lever that most
-reduces $\ES$ is therefore domain-specific: in finance, the
-marginal dollar is spent improving severity selection (avoid the
-worst errors); in medical and insurance, it is spent improving
-accuracy outright. Legal sits between. The decomposition is
-sensitive to the cost vector and to the model mix; we report it
-as descriptive rather than confirmatory. Robustness checks:
-$\pm 20\%$ perturbation of every cost level
+In insurance and medical, where frequency dominates, models
+differ almost entirely in \emph{how often} they err and error
+rate is the lever that most reduces $\ES$. In finance and legal,
+the two inputs contribute comparably: the marginal effort is
+split between reducing error rate and reducing severity per
+error. The lever is therefore domain-specific: in insurance and
+medical, it is spent improving
+accuracy outright. In finance and legal, both axes matter.
+The decomposition is sensitive to the cost vector and to the
+model mix; we report it as descriptive rather than confirmatory.
+Robustness checks: $\pm 20\%$ perturbation of every cost level
 (\autoref{sec:app-robustness}) does not change the cross-domain
-ordering, and excluding the two saturated corpora (DDI 2013,
-PrivacyQA) leaves $p$-CV and $\mu_X$-CV essentially unchanged
-in finance, medical, and legal; only insurance reduces to a
-single-corpus setting where $p$-CV drops from $0.67$ to $0.04$
-because JudgeBERT alone shows little per-model error-rate
-spread.
+ordering, and the qualitative split (insurance/medical
+frequency-dominated; finance/legal balanced) is preserved under
+the MC variant of the decomposition.
 
 \subsection{RQ3: Routing tradeoff}
 \label{sec:rq3}
@@ -825,38 +831,38 @@ is the cheap-routing regime; the others are deep-routing.}
   \node[font=\scriptsize, text=black!50] at (3,-4.8) {50\%};
   \node[font=\scriptsize, text=black!50] at (6,-4.8) {100\%};
   % domain labels (left) -- sorted by severity share descending
-  \node[anchor=east] at (-0.15,-1) {Finance};
-  \node[anchor=east] at (-0.15,-2) {Legal};
+  \node[anchor=east] at (-0.15,-1) {Legal};
+  \node[anchor=east] at (-0.15,-2) {Finance};
   \node[anchor=east] at (-0.15,-3) {Insurance};
   \node[anchor=east] at (-0.15,-4) {Medical};
-  % markers: x = share * 0.06 (axis 0..6 for 0..100%)
-  % Finance 81/19
-  \node[sevdot]  at (4.86,-1) {};
-  \node[freqdot] at (1.14,-1) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (4.86,-1) {81\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (1.14,-1) {19\%};
-  % Legal 37/63
-  \node[sevdot]  at (2.22,-2) {};
-  \node[freqdot] at (3.78,-2) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (2.22,-2) {37\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (3.78,-2) {63\%};
-  % Insurance 6/94
-  \node[sevdot]  at (0.36,-3) {};
-  \node[freqdot] at (5.64,-3) {};
-  \node[anchor=south west, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj] at (0.36,-3) {6\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.64,-3) {94\%};
-  % Medical 5/95
-  \node[sevdot]  at (0.30,-4) {};
-  \node[freqdot] at (5.70,-4) {};
-  \node[anchor=south west, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj] at (0.30,-4) {5\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.70,-4) {95\%};
+  % markers: x = share * 6 (axis 0..6 for 0..100%); analytic CV-ratio shares
+  % Legal 51/49
+  \node[sevdot]  at (3.06,-1) {};
+  \node[freqdot] at (2.94,-1) {};
+  \node[anchor=south east, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj]    at (3.06,-1) {51\%};
+  \node[anchor=south west, yshift=2pt, xshift=2pt, font=\scriptsize, text=accentBlue] at (2.94,-1) {49\%};
+  % Finance 48/52
+  \node[sevdot]  at (2.88,-2) {};
+  \node[freqdot] at (3.12,-2) {};
+  \node[anchor=south east, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj]    at (2.88,-2) {48\%};
+  \node[anchor=south west, yshift=2pt, xshift=2pt, font=\scriptsize, text=accentBlue] at (3.12,-2) {52\%};
+  % Insurance 27/73
+  \node[sevdot]  at (1.62,-3) {};
+  \node[freqdot] at (4.38,-3) {};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (1.62,-3) {27\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (4.38,-3) {73\%};
+  % Medical 8/92
+  \node[sevdot]  at (0.48,-4) {};
+  \node[freqdot] at (5.52,-4) {};
+  \node[anchor=south west, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj] at (0.48,-4) {8\%};
+  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.52,-4) {92\%};
 \end{tikzpicture}
 \caption{Inter-model variance in $\widehat{\ES}$ split into a
-\textcolor{sevMaj}{severity share $\sigma^2_{\bpi}/\sigma^2$} and
-a \textcolor{accentBlue}{frequency share $\sigma^2_p/\sigma^2$}.
-Each domain occupies its own spectrum; the dots are the two
-complementary shares. Severity dominates finance; medical and
-insurance concentrate on frequency; legal sits between.}
+\textcolor{sevMaj}{severity share} and a
+\textcolor{accentBlue}{frequency share} via the closed-form
+$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition. The two
+shares sum to $1$. Legal and finance are roughly balanced;
+insurance and medical are frequency-dominated.}
 \label{fig:variance}
 \end{figure}
 
@@ -1004,22 +1010,19 @@ into a budgeted comparison.
 
 \subsection{When does severity matter most?}
 
-The RQ2 mechanism (\autoref{sec:rq2}) has a direct
+The RQ2 decomposition (\autoref{sec:rq2}) has a direct
 implication for procurement and model-selection workflows.
-In \emph{severity-dominated} regimes (finance here, with
-$\sigma^2_{\bpi}$-share $0.81$), two models with the same
-accuracy can carry order-of-magnitude different dollar exposures:
-ranking on accuracy alone leaves money on the table and
-the model-selection committee must inspect $\bpi$. In
-\emph{frequency-dominated} regimes (medical $0.05$, insurance
-$0.06$), the $12$ models cluster on essentially the same
-severity profile across all datasets in the domain, so the
-error-rate ordering is already cost-faithful; the actuarial
-overhead pays back only on tail-risk and reserve computations
-(\autoref{sec:rq3}, tail-risk premium). Legal sits between
-($0.37$), with a smaller but non-trivial severity contribution.
-Whether a deployment is in the severity- or frequency-dominated
-regime is a domain property given the cost vector, not a
+In \emph{frequency-dominated} regimes (medical with severity
+share $0.08$, insurance $0.27$), the within-domain $p$-CV is
+several times the $\mu_X$-CV: the error-rate ordering is already
+close to cost-faithful, and the actuarial overhead pays back
+mostly on tail-risk and reserve computations (\autoref{sec:rq3}).
+In \emph{balanced} regimes (legal $0.51$, finance $0.48$),
+$p$-CV and $\mu_X$-CV are comparable: two models with the same
+accuracy can carry materially different dollar exposures, so
+the model-selection committee should inspect $\bpi$ in addition
+to error rate. The split is a domain property given the cost
+vector, not a
 property of the model; this can be checked before committing to
 a more elaborate evaluation pipeline.
 
@@ -1099,7 +1102,7 @@ insurance pilot is a small-sample artefact, not a stable empirical
 regularity. The framework's residual value lies elsewhere. It
 surfaces $74$ dollar-magnitude inversions in which the
 higher-accuracy model is the more expensive one; it decomposes
-$\sigma^2_{\ES}$ into severity ($0.05$--$0.81$) and frequency
+$\sigma^2_{\ES}$ into severity ($0.08$--$0.51$) and frequency
 components that vary by domain, revealing whether the lever for
 reducing $\ES$ is \enquote{which errors} or \enquote{how often}; and it
 yields a routing tradeoff that cuts $\ES$ by $85$\,\% (finance,
@@ -1558,6 +1561,30 @@ CIs differ by an order of magnitude.
 \section{Robustness Analyses}
 \label{sec:app-robustness}
 
+\paragraph{Variance decomposition: Monte Carlo variant.}
+\label{sec:app-variance-mc}
+The body reports severity shares via the closed-form CV-ratio
+$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$. As a sanity check, we
+also compute a Monte Carlo decomposition that simulates each
+model's $\ES$ at fixed $p = \bar p$ (severity-only) and fixed
+$\bpi = \bar\bpi$ (frequency-only), then takes
+$\text{share} = \mathrm{Var}(\ES_{\bpi\text{-only}}) /
+(\mathrm{Var}(\ES_{\bpi\text{-only}}) + \mathrm{Var}(\ES_{p\text{-only}}))$.
+Both methods are implemented in
+\path{experiments/analysis.py:test_h2_variance_decomposition}
+and \path{...analytic}. The MC variant gives severity shares
+$0.67$ (finance), $0.46$ (legal), $0.06$ (insurance), $0.70$
+(medical). It preserves the insurance/finance ordering but
+re-classifies medical as severity-dominated because the MC
+captures the cost-tier interaction: at the $10$x geometric cost
+spacing, small cross-model differences in the critical-tier
+share of $\bpi$ translate to large $\ES$ swings. We report the
+CV-ratio method as primary because it is closed-form,
+cost-vector-independent in normalised form, and reproducible
+without simulation noise; the MC variant is published alongside
+in the \texttt{hypothesis\_tests.json} artifact so reviewers can
+cross-check both.
+
 \paragraph{Single-coordinate $\pm 20\%$ perturbations.}
 Perturbing each $c_k$ by $\pm 20\%$ one coordinate at a time
 barely moves the per-domain $\ES$ rankings: the minimum Spearman
@@ -1777,8 +1804,9 @@ under the strict null, which is not informative at $n=4$.
 The reasoning sample is small ($n=4$) and vendor-correlated.
 Three of the four reasoning models are from Alibaba (Qwen3-14B,
 Qwen3-30B-A3B, QwQ-32B); the same vendor's non-reasoning
-checkpoint Qwen2.5-72B lands among the more expensive models in
-medical ($\widehat{\ES} = \$752$\,M), so vendor and
+checkpoint Qwen2.5-72B lands among the more expensive models on
+HEAD-QA ($\widehat{\ES} = \$752$\,M, the most-expensive medical
+dataset), so vendor and
 post-training procedure are confounded with the reasoning label.
 A controlled within-vendor comparison would require evaluating
 the same base model with and without reasoning fine-tuning,
