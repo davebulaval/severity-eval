@@ -612,11 +612,13 @@ Domain & $\tau$ & $p$-value & 95\% bootstrap CI \\
 \end{tabular}
 \caption{Kendall $\tau$ between accuracy and $\widehat{\ES}$
 rankings per domain ($n_{\text{models}}{=}12$, full 11-corpus
-evaluation, $10{,}000$ bootstrap resamples over models). The
-point estimate is moderate for finance ($\tau{=}0.58$) and
-strong for the other three domains ($\tau \geq 0.73$); the
-bootstrap CIs are wide for finance and insurance, consistent
-with the small number of ranked models.}
+evaluation, $10{,}000$ bootstrap resamples over models). $p$-values
+are exact (no ties; \texttt{scipy.stats.kendalltau} with
+\texttt{method='exact'} agrees with the asymptotic value to 4
+significant digits at $n=12$). The point estimate is moderate for
+finance ($\tau{=}0.58$) and strong for the other three domains
+($\tau \geq 0.73$); the bootstrap CIs are wide for finance and
+insurance, consistent with the small number of ranked models.}
 \label{tab:h1}
 \end{table}
 
@@ -675,12 +677,15 @@ with the small number of ranked models.}
 \end{tikzpicture}%
 }%
 \caption{Finance: accuracy rank (left) vs.\ $\widehat{\ES}$ rank
-(right) across 12 models, full corpus ($\tau{=}0.58$). Two models
-rise sharply when ranked by dollar cost: DeepSeek-R1-70B
-($4{\to}1$) and GPT-OSS-20B ($9{\to}3$). Finance is the only
-domain where dataset-level inversions concentrate; the other
-three are near-monotone and reproduced as mini-slopegraphs in
-\autoref{fig:slopegraphs_all_domains}.}
+(right) across 12 models, full corpus ($\tau{=}0.58$). Dollar
+labels are sample-weighted means across FinanceBench, FinQA, and
+TAT-QA ($n_{\text{tot}}=2960$); the unweighted means used in the
+appendix tables differ by up to $\$3$\,M per model
+(\autoref{sec:app-full-results}). Two models rise sharply when
+ranked by dollar cost: DeepSeek-R1-70B ($4{\to}1$) and GPT-OSS-20B
+($9{\to}3$). Finance is the only domain where dataset-level
+inversions concentrate; the other three are reproduced as
+mini-slopegraphs in \autoref{fig:slopegraphs_all_domains}.}
 \label{fig:ranking_finance}
 \end{figure*}
 
@@ -847,12 +852,11 @@ is the cheap-routing regime; the others are deep-routing.}
   \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.70,-4) {95\%};
 \end{tikzpicture}
 \caption{Inter-model variance in $\widehat{\ES}$ split into a
-\textcolor{sevMaj}{severity component $\sigma^2_{\bpi}/\sigma^2$}
-and a \textcolor{accentBlue}{frequency component
-$\sigma^2_p/\sigma^2$}. Each domain occupies its own spectrum;
-the dots are the two complementary shares. Severity dominates in
-finance; medical and insurance concentrate almost entirely on
-frequency; legal sits between.}
+\textcolor{sevMaj}{severity share $\sigma^2_{\bpi}/\sigma^2$} and
+a \textcolor{accentBlue}{frequency share $\sigma^2_p/\sigma^2$}.
+Each domain occupies its own spectrum; the dots are the two
+complementary shares. Severity dominates finance; medical and
+insurance concentrate on frequency; legal sits between.}
 \label{fig:variance}
 \end{figure}
 
@@ -905,11 +909,11 @@ frequency; legal sits between.}
 \end{tikzpicture}
 \caption{Dumbbell of \textcolor{black!55}{routed share
 $\rho_{1/2}$} vs.\ \textcolor{accentBlue}{$\widehat{\ES}$
-reduction} by domain ($d{=}c_3$, $h{=}\$50$, full corpus, 12
-models). Finance shows the longest leverage gap: $18\%$ of queries
-deferred removes $85\%$ of expected loss. The other three domains
-need roughly half the queries deferred to extract near-total
-cuts.}
+reduction} by domain ($d{=}c_3$, $h{=}\$50$, full corpus,
+12~models). Finance shows the longest leverage gap: $18\%$ of
+queries deferred removes $85\%$ of expected loss. The other
+three domains need roughly half their queries deferred to extract
+near-total cuts.}
 \label{fig:routing}
 \end{figure}
 
@@ -963,10 +967,12 @@ major and critical errors. Applied to our severity labels (with
 $0$ for negligible), MQM-weighted model rankings track our
 $\widehat{\ES}$ rankings closely: per-domain Kendall $\tau$
 between MQM and $\widehat{\ES}$ is $0.82$ in finance, $0.97$ in
-medical, $1.00$ in legal, and $0.97$ in insurance. \emph{MQM
-recovers most of the cost ordering when its weights happen to be
-roughly proportional to the actual cost ratios.} The framework's
-empirical contribution above MQM is therefore not the per-domain
+medical, $1.00$ in legal, and $0.97$ in insurance. This
+agreement is partly algebraic: MQM's $\{1, 5, 25\}$ and our
+cost vectors are both roughly geometric ($\sim 5\times$ vs.\
+$\sim 10\times$), so rankings under the two weighted means are
+forced to align when severity profiles concentrate on a single
+tier. The contribution above MQM is therefore not the per-domain
 model ranking. It is what MQM cannot produce:
 
 \begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
@@ -1024,19 +1030,25 @@ derived from the question's structured field, not the model's
 specific wrong output. An LLM annotation pass on the full set of
 $1090$ wrong FinanceBench predictions
 (\autoref{sec:app-output-severity}) shows that the two labels
-measure orthogonal axes: Cohen $\kappa = 0.01$ between rule and
-output tiers, with $47\%$ of output tiers strictly below the
+target different quantities: Cohen $\kappa = 0.01$ between rule
+and output tiers, with $47\%$ of output tiers strictly below the
 rule (paraphrase, immaterial rounding) and $37\%$ strictly above
 (sign flip on a minor question-type, magnitude error on a
 descriptive answer). At the per-model level the rule and output
-severities give Kendall $\tau = -0.36$ on per-model means:
-output-level annotation can reorder models within a domain, not
-just rescale a point estimate. The body's results are therefore an importance-weighted
-exposure under a defensible default labelling; per-output
-annotation refines but does not contradict the cross-domain
-conclusions, since the rule label captures which questions are
-high-stakes while the output label captures whether the model's
-specific failure realises that stake.
+severities give Kendall $\tau = -0.36$ on per-model means. The
+practical consequence: on FinanceBench alone, the rank
+correlation between accuracy and $\widehat{\ES}$ is $\tau{=}0.85$
+under the rule label but drops to $\tau{=}0.12$ under the
+output label (12 models). Output-level annotation does not
+contradict the cross-domain RQ1 finding that accuracy and
+$\widehat{\ES}$ rankings disagree -- it strengthens it on
+FinanceBench. It does, however, mean the finance per-model
+$\widehat{\ES}$ point estimates reported in the body should be
+read as a question-importance-weighted exposure under a
+defensible default labelling; a full per-output re-annotation of
+FinQA and TAT-QA would be needed to confirm whether the
+specific finance ranking in \autoref{fig:ranking_finance} is
+stable under output-aware severity.
 
 \subsection{Human-in-the-loop routing}
 
@@ -1678,10 +1690,10 @@ gold answer, and the model's actual wrong prediction to Claude
 Sonnet 4 with the same four-tier rubric. FinanceBench is the
 only domain where severity is derived from a defensible
 answer-type by metric-type matrix rather than from a native
-structured field. The labelling script is
-\texttt{experiments/validate\_severity\_output\_llm.py}; results
-land in \texttt{results/output\_severity\_validation.\{json,csv\}}.
-We label all wrong predictions across the 12 models, $n=1090$.
+structured field. The labelling script
+(\path{experiments/validate_severity_output_llm.py}) writes
+\path{results/output_severity_validation.{json,csv}}. We label
+all wrong predictions across the 12 models, $n=1090$.
 
 \begin{center}
 \small
@@ -1722,10 +1734,15 @@ the two Gemma models are mid-pack by rule ($1.05$--$1.07$) but
 worst by LLM ($1.64$--$1.94$). Kendall $\tau$ between per-model
 mean rule and LLM severities is $-0.364$: output-level
 annotation would not simply scale the rule-based $\widehat{\ES}$
-estimate; it can reorder models within the same domain. The
-body's reported $\widehat{\ES}$ values are therefore best read
-as a question-importance-weighted exposure under a defensible
-default labelling. (Note: the $24$ rule-critical predictions
+estimate; it can reorder models within the same domain. On
+FinanceBench specifically, the rank correlation between accuracy
+and $\widehat{\ES}$ is $\tau = 0.85$ under the rule label and
+$\tau = 0.12$ under the output label, so the RQ1 finding
+\emph{accuracy and $\widehat{\ES}$ rank models differently} is
+strengthened, not weakened, by output-aware severity. The body's
+reported $\widehat{\ES}$ values are therefore best read as a
+question-importance-weighted exposure under a defensible default
+labelling. (Note: the $24$ rule-critical predictions
 arise entirely from the FinanceBench cross-tabulation matrix;
 no FinanceBench question is natively labelled \emph{critical}
 without the dollar-large + core combination.)
@@ -1748,6 +1765,9 @@ $-\$15.4$\,M in legal, $-\$6.5$\,M in insurance, $-\$2.2$\,M in
 finance, per $10{,}000$ outputs. The gap is largest in the two
 frequency-dominated domains (medical, insurance), where the
 reasoning models also have systematically lower error rate $p$.
+The four-out-of-four sign consistency would have a sign-test
+$p$-value of $2^{-4}=0.0625$ under the strict null, which is
+suggestive but not conclusive given the sample size.
 
 The reasoning sample is small ($n=4$) and vendor-correlated.
 Three of the four reasoning models are from Alibaba (Qwen3-14B,
@@ -1767,10 +1787,13 @@ claim in the body.
 \autoref{fig:ranking_finance} in the body shows the finance
 slopegraph. The other three domains are reproduced below at the
 same model order (top to bottom by accuracy) but with smaller
-vertical scale. Medical, legal, and insurance show essentially
-no rank crossings: their Kendall $\tau$ values (Table~3) range
-from $0.73$ to $0.97$ and translate visually to near-monotone
-slopegraphs.
+vertical scale. Legal is fully monotone ($\tau{=}0.97$, one
+adjacent swap); medical has two adjacent swaps ($\tau{=}0.94$).
+Insurance has $\tau{=}0.73$ with nine discordant model pairs;
+the swaps are spread across the middle of the ranking rather
+than concentrated at the top, which is why the visual impression
+remains close to monotone even though the rank correlation is
+moderate.
 
 \begin{figure*}[t]
 \centering
@@ -1806,20 +1829,20 @@ slopegraphs.
     \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){};
   }
 
-  % ===== Insurance (bottom-left): one swap (4,5) =====
+  % ===== Insurance (bottom-left): tau=0.73, 9 discordant pairs =====
   \node[panel, font=\footnotesize\bfseries] at (0, -14) {Insurance \scriptsize($\tau{=}0.73$)};
-  \draw[flat] (0,-17) -- (5,-17);  % gpt-oss-20b
-  \draw[flat] (0,-18) -- (5,-18);  % gpt-oss-120b
-  \draw[flat] (0,-19) -- (5,-19);  % phi-4
-  \draw[swap] (0,-20) -- (5,-21);  % deepseek swap
-  \draw[swap] (0,-21) -- (5,-20);  % qwen3-14b swap
-  \draw[flat] (0,-22) -- (5,-22);  % qwq-32b
-  \draw[flat] (0,-23) -- (5,-23);  % qwen2.5-72b
-  \draw[flat] (0,-24) -- (5,-24);  % qwen3-30b-a3b
-  \draw[flat] (0,-25) -- (5,-25);  % granite
-  \draw[flat] (0,-26) -- (5,-26);  % gemma-27b
-  \draw[flat] (0,-27) -- (5,-27);  % gemma-12b
-  \draw[flat] (0,-28) -- (5,-28);  % llama-3.3-70b
+  \draw[flat] (0,-17) -- (5,-17);  % gpt-oss-20b      1->1
+  \draw[swap] (0,-18) -- (5,-19);  % gpt-oss-120b     2->3
+  \draw[swap] (0,-19) -- (5,-18);  % qwen3-14b        3->2
+  \draw[flat] (0,-20) -- (5,-20);  % qwq-32b          4->4
+  \draw[flat] (0,-21) -- (5,-21);  % phi-4            5->5
+  \draw[swap] (0,-22) -- (5,-25);  % qwen3-30b-a3b    6->9
+  \draw[swap] (0,-23) -- (5,-24);  % qwen2.5-72b      7->8
+  \draw[swap] (0,-24) -- (5,-22);  % granite-3.2-8b   8->6
+  \draw[swap] (0,-25) -- (5,-28);  % deepseek         9->12
+  \draw[swap] (0,-26) -- (5,-23);  % gemma-3-27b      10->7
+  \draw[swap] (0,-27) -- (5,-26);  % gemma-3-12b      11->10
+  \draw[swap] (0,-28) -- (5,-27);  % llama-3.3-70b    12->11
   \foreach \y in {17,...,28}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
 
   % ===== Finance (bottom-right): reference =====
@@ -1843,11 +1866,11 @@ slopegraphs.
 }
 \caption{Per-domain slopegraphs (small multiples). Each panel
 shows 12 models in accuracy rank order on the left and
-$\widehat{\ES}$ rank on the right; blue line segments mark the
-swaps. Legal has no rank crossings; medical and insurance have a
-single adjacent swap each; finance is the only domain with
-non-trivial line crossings, shown in detail in
-\autoref{fig:ranking_finance}.}
+$\widehat{\ES}$ rank on the right; blue line segments mark
+discordant pairs. Legal has one adjacent swap; medical has two;
+insurance has nine discordant pairs concentrated in the middle
+of the ranking; finance has the largest reshuffles at the top
+and is shown in detail in \autoref{fig:ranking_finance}.}
 \label{fig:slopegraphs_all_domains}
 \end{figure*}
 
