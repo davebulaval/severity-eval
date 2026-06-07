@@ -82,13 +82,12 @@
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 
 % Code/data release URL. Tied to the acl package's [review]/[final] flag:
-% under [review] the anonymous mirror is shown, under [final] (camera-ready)
-% the deanonymised GitHub URL is rendered automatically. TODO before
-% submission: replace XXXX with the real anonymous.4open.science short hash.
+% under [review] the URL is suppressed for double-blind compliance; under
+% [final] (camera-ready) the deanonymised GitHub URL is rendered.
 \makeatletter
 \newcommand{\coderepo}{%
   \ifacl@anonymize
-    \url{https://anonymous.4open.science/r/severity-eval-XXXX}%
+    \emph{URL removed for double-blind review}%
   \else
     \url{https://github.com/davebulaval/severity-eval}%
   \fi
