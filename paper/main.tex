@@ -182,12 +182,8 @@ signal beyond accuracy and where it does not.
 
 Our contributions are twofold:
 (1)~\textbf{A multi-domain empirical validation} of the
-framework, characterizing where it adds signal over accuracy and
-the Multidimensional Quality Metrics (MQM) framework
-\citep{lommel2014mqm}---a severity-weighted scoring scheme from
-machine translation---and where it does not.
-(2)~\textbf{An open-source library, \seveval{}}, that wraps the
-framework as a HuggingFace-style metric, so any evaluation pipeline can compute the appropriate risk metrics.
+framework, characterizing where it adds signal over accuracy and the Multidimensional Quality Metrics (MQM) framework \citep{lommel2014mqm}, a severity-weighted scoring scheme from machine translation, and where it does not.
+(2)~\textbf{An open-source library, \seveval{}}, that wraps the framework as a HuggingFace-style metric, so any evaluation pipeline can compute the appropriate risk metrics.
 
 The paper is organized as follows:
 \autoref{sec:framework} recapitulates the framework proposed by \citet{beauchemin2026position};
@@ -203,16 +199,25 @@ discusses what the framework adds over accuracy and MQM.
 \label{sec:related-work}
 
 \paragraph{Evaluation metrics and cost-sensitive learning.}
-Accuracy ignores error heterogeneity. NLP metrics that partly
-address this (BLEU \citep{papineni2002bleu}, ROUGE
+Accuracy ignores error heterogeneity. The standard NLP metrics
+that partly address it (BLEU \citep{papineni2002bleu}, ROUGE
 \citep{lin2004rouge}, BERTScore \citep{zhang2020bertscore},
-BLEURT \citep{sellam2020bleurt}) measure linguistic quality, not
-operational risk; MQM \citep{lommel2014mqm} weights minor/major/
-critical errors at $1/5/25$, the closest NLP precedent. Cost-sensitive
-learning \citep{elkan2001foundations,drummond2006cost,ling2008cost}
-optimises models under a known cost matrix at training time but
-is restricted to classification with fixed classes. None of these
-maps errors to dollar-denominated organisational losses.
+BLEURT \citep{sellam2020bleurt}) measure linguistic quality
+rather than operational risk. The closest NLP precedent is MQM
+\citep{lommel2014mqm}, which weights minor, major, and critical
+errors at $1$, $5$, and $25$ to produce a severity-aware error
+score. The framework of \citet{beauchemin2026position} goes
+further on three fronts: its weights are calibrated against
+external dollar evidence rather than fixed at $1/5/25$, its
+output is denominated in currency rather than a unit-less
+penalty, and its compound-loss formulation yields tail measures
+($\VaR$, $\TVaR$) and reserves that a weighted sum cannot
+produce. Cost-sensitive learning
+\citep{elkan2001foundations,drummond2006cost,ling2008cost}
+addresses error heterogeneity at training time under a known
+cost matrix but is restricted to classification with fixed
+classes; none of these approaches map LLM errors to
+dollar-denominated organisational losses.
 
 \paragraph{Risk-aware AI evaluation and actuarial loss models.}
 Regulatory frameworks (EU AI Act \citep{euaiact2024}, NIST AI RMF
@@ -1175,7 +1180,7 @@ report = severity_eval.evaluate(
 \end{verbatim}
 \end{small}
 
-The returned \texttt{SeverityReport} object contains the
+\noindent The returned \texttt{SeverityReport} object contains the
 accuracy, error rate, severity profile $\hat{\bpi}$, expected loss,
 VaR, TVaR, and the full vector of simulated losses. It supports
 serialization to JSON, pandas DataFrames, and \LaTeX{} tables.
@@ -1265,7 +1270,7 @@ critical   & $16$  & $0$   & $0$  & $8$   \\
 \end{tabular}
 \end{center}
 
-Pooled Cohen $\kappa = 0.013$, adjacent agreement
+\noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
 $68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (\texttt{Qwen3-30B-A3B})
 to $0.042$ (\texttt{Llama-3.3-70B}), well below the rule-vs-LLM
 $\kappa = 0.46$ obtained when both annotators score the question
@@ -1593,7 +1598,7 @@ Insurance & $0.99$ & $1.00$ & $0.99$ \\
 \end{tabular}
 \end{center}
 
-The log-linear spacing reshuffles finance the most
+\noindent The log-linear spacing reshuffles finance the most
 ($\rho{=}0.85$), consistent with the high severity-share in that
 domain. The medical, legal, and insurance rankings are stable
 across all tested spacings because frequency dominates inter-model
@@ -1625,7 +1630,7 @@ $0.50$ & ---   & ---   & ---   & $3.30$  & $2.90$  & $1.90$ & $1.60$ & $1.40$ & 
 }
 \end{center}
 
-Reserves scale as expected with both $\theta$ and
+\noindent Reserves scale as expected with both $\theta$ and
 $\psi^\ast$. At $\theta = 0.5$ Lundberg's adjustment coefficient
 $R$ has no positive root in finance (the safety loading exceeds
 the achievable margin), so $u^\ast$ is undefined; reserves
@@ -1673,7 +1678,7 @@ full   & $0.58$          & $0.94$          & $0.97$          & $0.73$          \
 }
 \end{center}
 
-At $n_{\text{sub}} = 1000$ (close to the original
+\noindent At $n_{\text{sub}} = 1000$ (close to the original
 $1$\,K-per-dataset pilot) the per-domain $\tau$ reproduces the
 pilot $\tau \approx 0.4$ range in finance and insurance
 ($0.52$ and $0.45$ mean across $10$ seeds), while medical and
@@ -2034,3 +2039,4 @@ and is shown in detail in \autoref{fig:ranking_finance}.}
 \input{prompt_documentation}
 
 \end{document}
+
