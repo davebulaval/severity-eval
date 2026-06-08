@@ -630,16 +630,16 @@ insurance given the smaller per-domain variance.}
 
 \begin{figure*}[t]
 \centering
-\resizebox{\textwidth}{!}{%
+\resizebox{0.92\textwidth}{!}{%
 \begin{tikzpicture}[
-    yscale=0.62, xscale=1.0,
-    every node/.style={font=\footnotesize},
+    yscale=0.42, xscale=1.0,
+    every node/.style={font=\scriptsize},
     rise/.style={draw=sevNeg, line width=1.4pt},
     flat/.style={draw=black!30, line width=0.5pt},
-    dot/.style={circle, fill=black!70, inner sep=1.1pt},
+    dot/.style={circle, fill=black!70, inner sep=1.0pt},
 ]
-  \node[font=\footnotesize\bfseries, anchor=south west] at (-3.4,-0.1) {Accuracy};
-  \node[font=\footnotesize\bfseries, anchor=south east] at (12.4,-0.1) {Expected loss $\widehat{\ES}$ per 10\,k outputs};
+  \node[font=\scriptsize\bfseries, anchor=south west] at (-3.4,-0.1) {Accuracy};
+  \node[font=\scriptsize\bfseries, anchor=south east] at (12.4,-0.1) {Expected loss $\widehat{\ES}$ per 10\,k outputs};
   % Sample-size-weighted finance ranks (n=2960 = 150+1147+1663 per model).
   % 14 models: 12 LLMs + majority + random at the bottom.
   \draw[flat] (0,-1)  -- (9,-2);
@@ -669,8 +669,8 @@ insurance given the smaller per-domain variance.}
   \node[left] at (-0.2,-10) {32.87\%\enskip \texttt{GPT-OSS-120B}};
   \node[left] at (-0.2,-11) {31.62\%\enskip \texttt{Qwen2.5-72B}};
   \node[left] at (-0.2,-12) {29.59\%\enskip \texttt{Phi-4}};
-  \node[left] at (-0.2,-13) {1.69\%\enskip \textit{Majority}};
-  \node[left] at (-0.2,-14) {0.00\%\enskip \textit{Random}};
+  \node[left] at (-0.2,-13) {1.69\%\enskip \texttt{Majority}};
+  \node[left] at (-0.2,-14) {0.00\%\enskip \texttt{Random}};
   % right labels: E[S] rank order, name then value
   \node[right] at (9.2,-1)  {\textcolor{sevNeg}{\bfseries \texttt{DeepSeek-R1-70B}}\enskip \$25.13\,M};
   \node[right] at (9.2,-2)  {\texttt{Gemma-3-27B}\enskip \$30.17\,M};
@@ -684,8 +684,8 @@ insurance given the smaller per-domain variance.}
   \node[right] at (9.2,-10) {\texttt{GPT-OSS-120B}\enskip \$33.45\,M};
   \node[right] at (9.2,-11) {\texttt{Qwen2.5-72B}\enskip \$34.07\,M};
   \node[right] at (9.2,-12) {\texttt{Phi-4}\enskip \$35.31\,M};
-  \node[right] at (9.2,-13) {\textit{Majority}\enskip \$42.55\,M};
-  \node[right] at (9.2,-14) {\textit{Random}\enskip \$42.70\,M};
+  \node[right] at (9.2,-13) {\texttt{Majority}\enskip \$42.55\,M};
+  \node[right] at (9.2,-14) {\texttt{Random}\enskip \$42.70\,M};
   \foreach \y in {1,...,14}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
 \end{tikzpicture}%
 }%
