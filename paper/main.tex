@@ -1175,7 +1175,7 @@ report = severity_eval.evaluate(
 \end{verbatim}
 \end{small}
 
-\noindent The returned \texttt{SeverityReport} object contains the
+The returned \texttt{SeverityReport} object contains the
 accuracy, error rate, severity profile $\hat{\bpi}$, expected loss,
 VaR, TVaR, and the full vector of simulated losses. It supports
 serialization to JSON, pandas DataFrames, and \LaTeX{} tables.
@@ -1265,7 +1265,7 @@ critical   & $16$  & $0$   & $0$  & $8$   \\
 \end{tabular}
 \end{center}
 
-\noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
+Pooled Cohen $\kappa = 0.013$, adjacent agreement
 $68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (\texttt{Qwen3-30B-A3B})
 to $0.042$ (\texttt{Llama-3.3-70B}), well below the rule-vs-LLM
 $\kappa = 0.46$ obtained when both annotators score the question
@@ -1593,7 +1593,7 @@ Insurance & $0.99$ & $1.00$ & $0.99$ \\
 \end{tabular}
 \end{center}
 
-\noindent The log-linear spacing reshuffles finance the most
+The log-linear spacing reshuffles finance the most
 ($\rho{=}0.85$), consistent with the high severity-share in that
 domain. The medical, legal, and insurance rankings are stable
 across all tested spacings because frequency dominates inter-model
@@ -1625,7 +1625,7 @@ $0.50$ & ---   & ---   & ---   & $3.30$  & $2.90$  & $1.90$ & $1.60$ & $1.40$ & 
 }
 \end{center}
 
-\noindent Reserves scale as expected with both $\theta$ and
+Reserves scale as expected with both $\theta$ and
 $\psi^\ast$. At $\theta = 0.5$ Lundberg's adjustment coefficient
 $R$ has no positive root in finance (the safety loading exceeds
 the achievable margin), so $u^\ast$ is undefined; reserves
@@ -1673,7 +1673,7 @@ full   & $0.58$          & $0.94$          & $0.97$          & $0.73$          \
 }
 \end{center}
 
-\noindent At $n_{\text{sub}} = 1000$ (close to the original
+At $n_{\text{sub}} = 1000$ (close to the original
 $1$\,K-per-dataset pilot) the per-domain $\tau$ reproduces the
 pilot $\tau \approx 0.4$ range in finance and insurance
 ($0.52$ and $0.45$ mean across $10$ seeds), while medical and
