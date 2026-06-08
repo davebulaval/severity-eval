@@ -187,11 +187,13 @@ signal beyond accuracy and where it does not.
 Our contributions are twofold:
 (1)~\textbf{The first multi-domain empirical validation} of the
 framework, characterising where it adds signal over accuracy and
-MQM-weighted scoring and where it does not, together with the
-reusable artifacts (severity-annotation tables for the $11$
-corpora, four cost-vector calibrations from Basel LDA,
-regulatory, clinical, and litigation data, and full per-cell
-results).
+over the Multidimensional Quality Metrics (MQM) framework
+\citep{lommel2014mqm}---the closest NLP precedent, which assigns
+severity-weighted scores to translation errors---and where it
+does not, together with the reusable artifacts (severity-
+annotation tables for the $11$ corpora, four cost-vector
+calibrations from Basel LDA, regulatory, clinical, and
+litigation data, and full per-cell results).
 (2)~\textbf{An open-source library, \seveval{}}, that wraps the
 framework as a HuggingFace-style \texttt{evaluate.Metric} so any
 LLM evaluation pipeline can compute $\widehat{\ES}$,
@@ -203,10 +205,9 @@ with a single call.
 \autoref{sec:experiments} details the setup; \autoref{sec:results}
 reports rankings, variance, and routing; \autoref{sec:discussion}
 discusses what the framework adds over accuracy and MQM. We
-release \seveval{}, a HuggingFace-style Python library
-(\autoref{sec:app-library}), with severity tables
-(\autoref{sec:severity-annotation}) and cost calibrations
-(\autoref{sec:app-calibration}).
+release \seveval{}, a HuggingFace-style Python library, with
+severity tables (\autoref{sec:severity-annotation}) and cost
+calibrations (\autoref{sec:app-calibration}).
 
 % ============================================================================
 % 2. RELATED WORK
@@ -1486,8 +1487,7 @@ $\VaR_{0.95}$ and $\TVaR_{0.95}$). The Lundberg coefficient $R$
 and reserve $u^\ast$ are computed at ruin tolerance
 $\psi^\ast{=}0.01$; routing cost reduction is reported at
 thresholds $d \in \{c_2, c_3\}$ with human review cost
-$h{=}\$50$. All computations use the \seveval{} library
-(\autoref{sec:app-library}).
+$h{=}\$50$. All computations use the \seveval{} library.
 
 \paragraph{Confidence intervals.}
 Our benchmarks span three orders of magnitude in size
