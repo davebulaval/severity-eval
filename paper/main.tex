@@ -27,7 +27,8 @@
 \usepackage{subcaption}
 \usepackage{enumitem}
 \setlist{nosep}
-\setlist[itemize]{leftmargin=*,label={}}
+\setlist[itemize]{leftmargin=*, noitemsep, topsep=0ex}
+\setlist[enumerate]{leftmargin=*, noitemsep, topsep=0ex}
 \usepackage{url}
 \usepackage{colortbl}
 \usepackage{tikz}
@@ -155,8 +156,8 @@ evidence.
 Accuracy treats every error as equally costly: a misclassified
 spam email and a misclassified cancer diagnosis count the same.
 As LLMs enter high-stakes deployments, that assumption breaks.
-On JudgeBERT (French legal simplification), DeepSeek-R1-70B
-edges Llama-3.3-70B by $+0.74$ accuracy points yet costs
+On JudgeBERT (French legal simplification), \texttt{DeepSeek-R1-70B}
+edges \texttt{Llama-3.3-70B} by $+0.74$ accuracy points yet costs
 $\$28.69$\,M more per $10{,}000$ outputs at calibrated severity
 weights; the leaderboard rewards the more expensive model. A
 revenue answer of \$$11.60$\,B instead of \$$14.20$\,B shifts a
@@ -446,6 +447,7 @@ Insurance & \$100  & \$2k   & \$10k  & \$250k \\
 domain; calibration in \autoref{sec:app-calibration}).}
 \label{tab:costs}
 \end{table}
+\vspace{-1em}
 
 The calibration of each cost level draws on multiple sources:
 regulatory penalties (SEC SAB~99, SOX~\S906, FINRA, FDA, EU~AI~Act),
@@ -579,12 +581,12 @@ contribute new inversions. The
 gaps have a heavy right tail: median $\$1.90$\,M, $75$th
 percentile $\$5.23$\,M, max $\$28.69$\,M, summing to $\$0.28$\,B
 of mis-attributed exposure per $10{,}000$ outputs. The largest
-is on JudgeBERT: DeepSeek-R1-70B edges Llama-3.3-70B by $+0.74$
+is on JudgeBERT: \texttt{DeepSeek-R1-70B} edges \texttt{Llama-3.3-70B} by $+0.74$
 accuracy points yet costs $\$28.69$\,M more; on ContractNLI,
-Llama-3.3-70B is $+2.53$ over Granite-3.2-8B for $+\$21.85$\,M;
-on TAT-QA, qwen2.5-72b is $+0.24$ over DeepSeek-R1-70B for
+\texttt{Llama-3.3-70B} is $+2.53$ over \texttt{Granite-3.2-8B} for $+\$21.85$\,M;
+on TAT-QA, \texttt{qwen2.5-72b} is $+0.24$ over \texttt{DeepSeek-R1-70B} for
 $+\$8.73$\,M. The most visible \emph{rank flip} is in finance:
-DeepSeek-R1-70B is rank $4$ by accuracy and rank $1$ by $\ES$,
+\texttt{DeepSeek-R1-70B} is rank $4$ by accuracy and rank $1$ by $\ES$,
 driven by a severity profile concentrated on negligible/minor
 levels (\autoref{fig:ranking_finance}).
 
@@ -623,6 +625,7 @@ Finance is moderate ($\tau{=}0.69$); the other three are strong
 insurance given the smaller per-domain variance.}
 \label{tab:h1}
 \end{table}
+\vspace{-1em}
 
 \begin{figure*}[t]
 \centering
@@ -653,33 +656,33 @@ insurance given the smaller per-domain variance.}
   \draw[flat] (0,-13) -- (9,-13);
   \draw[flat] (0,-14) -- (9,-14);
   % left labels: accuracy rank order, value before name
-  \node[left] at (-0.2,-1)  {37.77\%\enskip Gemma-3-27B};
-  \node[left] at (-0.2,-2)  {36.72\%\enskip Qwen3-14B};
-  \node[left] at (-0.2,-3)  {36.39\%\enskip Qwen3-30B-A3B};
-  \node[left] at (-0.2,-4)  {35.61\%\enskip \textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}};
-  \node[left] at (-0.2,-5)  {34.76\%\enskip Gemma-3-12B};
-  \node[left] at (-0.2,-6)  {34.36\%\enskip Granite-3.2-8B};
-  \node[left] at (-0.2,-7)  {34.16\%\enskip Llama-3.3-70B};
-  \node[left] at (-0.2,-8)  {33.72\%\enskip QwQ-32B};
-  \node[left] at (-0.2,-9)  {33.21\%\enskip \textcolor{sevNeg}{\bfseries GPT-OSS-20B}};
-  \node[left] at (-0.2,-10) {32.87\%\enskip GPT-OSS-120B};
-  \node[left] at (-0.2,-11) {31.62\%\enskip Qwen2.5-72B};
-  \node[left] at (-0.2,-12) {29.59\%\enskip Phi-4};
+  \node[left] at (-0.2,-1)  {37.77\%\enskip \texttt{Gemma-3-27B}};
+  \node[left] at (-0.2,-2)  {36.72\%\enskip \texttt{Qwen3-14B}};
+  \node[left] at (-0.2,-3)  {36.39\%\enskip \texttt{Qwen3-30B-A3B}};
+  \node[left] at (-0.2,-4)  {35.61\%\enskip \textcolor{sevNeg}{\bfseries \texttt{DeepSeek-R1-70B}}};
+  \node[left] at (-0.2,-5)  {34.76\%\enskip \texttt{Gemma-3-12B}};
+  \node[left] at (-0.2,-6)  {34.36\%\enskip \texttt{Granite-3.2-8B}};
+  \node[left] at (-0.2,-7)  {34.16\%\enskip \texttt{Llama-3.3-70B}};
+  \node[left] at (-0.2,-8)  {33.72\%\enskip \texttt{QwQ-32B}};
+  \node[left] at (-0.2,-9)  {33.21\%\enskip \textcolor{sevNeg}{\bfseries \texttt{GPT-OSS-20B}}};
+  \node[left] at (-0.2,-10) {32.87\%\enskip \texttt{GPT-OSS-120B}};
+  \node[left] at (-0.2,-11) {31.62\%\enskip \texttt{Qwen2.5-72B}};
+  \node[left] at (-0.2,-12) {29.59\%\enskip \texttt{Phi-4}};
   \node[left] at (-0.2,-13) {1.69\%\enskip \textit{Majority}};
   \node[left] at (-0.2,-14) {0.00\%\enskip \textit{Random}};
   % right labels: E[S] rank order, name then value
-  \node[right] at (9.2,-1)  {\textcolor{sevNeg}{\bfseries DeepSeek-R1-70B}\enskip \$25.13\,M};
-  \node[right] at (9.2,-2)  {Gemma-3-27B\enskip \$30.17\,M};
-  \node[right] at (9.2,-3)  {\textcolor{sevNeg}{\bfseries GPT-OSS-20B}\enskip \$32.13\,M};
-  \node[right] at (9.2,-4)  {Qwen3-14B\enskip \$32.17\,M};
-  \node[right] at (9.2,-5)  {Granite-3.2-8B\enskip \$32.31\,M};
-  \node[right] at (9.2,-6)  {Qwen3-30B-A3B\enskip \$32.59\,M};
-  \node[right] at (9.2,-7)  {Gemma-3-12B\enskip \$32.98\,M};
-  \node[right] at (9.2,-8)  {Llama-3.3-70B\enskip \$33.28\,M};
-  \node[right] at (9.2,-9)  {QwQ-32B\enskip \$33.31\,M};
-  \node[right] at (9.2,-10) {GPT-OSS-120B\enskip \$33.45\,M};
-  \node[right] at (9.2,-11) {Qwen2.5-72B\enskip \$34.07\,M};
-  \node[right] at (9.2,-12) {Phi-4\enskip \$35.31\,M};
+  \node[right] at (9.2,-1)  {\textcolor{sevNeg}{\bfseries \texttt{DeepSeek-R1-70B}}\enskip \$25.13\,M};
+  \node[right] at (9.2,-2)  {\texttt{Gemma-3-27B}\enskip \$30.17\,M};
+  \node[right] at (9.2,-3)  {\textcolor{sevNeg}{\bfseries \texttt{GPT-OSS-20B}}\enskip \$32.13\,M};
+  \node[right] at (9.2,-4)  {\texttt{Qwen3-14B}\enskip \$32.17\,M};
+  \node[right] at (9.2,-5)  {\texttt{Granite-3.2-8B}\enskip \$32.31\,M};
+  \node[right] at (9.2,-6)  {\texttt{Qwen3-30B-A3B}\enskip \$32.59\,M};
+  \node[right] at (9.2,-7)  {\texttt{Gemma-3-12B}\enskip \$32.98\,M};
+  \node[right] at (9.2,-8)  {\texttt{Llama-3.3-70B}\enskip \$33.28\,M};
+  \node[right] at (9.2,-9)  {\texttt{QwQ-32B}\enskip \$33.31\,M};
+  \node[right] at (9.2,-10) {\texttt{GPT-OSS-120B}\enskip \$33.45\,M};
+  \node[right] at (9.2,-11) {\texttt{Qwen2.5-72B}\enskip \$34.07\,M};
+  \node[right] at (9.2,-12) {\texttt{Phi-4}\enskip \$35.31\,M};
   \node[right] at (9.2,-13) {\textit{Majority}\enskip \$42.55\,M};
   \node[right] at (9.2,-14) {\textit{Random}\enskip \$42.70\,M};
   \foreach \y in {1,...,14}{ \node[dot] at (0,-\y){}; \node[dot] at (9,-\y){}; }
@@ -688,8 +691,8 @@ insurance given the smaller per-domain variance.}
 \caption{Finance: accuracy rank (left) vs.\ $\widehat{\ES}$
 rank (right) across 14 models including baselines, full corpus
 ($\tau{=}0.69$, sample-weighted across the 3 datasets,
-$n_{\text{tot}}=2960$). DeepSeek-R1-70B ($4{\to}1$) and
-GPT-OSS-20B ($9{\to}3$) rise sharply when ranked by dollar cost;
+$n_{\text{tot}}=2960$). \texttt{DeepSeek-R1-70B} ($4{\to}1$) and
+\texttt{GPT-OSS-20B} ($9{\to}3$) rise sharply when ranked by dollar cost;
 random and majority sit at the bottom on both axes. Mini-slopegraphs
 for the other three domains in
 \autoref{fig:slopegraphs_all_domains}.}
@@ -778,120 +781,93 @@ $\rho_{1/2}$ = median deferred share). Finance is cheap-routing;
 the others are deep-routing.}
 \label{tab:h4}
 \end{table}
+\vspace{-1em}
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[
     font=\footnotesize,
-    yscale=0.75,
-    sevdot/.style={circle, fill=sevMaj, draw=sevMaj, inner sep=2.2pt},
-    freqdot/.style={circle, fill=accentBlue, draw=accentBlue, inner sep=2.2pt},
-    spine/.style={draw=black!18, line width=0.8pt, line cap=round},
+    yscale=0.7,
 ]
-  % horizontal spectrum spines, one per domain
-  \foreach \y in {1,2,3,4} \draw[spine] (0,-\y) -- (6,-\y);
-  % 50% reference tick (dotted)
-  \draw[dotted, black!40] (3,-0.4) -- (3,-4.6);
-  % directional hints at axis extremities
-  \node[font=\scriptsize, text=accentBlue, anchor=south west, yshift=2pt] at (0,-0.1)
-    {$\leftarrow$ frequency-dominated};
-  \node[font=\scriptsize, text=sevMaj, anchor=south east, yshift=2pt] at (6,-0.1)
-    {severity-dominated $\rightarrow$};
-  % axis tick labels at 0/50/100
-  \node[font=\scriptsize, text=black!50] at (0,-4.8) {0\%};
-  \node[font=\scriptsize, text=black!50] at (3,-4.8) {50\%};
-  \node[font=\scriptsize, text=black!50] at (6,-4.8) {100\%};
-  % domain labels (left) -- sorted by severity share descending
-  \node[anchor=east] at (-0.15,-1) {Legal};
-  \node[anchor=east] at (-0.15,-2) {Medical};
-  \node[anchor=east] at (-0.15,-3) {Finance};
-  \node[anchor=east] at (-0.15,-4) {Insurance};
-  % markers: x = share * 6 (axis 0..6 for 0..100%); 14-model analytic shares
-  % Legal 27/73
-  \node[sevdot]  at (1.62,-1) {};
-  \node[freqdot] at (4.38,-1) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (1.62,-1) {27\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (4.38,-1) {73\%};
-  % Medical 19/81
-  \node[sevdot]  at (1.14,-2) {};
-  \node[freqdot] at (4.86,-2) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (1.14,-2) {19\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (4.86,-2) {81\%};
-  % Finance 11/89
-  \node[sevdot]  at (0.66,-3) {};
-  \node[freqdot] at (5.34,-3) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=sevMaj]    at (0.66,-3) {11\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.34,-3) {89\%};
-  % Insurance 6/94
-  \node[sevdot]  at (0.36,-4) {};
-  \node[freqdot] at (5.64,-4) {};
-  \node[anchor=south west, yshift=2pt, xshift=-2pt, font=\scriptsize, text=sevMaj] at (0.36,-4) {6\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.64,-4) {94\%};
+  % stacked horizontal bars; bar half-height
+  \def\bh{0.32}
+  % column headers
+  \node[font=\scriptsize, anchor=south, text=sevMaj!95!black]      at (1.4,0.05) {severity};
+  \node[font=\scriptsize, anchor=south, text=accentBlue!95!black]  at (4.5,0.05) {frequency};
+  % rows: \dom / sev percent / split-x on 0..6 axis
+  \foreach \y/\dom/\sev/\sx in {%
+      1/Legal/27/1.62,%
+      2/Medical/19/1.14,%
+      3/Finance/11/0.66,%
+      4/Insurance/6/0.36}{%
+    \node[anchor=east] at (-0.1,-\y) {\dom};
+    \fill[sevMaj]      (0,-\y-\bh) rectangle (\sx,-\y+\bh);
+    \fill[accentBlue]  (\sx,-\y-\bh) rectangle (6,-\y+\bh);
+    \node[font=\scriptsize, text=white, anchor=west] at (0.08,-\y) {\sev\%};
+    \pgfmathsetmacro{\fr}{100-\sev}
+    \node[font=\scriptsize, text=white, anchor=east] at (5.92,-\y) {\pgfmathprintnumber[fixed,precision=0]{\fr}\%};
+  }
+  \node[font=\scriptsize, text=black!55] at (0,-4.8) {0\%};
+  \node[font=\scriptsize, text=black!55] at (3,-4.8) {50\%};
+  \node[font=\scriptsize, text=black!55] at (6,-4.8) {100\%};
 \end{tikzpicture}
-\caption{Inter-model variance in $\widehat{\ES}$ split into a
-\textcolor{sevMaj}{severity share} and a
-\textcolor{accentBlue}{frequency share} via the closed-form
-$CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition over the
-14 models. All four domains are frequency-dominated; legal and
-medical have the largest severity contribution.}
+\caption{Inter-model variance in $\widehat{\ES}$ split into
+\textcolor{sevMaj!95!black}{severity (orange)} and
+\textcolor{accentBlue!95!black}{frequency (blue)} shares via the
+closed-form $CV(\mu_X)^2 / (CV(p)^2 + CV(\mu_X)^2)$ decomposition
+over the 14 models. Each bar is one domain; the orange portion
+is the severity contribution and the blue portion the frequency
+contribution, summing to 100\%. All four domains are
+frequency-dominated; legal and medical have the largest severity
+contribution.}
 \label{fig:variance}
 \end{figure}
+\vspace{-1em}
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[
     font=\footnotesize,
-    yscale=0.75,
-    routedot/.style={circle, fill=black!55, draw=black!55, inner sep=2.2pt},
-    reddot/.style={circle, fill=accentBlue, draw=accentBlue, inner sep=2.2pt},
-    spine/.style={draw=black!18, line width=0.8pt, line cap=round},
-    gap/.style={draw=accentBlue!40, line width=2.0pt, line cap=round},
+    yscale=0.7,
 ]
-  % spine 0..100
-  \foreach \y in {1,2,3,4} \draw[spine] (0,-\y) -- (6,-\y);
-  % column hint
-  \node[font=\footnotesize, text=black!55, anchor=west] at (0,-0.15) {routed $\rho_{1/2}$};
-  \node[font=\footnotesize, text=accentBlue, anchor=east] at (6,-0.15) {$\widehat{\ES}$ reduction};
-  % domains (sorted by leverage = reduction - routed)
-  \node[anchor=east] at (-0.15,-1) {Finance};
-  \node[anchor=east] at (-0.15,-2) {Insurance};
-  \node[anchor=east] at (-0.15,-3) {Legal};
-  \node[anchor=east] at (-0.15,-4) {Medical};
-  % Finance: 19.73 -> 84.59
-  \draw[gap] (1.18,-1) -- (5.08,-1);
-  \node[routedot] at (1.18,-1) {};
-  \node[reddot]   at (5.08,-1) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (1.18,-1) {19.73\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.08,-1) {84.59\%};
-  % Insurance: 41.36 -> 98.32
-  \draw[gap] (2.48,-2) -- (5.90,-2);
-  \node[routedot] at (2.48,-2) {};
-  \node[reddot]   at (5.90,-2) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (2.48,-2) {41.36\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.90,-2) {98.32\%};
-  % Legal: 53.15 -> 98.04
-  \draw[gap] (3.19,-3) -- (5.88,-3);
-  \node[routedot] at (3.19,-3) {};
-  \node[reddot]   at (5.88,-3) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (3.19,-3) {53.15\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.88,-3) {98.04\%};
-  % Medical: 51.65 -> 93.28
-  \draw[gap] (3.10,-4) -- (5.60,-4);
-  \node[routedot] at (3.10,-4) {};
-  \node[reddot]   at (5.60,-4) {};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=black!60]   at (3.10,-4) {51.65\%};
-  \node[anchor=south, yshift=2pt, font=\scriptsize, text=accentBlue] at (5.60,-4) {93.28\%};
-  % x-axis tick marks at 0/50/100
-  \foreach \x/\v in {0/0, 3/50, 6/100} \node[font=\scriptsize, text=black!50] at (\x,-4.7) {\v\%};
+  \def\bh{0.18}
+  % headers
+  \node[font=\scriptsize, text=black!60, anchor=south] at (1.5,0.05)
+    {\% queries deferred ($\rho_{1/2}$)};
+  \node[font=\scriptsize, text=accentBlue!95!black, anchor=south] at (4.5,0.05)
+    {$\widehat{\ES}$ reduction (\%)};
+  % rows: domain / deferred / reduction / leverage_label
+  \foreach \y/\dom/\rt/\red/\lev in {%
+      1/Finance/19.73/84.59/4.29\,$\times$,%
+      2/Insurance/41.36/98.32/2.38\,$\times$,%
+      3/Legal/53.15/98.04/1.84\,$\times$,%
+      4/Medical/51.65/93.28/1.81\,$\times$}{%
+    \node[anchor=east] at (-0.1,-\y-0.2) {\dom};
+    % deferred bar (gray, top), reduction bar (blue, bottom)
+    \pgfmathsetmacro{\rtx}{\rt*0.06}
+    \pgfmathsetmacro{\redx}{\red*0.06}
+    \fill[black!50]  (0,-\y-\bh)         rectangle (\rtx,-\y+\bh);
+    \fill[accentBlue] (0,-\y-2*\bh-0.45) rectangle (\redx,-\y-0.45+0);
+    \node[font=\scriptsize, text=black!75, anchor=west] at (\rtx,-\y) {\rt\%};
+    \node[font=\scriptsize, text=accentBlue!95!black, anchor=west] at (\redx,-\y-0.45) {\red\%};
+    \node[font=\scriptsize, text=black!55, anchor=west] at (6.0,-\y-0.22)
+      {leverage \lev};
+  }
+  % x axis ticks
+  \node[font=\scriptsize, text=black!55] at (0,-5.1) {0\%};
+  \node[font=\scriptsize, text=black!55] at (3,-5.1) {50\%};
+  \node[font=\scriptsize, text=black!55] at (6,-5.1) {100\%};
 \end{tikzpicture}
-\caption{Dumbbell of \textcolor{black!55}{routed share
-$\rho_{1/2}$} vs.\ \textcolor{accentBlue}{$\widehat{\ES}$
-reduction} by domain ($d{=}c_3$, $h{=}\$50$, full corpus). Finance
-shows the longest leverage gap ($19.73\%$ deferred $\to$
-$84.59\%$ cut); the others need $\sim$half their queries
-deferred for similar cuts.}
+\caption{Per domain: \textcolor{black!60}{gray bar} = fraction
+of queries deferred to a human reviewer, \textcolor{accentBlue!95!black}{blue
+bar} = resulting $\widehat{\ES}$ reduction (both on a $0$--$100\%$
+axis; $d{=}c_3$, $h{=}\$50$, full corpus). Leverage = reduction\,/\,deferred;
+finance is the cheap-routing regime ($4.29\times$), while the
+others get near-total cuts but only after deferring around half
+the queries ($1.81$--$2.38\times$).}
 \label{fig:routing}
 \end{figure}
+\vspace{-1em}
 
 % ============================================================================
 % 7. DISCUSSION
@@ -951,7 +927,7 @@ forced to align when severity profiles concentrate on a single
 tier. The contribution above MQM is therefore not the per-domain
 model ranking. It is what MQM cannot produce:
 
-\begin{itemize}[leftmargin=*,topsep=2pt,itemsep=2pt]
+\begin{itemize}
   \item dollar-denominated magnitudes calibrated against external
     evidence (regulatory penalties, litigation data, operational
     loss reports), so the $\$28.69$\,M JudgeBERT inversion is an
@@ -963,12 +939,12 @@ model ranking. It is what MQM cannot produce:
 \end{itemize}
 
 \paragraph{Worked example.}
-A risk-management team comparing DeepSeek-R1-70B and Llama-3.3-70B
-for a JudgeBERT deployment sees DeepSeek-R1-70B win on accuracy
-by $0.74$ points. Under MQM, DeepSeek-R1-70B also ranks better.
+A risk-management team comparing \texttt{DeepSeek-R1-70B} and \texttt{Llama-3.3-70B}
+for a JudgeBERT deployment sees \texttt{DeepSeek-R1-70B} win on accuracy
+by $0.74$ points. Under MQM, \texttt{DeepSeek-R1-70B} also ranks better.
 The framework adds three numbers: $\widehat{\ES}$ for
-DeepSeek-R1-70B is $\$504.80$\,M vs.\ $\$476.11$\,M for
-Llama-3.3-70B per $10{,}000$ outputs (the higher-accuracy model
+\texttt{DeepSeek-R1-70B} is $\$504.80$\,M vs.\ $\$476.11$\,M for
+\texttt{Llama-3.3-70B} per $10{,}000$ outputs (the higher-accuracy model
 is in fact $\$28.69$\,M more expensive). $\TVaR_{0.95}$ is
 $\$524.86$\,M vs.\ $\$495.78$\,M, so the tail-risk margin is also
 worse for the higher-accuracy model. The Lundberg reserve at
@@ -1438,18 +1414,18 @@ sections $\to$ negligible).
 \toprule
 Model & Params & Provider & Type \\
 \midrule
-Granite-3.2-8B          & 8\,B   & IBM       & General (FP16)  \\
-GPT-OSS-20B             & 20\,B  & OpenAI    & General (MXFP4) \\
-Phi-4                   & 14\,B  & Microsoft & General         \\
-Gemma-3-12B             & 12\,B  & Google    & General         \\
-Qwen3-14B               & 14\,B  & Alibaba   & Reasoning       \\
-Gemma-3-27B             & 27\,B  & Google    & General         \\
-Qwen3-30B-A3B           & 30\,B  & Alibaba   & MoE             \\
-QwQ-32B                 & 32\,B  & Alibaba   & Reasoning       \\
-DeepSeek-R1-Distill-70B & 70\,B  & DeepSeek  & Reasoning       \\
-Llama-3.3-70B           & 70\,B  & Meta      & General         \\
-Qwen2.5-72B             & 72\,B  & Alibaba   & General         \\
-GPT-OSS-120B            & 120\,B & OpenAI    & General (MXFP4) \\
+\texttt{Granite-3.2-8B}          & 8\,B   & IBM       & General (FP16)  \\
+\texttt{GPT-OSS-20B}             & 20\,B  & OpenAI    & General (MXFP4) \\
+\texttt{Phi-4}                   & 14\,B  & Microsoft & General         \\
+\texttt{Gemma-3-12B}             & 12\,B  & Google    & General         \\
+\texttt{Qwen3-14B}               & 14\,B  & Alibaba   & Reasoning       \\
+\texttt{Gemma-3-27B}             & 27\,B  & Google    & General         \\
+\texttt{Qwen3-30B-A3B}           & 30\,B  & Alibaba   & MoE             \\
+\texttt{QwQ-32B}                 & 32\,B  & Alibaba   & Reasoning       \\
+\texttt{DeepSeek-R1-Distill-70B} & 70\,B  & DeepSeek  & Reasoning       \\
+\texttt{Llama-3.3-70B}           & 70\,B  & Meta      & General         \\
+\texttt{Qwen2.5-72B}             & 72\,B  & Alibaba   & General         \\
+\texttt{GPT-OSS-120B}            & 120\,B & OpenAI    & General (MXFP4) \\
 \bottomrule
 \end{tabular}%
 }%
@@ -1459,15 +1435,16 @@ Granite). $70$--$72$\,B and $120$\,B models use TP$=2$; others
 single-GPU.}
 \label{tab:models}
 \end{table}
+\vspace{-1em}
 
 \paragraph{Inference hardware and quantization.}
 Local open-weight models are served by vLLM with FP8 quantization
 (RedHatAI compressed-tensors packaging where available, Qwen-native
 FP8 otherwise) and MXFP4 for the gpt-oss family. The
-70-72\,B Llama, DeepSeek, and Qwen2.5 checkpoints and gpt-oss-120b
+70-72\,B Llama, DeepSeek, and Qwen2.5 checkpoints and \texttt{gpt-oss-120b}
 run with \texttt{tensor\_parallel\_size}=2 on two NVIDIA RTX 6000 Ada
 48\,GB cards; the remaining open-weight models fit on a single card.
-The granite-3.2-8b checkpoint is FP16 (no FP8 variant published). We
+The \texttt{granite-3.2-8b} checkpoint is FP16 (no FP8 variant published). We
 use adaptive inference parameters per dataset, with
 \texttt{max\_new\_tokens} ranging from 16 (ContractNLI, binary
 answers) to 256 (CUAD, clause extraction). Each model's vLLM
@@ -1747,8 +1724,8 @@ critical   & $16$  & $0$   & $0$  & $8$   \\
 \end{center}
 
 \noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
-$68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (Qwen3-30B-A3B)
-to $0.042$ (Llama-3.3-70B), well below the rule-vs-LLM
+$68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (\texttt{Qwen3-30B-A3B})
+to $0.042$ (\texttt{Llama-3.3-70B}), well below the rule-vs-LLM
 $\kappa = 0.46$ obtained when both annotators score the question
 \emph{type} rather than the model's output
 (\autoref{sec:app-severity-by-dataset}). The directions of
@@ -1766,7 +1743,7 @@ diverges between the two labels in non-trivial ways: the two
 gpt-oss models are the worst under the rule (mean rule-tier
 $1.17$--$1.19$) but the joint-best under the LLM ($0.49$),
 because their wrong predictions sit on harder question types yet
-produce close-to-gold outputs. Conversely, Granite-3.2-8B and
+produce close-to-gold outputs. Conversely, \texttt{Granite-3.2-8B} and
 the two Gemma models are mid-pack by rule ($1.05$--$1.07$) but
 worst by LLM ($1.64$--$1.94$). Kendall $\tau$ between per-model
 mean rule and LLM severities is $-0.364$: output-level
@@ -1795,7 +1772,7 @@ evidence anywhere else in the paper. It is included for
 completeness and to forestall the question.}
 
 The four reasoning-tuned checkpoints in our roster
-(DeepSeek-R1-Distill-70B, QwQ-32B, Qwen3-14B, Qwen3-30B-A3B)
+(\texttt{DeepSeek-R1-Distill-70B}, \texttt{QwQ-32B}, \texttt{Qwen3-14B}, \texttt{Qwen3-30B-A3B})
 achieve lower mean $\widehat{\ES}$ than the eight non-reasoning
 checkpoints in three of the four domains: $-\$28.49$\,M in
 medical, $-\$12.17$\,M in legal, $-\$2.73$\,M in finance, per
@@ -1803,16 +1780,16 @@ $10{,}000$ outputs (unweighted mean across the reasoning vs.\
 non-reasoning groups, computed from
 \path{results/metrics_by_domain.csv}). Insurance is the
 exception: the reasoning mean is $\$1.27$\,M \emph{higher} than
-the non-reasoning mean, driven by DeepSeek-R1-Distill-70B at
+the non-reasoning mean, driven by \texttt{DeepSeek-R1-Distill-70B} at
 $\$255.99$\,M, which exceeds three of the eight non-reasoning
 checkpoints on that domain. The three-of-four sign consistency
 corresponds to a sign-test $p$-value of $\binom{4}{3}/2^4=0.25$
 under the strict null, which is not informative at $n=4$.
 
 The reasoning sample is small ($n=4$) and vendor-correlated.
-Three of the four reasoning models are from Alibaba (Qwen3-14B,
-Qwen3-30B-A3B, QwQ-32B); the same vendor's non-reasoning
-checkpoint Qwen2.5-72B lands among the more expensive models on
+Three of the four reasoning models are from Alibaba (\texttt{Qwen3-14B},
+\texttt{Qwen3-30B-A3B}, \texttt{QwQ-32B}); the same vendor's non-reasoning
+checkpoint \texttt{Qwen2.5-72B} lands among the more expensive models on
 HEAD-QA ($\widehat{\ES} = \$752$\,M, the most-expensive medical
 dataset), so vendor and
 post-training procedure are confounded with the reasoning label.
@@ -1849,15 +1826,15 @@ moderate.
 ]
   % ===== Medical (top-left): one swap (5,6) =====
   \node[panel, font=\footnotesize\bfseries] at (0, 2) {Medical \scriptsize($\tau{=}0.94$)};
-  \draw[flat] (0,-1) -- (5,-1);    % gpt-oss-20b
-  \draw[flat] (0,-2) -- (5,-2);    % gpt-oss-120b
-  \draw[flat] (0,-3) -- (5,-3);    % phi-4
+  \draw[flat] (0,-1) -- (5,-1);    % \texttt{gpt-oss-20b}
+  \draw[flat] (0,-2) -- (5,-2);    % \texttt{gpt-oss-120b}
+  \draw[flat] (0,-3) -- (5,-3);    % \texttt{phi-4}
   \draw[flat] (0,-4) -- (5,-4);    % deepseek-r1
-  \draw[swap] (0,-5) -- (5,-6);    % qwen3-30b-a3b swap
-  \draw[swap] (0,-6) -- (5,-5);    % qwq-32b swap
-  \draw[flat] (0,-7) -- (5,-7);    % llama-3.3-70b
-  \draw[flat] (0,-8) -- (5,-8);    % qwen3-14b
-  \draw[flat] (0,-9) -- (5,-9);    % qwen2.5-72b
+  \draw[swap] (0,-5) -- (5,-6);    % \texttt{qwen3-30b-a3b} swap
+  \draw[swap] (0,-6) -- (5,-5);    % \texttt{qwq-32b} swap
+  \draw[flat] (0,-7) -- (5,-7);    % \texttt{llama-3.3-70b}
+  \draw[flat] (0,-8) -- (5,-8);    % \texttt{qwen3-14b}
+  \draw[flat] (0,-9) -- (5,-9);    % \texttt{qwen2.5-72b}
   \draw[flat] (0,-10) -- (5,-10);  % granite
   \draw[flat] (0,-11) -- (5,-11);  % gemma-27b
   \draw[flat] (0,-12) -- (5,-12);  % gemma-12b
@@ -1872,31 +1849,31 @@ moderate.
 
   % ===== Insurance (bottom-left): tau=0.73, 9 discordant pairs =====
   \node[panel, font=\footnotesize\bfseries] at (0, -14) {Insurance \scriptsize($\tau{=}0.73$)};
-  \draw[flat] (0,-17) -- (5,-17);  % gpt-oss-20b      1->1
-  \draw[swap] (0,-18) -- (5,-19);  % gpt-oss-120b     2->3
-  \draw[swap] (0,-19) -- (5,-18);  % qwen3-14b        3->2
-  \draw[flat] (0,-20) -- (5,-20);  % qwq-32b          4->4
-  \draw[flat] (0,-21) -- (5,-21);  % phi-4            5->5
-  \draw[swap] (0,-22) -- (5,-25);  % qwen3-30b-a3b    6->9
-  \draw[swap] (0,-23) -- (5,-24);  % qwen2.5-72b      7->8
-  \draw[swap] (0,-24) -- (5,-22);  % granite-3.2-8b   8->6
+  \draw[flat] (0,-17) -- (5,-17);  % \texttt{gpt-oss-20b}      1->1
+  \draw[swap] (0,-18) -- (5,-19);  % \texttt{gpt-oss-120b}     2->3
+  \draw[swap] (0,-19) -- (5,-18);  % \texttt{qwen3-14b}        3->2
+  \draw[flat] (0,-20) -- (5,-20);  % \texttt{qwq-32b}          4->4
+  \draw[flat] (0,-21) -- (5,-21);  % \texttt{phi-4}            5->5
+  \draw[swap] (0,-22) -- (5,-25);  % \texttt{qwen3-30b-a3b}    6->9
+  \draw[swap] (0,-23) -- (5,-24);  % \texttt{qwen2.5-72b}      7->8
+  \draw[swap] (0,-24) -- (5,-22);  % \texttt{granite-3.2-8b}   8->6
   \draw[swap] (0,-25) -- (5,-28);  % deepseek         9->12
-  \draw[swap] (0,-26) -- (5,-23);  % gemma-3-27b      10->7
-  \draw[swap] (0,-27) -- (5,-26);  % gemma-3-12b      11->10
-  \draw[swap] (0,-28) -- (5,-27);  % llama-3.3-70b    12->11
+  \draw[swap] (0,-26) -- (5,-23);  % \texttt{gemma-3-27b}      10->7
+  \draw[swap] (0,-27) -- (5,-26);  % \texttt{gemma-3-12b}      11->10
+  \draw[swap] (0,-28) -- (5,-27);  % \texttt{llama-3.3-70b}    12->11
   \foreach \y in {17,...,28}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
 
   % ===== Finance (bottom-right): reference =====
   \node[panel, font=\footnotesize\bfseries] at (8, -14) {Finance \scriptsize($\tau{=}0.58$, see Fig.~1)};
-  \draw[flat] (8,-17) -- (13,-18);   % gemma-3-27b
-  \draw[flat] (8,-18) -- (13,-20);   % qwen3-14b
-  \draw[flat] (8,-19) -- (13,-22);   % qwen3-30b-a3b
+  \draw[flat] (8,-17) -- (13,-18);   % \texttt{gemma-3-27b}
+  \draw[flat] (8,-18) -- (13,-20);   % \texttt{qwen3-14b}
+  \draw[flat] (8,-19) -- (13,-22);   % \texttt{qwen3-30b-a3b}
   \draw[swap] (8,-20) -- (13,-17);   % deepseek rise
   \draw[flat] (8,-21) -- (13,-23);
   \draw[flat] (8,-22) -- (13,-21);
   \draw[flat] (8,-23) -- (13,-24);
   \draw[flat] (8,-24) -- (13,-25);
-  \draw[swap] (8,-25) -- (13,-19);   % gpt-oss-20b rise
+  \draw[swap] (8,-25) -- (13,-19);   % \texttt{gpt-oss-20b} rise
   \draw[flat] (8,-26) -- (13,-26);
   \draw[flat] (8,-27) -- (13,-27);
   \draw[flat] (8,-28) -- (13,-28);
@@ -1935,46 +1912,46 @@ measures. $\widehat{\ES}$ and tail measures in \$M.}\label{tab:results-finance}
 Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_{95}$ \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{financebench}}
-  & qwen2.5-72b              & 50.7 & 0.493 & 22.2 & 24.1 & 24.7 \\
-  & qwen3-14b                & 56.0 & 0.440 & 22.9 & 24.8 & 25.3 \\
-  & llama-3.3-70b            & 48.7 & 0.513 & 23.0 & 24.9 & 25.4 \\
-  & qwen3-30b-a3b            & 55.3 & 0.447 & 24.2 & 26.1 & 26.6 \\
-  & qwq-32b                  & 47.3 & 0.527 & 26.7 & 28.6 & 29.2 \\
-  & gemma-3-27b              & 40.7 & 0.593 & 26.8 & 28.7 & 29.2 \\
-  & phi-4                    & 37.3 & 0.627 & 27.0 & 28.9 & 29.4 \\
-  & gemma-3-12b              & 34.0 & 0.660 & 28.0 & 29.9 & 30.4 \\
-  & deepseek-r1-distill-70b  & 26.0 & 0.740 & 30.6 & 32.0 & 32.4 \\
-  & granite-3.2-8b           & 35.3 & 0.647 & 34.4 & 36.8 & 37.4 \\
-  & gpt-oss-120b             & 22.7 & 0.773 & 37.0 & 39.0 & 39.5 \\
-  & gpt-oss-20b              & 19.3 & 0.807 & 39.7 & 41.6 & 42.1 \\
+  & \texttt{qwen2.5-72b}              & 50.7 & 0.493 & 22.2 & 24.1 & 24.7 \\
+  & \texttt{qwen3-14b}                & 56.0 & 0.440 & 22.9 & 24.8 & 25.3 \\
+  & \texttt{llama-3.3-70b}            & 48.7 & 0.513 & 23.0 & 24.9 & 25.4 \\
+  & \texttt{qwen3-30b-a3b}            & 55.3 & 0.447 & 24.2 & 26.1 & 26.6 \\
+  & \texttt{qwq-32b}                  & 47.3 & 0.527 & 26.7 & 28.6 & 29.2 \\
+  & \texttt{gemma-3-27b}              & 40.7 & 0.593 & 26.8 & 28.7 & 29.2 \\
+  & \texttt{phi-4}                    & 37.3 & 0.627 & 27.0 & 28.9 & 29.4 \\
+  & \texttt{gemma-3-12b}              & 34.0 & 0.660 & 28.0 & 29.9 & 30.4 \\
+  & \texttt{deepseek-r1-distill-70b}  & 26.0 & 0.740 & 30.6 & 32.0 & 32.4 \\
+  & \texttt{granite-3.2-8b}           & 35.3 & 0.647 & 34.4 & 36.8 & 37.4 \\
+  & \texttt{gpt-oss-120b}             & 22.7 & 0.773 & 37.0 & 39.0 & 39.5 \\
+  & \texttt{gpt-oss-20b}              & 19.3 & 0.807 & 39.7 & 41.6 & 42.1 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{finqa}}
-  & deepseek-r1-distill-70b  & 23.4 & 0.766 & 38.6 & 40.7 & 41.2 \\
-  & granite-3.2-8b           & 13.1 & 0.869 & 46.9 & 49.3 & 49.8 \\
-  & qwen3-14b                & 13.5 & 0.865 & 47.4 & 49.6 & 50.2 \\
-  & gemma-3-27b              & 11.1 & 0.889 & 47.4 & 49.6 & 50.2 \\
-  & gemma-3-12b              & 10.4 & 0.896 & 48.6 & 50.8 & 51.4 \\
-  & qwq-32b                  & 10.5 & 0.895 & 48.6 & 50.9 & 51.5 \\
-  & qwen3-30b-a3b            & 11.6 & 0.884 & 49.0 & 51.3 & 51.9 \\
-  & gpt-oss-20b              & 11.2 & 0.888 & 49.1 & 51.5 & 52.1 \\
-  & gpt-oss-120b             & 10.1 & 0.899 & 49.4 & 51.8 & 52.4 \\
-  & qwen2.5-72b              &  9.5 & 0.905 & 50.1 & 52.5 & 53.1 \\
-  & llama-3.3-70b            &  9.9 & 0.901 & 50.2 & 52.5 & 53.2 \\
-  & phi-4                    &  8.5 & 0.915 & 51.0 & 53.3 & 53.9 \\
+  & \texttt{deepseek-r1-distill-70b}  & 23.4 & 0.766 & 38.6 & 40.7 & 41.2 \\
+  & \texttt{granite-3.2-8b}           & 13.1 & 0.869 & 46.9 & 49.3 & 49.8 \\
+  & \texttt{qwen3-14b}                & 13.5 & 0.865 & 47.4 & 49.6 & 50.2 \\
+  & \texttt{gemma-3-27b}              & 11.1 & 0.889 & 47.4 & 49.6 & 50.2 \\
+  & \texttt{gemma-3-12b}              & 10.4 & 0.896 & 48.6 & 50.8 & 51.4 \\
+  & \texttt{qwq-32b}                  & 10.5 & 0.895 & 48.6 & 50.9 & 51.5 \\
+  & \texttt{qwen3-30b-a3b}            & 11.6 & 0.884 & 49.0 & 51.3 & 51.9 \\
+  & \texttt{gpt-oss-20b}              & 11.2 & 0.888 & 49.1 & 51.5 & 52.1 \\
+  & \texttt{gpt-oss-120b}             & 10.1 & 0.899 & 49.4 & 51.8 & 52.4 \\
+  & \texttt{qwen2.5-72b}              &  9.5 & 0.905 & 50.1 & 52.5 & 53.1 \\
+  & \texttt{llama-3.3-70b}            &  9.9 & 0.901 & 50.2 & 52.5 & 53.2 \\
+  & \texttt{phi-4}                    &  8.5 & 0.915 & 51.0 & 53.3 & 53.9 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{tatqa}}
-  & deepseek-r1-distill-70b  & 44.9 & 0.551 & 15.4 & 16.9 & 17.3 \\
-  & gemma-3-27b              & 55.9 & 0.441 & 18.6 & 20.3 & 20.8 \\
-  & gpt-oss-20b              & 49.6 & 0.504 & 19.7 & 21.4 & 21.9 \\
-  & qwen3-30b-a3b            & 51.8 & 0.482 & 22.0 & 23.9 & 24.4 \\
-  & granite-3.2-8b           & 48.9 & 0.511 & 22.1 & 24.0 & 24.5 \\
-  & gpt-oss-120b             & 49.5 & 0.505 & 22.1 & 24.0 & 24.5 \\
-  & llama-3.3-70b            & 49.6 & 0.504 & 22.5 & 24.4 & 24.9 \\
-  & qwen3-14b                & 51.0 & 0.490 & 22.5 & 24.4 & 24.9 \\
-  & gemma-3-12b              & 51.7 & 0.483 & 22.7 & 24.7 & 25.2 \\
-  & qwq-32b                  & 48.5 & 0.515 & 23.4 & 25.3 & 25.8 \\
-  & qwen2.5-72b              & 45.2 & 0.548 & 24.1 & 26.1 & 26.6 \\
-  & phi-4                    & 43.5 & 0.565 & 25.3 & 27.3 & 27.9 \\
+  & \texttt{deepseek-r1-distill-70b}  & 44.9 & 0.551 & 15.4 & 16.9 & 17.3 \\
+  & \texttt{gemma-3-27b}              & 55.9 & 0.441 & 18.6 & 20.3 & 20.8 \\
+  & \texttt{gpt-oss-20b}              & 49.6 & 0.504 & 19.7 & 21.4 & 21.9 \\
+  & \texttt{qwen3-30b-a3b}            & 51.8 & 0.482 & 22.0 & 23.9 & 24.4 \\
+  & \texttt{granite-3.2-8b}           & 48.9 & 0.511 & 22.1 & 24.0 & 24.5 \\
+  & \texttt{gpt-oss-120b}             & 49.5 & 0.505 & 22.1 & 24.0 & 24.5 \\
+  & \texttt{llama-3.3-70b}            & 49.6 & 0.504 & 22.5 & 24.4 & 24.9 \\
+  & \texttt{qwen3-14b}                & 51.0 & 0.490 & 22.5 & 24.4 & 24.9 \\
+  & \texttt{gemma-3-12b}              & 51.7 & 0.483 & 22.7 & 24.7 & 25.2 \\
+  & \texttt{qwq-32b}                  & 48.5 & 0.515 & 23.4 & 25.3 & 25.8 \\
+  & \texttt{qwen2.5-72b}              & 45.2 & 0.548 & 24.1 & 26.1 & 26.6 \\
+  & \texttt{phi-4}                    & 43.5 & 0.565 & 25.3 & 27.3 & 27.9 \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1986,46 +1963,46 @@ measures. $\widehat{\ES}$ and tail measures in \$M.}\label{tab:results-legal}
 Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_{95}$ \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{contractnli}}
-  & qwen3-30b-a3b            & 84.5 & 0.155 &  53.3 &  58.2 &  59.5 \\
-  & gpt-oss-20b              & 83.8 & 0.162 &  68.5 &  74.1 &  75.5 \\
-  & gpt-oss-120b             & 84.3 & 0.157 &  70.7 &  76.5 &  78.0 \\
-  & qwq-32b                  & 81.7 & 0.183 &  73.4 &  79.2 &  80.7 \\
-  & qwen3-14b                & 82.0 & 0.180 &  80.9 &  87.2 &  88.7 \\
-  & qwen2.5-72b              & 82.3 & 0.177 &  91.5 &  98.1 &  99.8 \\
-  & gemma-3-27b              & 82.7 & 0.173 &  92.3 &  98.9 & 100.6 \\
-  & deepseek-r1-distill-70b  & 81.3 & 0.187 &  98.2 & 105.0 & 106.8 \\
-  & gemma-3-12b              & 80.6 & 0.194 & 104.2 & 111.1 & 112.9 \\
-  & granite-3.2-8b           & 72.9 & 0.271 & 122.5 & 130.0 & 132.0 \\
-  & phi-4                    & 77.5 & 0.225 & 128.3 & 136.1 & 138.1 \\
-  & llama-3.3-70b            & 75.5 & 0.245 & 144.4 & 152.5 & 154.5 \\
+  & \texttt{qwen3-30b-a3b}            & 84.5 & 0.155 &  53.3 &  58.2 &  59.5 \\
+  & \texttt{gpt-oss-20b}              & 83.8 & 0.162 &  68.5 &  74.1 &  75.5 \\
+  & \texttt{gpt-oss-120b}             & 84.3 & 0.157 &  70.7 &  76.5 &  78.0 \\
+  & \texttt{qwq-32b}                  & 81.7 & 0.183 &  73.4 &  79.2 &  80.7 \\
+  & \texttt{qwen3-14b}                & 82.0 & 0.180 &  80.9 &  87.2 &  88.7 \\
+  & \texttt{qwen2.5-72b}              & 82.3 & 0.177 &  91.5 &  98.1 &  99.8 \\
+  & \texttt{gemma-3-27b}              & 82.7 & 0.173 &  92.3 &  98.9 & 100.6 \\
+  & \texttt{deepseek-r1-distill-70b}  & 81.3 & 0.187 &  98.2 & 105.0 & 106.8 \\
+  & \texttt{gemma-3-12b}              & 80.6 & 0.194 & 104.2 & 111.1 & 112.9 \\
+  & \texttt{granite-3.2-8b}           & 72.9 & 0.271 & 122.5 & 130.0 & 132.0 \\
+  & \texttt{phi-4}                    & 77.5 & 0.225 & 128.3 & 136.1 & 138.1 \\
+  & \texttt{llama-3.3-70b}            & 75.5 & 0.245 & 144.4 & 152.5 & 154.5 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{cuad}}
-  & qwen2.5-72b              & 17.2 & 0.828 & 211.2 & 219.0 & 221.0 \\
-  & gemma-3-12b              & 16.7 & 0.833 & 211.4 & 219.3 & 221.4 \\
-  & gemma-3-27b              & 17.2 & 0.828 & 211.9 & 219.9 & 221.9 \\
-  & llama-3.3-70b            & 15.5 & 0.845 & 212.2 & 220.2 & 222.2 \\
-  & qwq-32b                  & 17.0 & 0.830 & 213.4 & 221.4 & 223.6 \\
-  & gpt-oss-120b             & 18.1 & 0.819 & 213.6 & 221.5 & 223.6 \\
-  & qwen3-30b-a3b            & 15.7 & 0.843 & 214.0 & 222.0 & 224.0 \\
-  & gpt-oss-20b              & 17.1 & 0.829 & 214.5 & 222.6 & 224.7 \\
-  & qwen3-14b                & 14.5 & 0.855 & 217.3 & 225.2 & 227.4 \\
-  & phi-4                    & 12.6 & 0.874 & 218.6 & 226.7 & 228.8 \\
-  & granite-3.2-8b           & 12.2 & 0.878 & 223.8 & 231.9 & 234.1 \\
-  & deepseek-r1-distill-70b  &  4.3 & 0.957 & 232.1 & 240.2 & 242.4 \\
+  & \texttt{qwen2.5-72b}              & 17.2 & 0.828 & 211.2 & 219.0 & 221.0 \\
+  & \texttt{gemma-3-12b}              & 16.7 & 0.833 & 211.4 & 219.3 & 221.4 \\
+  & \texttt{gemma-3-27b}              & 17.2 & 0.828 & 211.9 & 219.9 & 221.9 \\
+  & \texttt{llama-3.3-70b}            & 15.5 & 0.845 & 212.2 & 220.2 & 222.2 \\
+  & \texttt{qwq-32b}                  & 17.0 & 0.830 & 213.4 & 221.4 & 223.6 \\
+  & \texttt{gpt-oss-120b}             & 18.1 & 0.819 & 213.6 & 221.5 & 223.6 \\
+  & \texttt{qwen3-30b-a3b}            & 15.7 & 0.843 & 214.0 & 222.0 & 224.0 \\
+  & \texttt{gpt-oss-20b}              & 17.1 & 0.829 & 214.5 & 222.6 & 224.7 \\
+  & \texttt{qwen3-14b}                & 14.5 & 0.855 & 217.3 & 225.2 & 227.4 \\
+  & \texttt{phi-4}                    & 12.6 & 0.874 & 218.6 & 226.7 & 228.8 \\
+  & \texttt{granite-3.2-8b}           & 12.2 & 0.878 & 223.8 & 231.9 & 234.1 \\
+  & \texttt{deepseek-r1-distill-70b}  &  4.3 & 0.957 & 232.1 & 240.2 & 242.4 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{maud}}
-  & gpt-oss-20b              & 82.6 & 0.174 &  34.6 &  38.2 &  39.1 \\
-  & gpt-oss-120b             & 77.6 & 0.224 &  53.6 &  57.8 &  58.9 \\
-  & qwen3-30b-a3b            & 64.9 & 0.351 & 117.8 & 124.6 & 126.3 \\
-  & qwq-32b                  & 64.9 & 0.351 & 119.9 & 126.7 & 128.5 \\
-  & qwen3-14b                & 64.7 & 0.353 & 125.5 & 132.5 & 134.3 \\
-  & gemma-3-27b              & 54.8 & 0.452 & 211.3 & 220.5 & 222.9 \\
-  & llama-3.3-70b            & 53.6 & 0.464 & 230.3 & 239.9 & 242.3 \\
-  & gemma-3-12b              & 52.8 & 0.472 & 233.6 & 243.4 & 245.7 \\
-  & granite-3.2-8b           & 49.1 & 0.509 & 274.9 & 285.4 & 288.1 \\
-  & qwen2.5-72b              & 50.3 & 0.497 & 280.2 & 291.0 & 293.7 \\
-  & deepseek-r1-distill-70b  & 19.1 & 0.809 & 499.8 & 513.0 & 516.4 \\
-  & phi-4                    & 16.8 & 0.832 & 525.7 & 538.9 & 542.4 \\
+  & \texttt{gpt-oss-20b}              & 82.6 & 0.174 &  34.6 &  38.2 &  39.1 \\
+  & \texttt{gpt-oss-120b}             & 77.6 & 0.224 &  53.6 &  57.8 &  58.9 \\
+  & \texttt{qwen3-30b-a3b}            & 64.9 & 0.351 & 117.8 & 124.6 & 126.3 \\
+  & \texttt{qwq-32b}                  & 64.9 & 0.351 & 119.9 & 126.7 & 128.5 \\
+  & \texttt{qwen3-14b}                & 64.7 & 0.353 & 125.5 & 132.5 & 134.3 \\
+  & \texttt{gemma-3-27b}              & 54.8 & 0.452 & 211.3 & 220.5 & 222.9 \\
+  & \texttt{llama-3.3-70b}            & 53.6 & 0.464 & 230.3 & 239.9 & 242.3 \\
+  & \texttt{gemma-3-12b}              & 52.8 & 0.472 & 233.6 & 243.4 & 245.7 \\
+  & \texttt{granite-3.2-8b}           & 49.1 & 0.509 & 274.9 & 285.4 & 288.1 \\
+  & \texttt{qwen2.5-72b}              & 50.3 & 0.497 & 280.2 & 291.0 & 293.7 \\
+  & \texttt{deepseek-r1-distill-70b}  & 19.1 & 0.809 & 499.8 & 513.0 & 516.4 \\
+  & \texttt{phi-4}                    & 16.8 & 0.832 & 525.7 & 538.9 & 542.4 \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -2038,46 +2015,46 @@ saturated by every model ($\widehat{\ES}{\le}\$1\,M$).}\label{tab:results-medica
 Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_{95}$ \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{headqa}}
-  & gpt-oss-20b              & 86.0 & 0.140 &  145.3 &  158.0 &  161.2 \\
-  & phi-4                    & 80.1 & 0.199 &  172.3 &  185.5 &  189.1 \\
-  & gpt-oss-120b             & 75.1 & 0.249 &  257.8 &  274.4 &  278.6 \\
-  & qwen3-30b-a3b            & 47.7 & 0.523 &  518.2 &  541.2 &  546.9 \\
-  & qwq-32b                  & 36.5 & 0.635 &  627.6 &  652.3 &  658.4 \\
-  & granite-3.2-8b           & 29.5 & 0.705 &  733.7 &  760.2 &  767.0 \\
-  & qwen2.5-72b              & 25.8 & 0.742 &  752.2 &  778.8 &  785.3 \\
-  & qwen3-14b                & 20.1 & 0.799 &  811.5 &  839.0 &  845.8 \\
-  & deepseek-r1-distill-70b  & 15.0 & 0.850 &  833.4 &  860.9 &  867.8 \\
-  & llama-3.3-70b            &  0.9 & 0.991 & 1006.7 & 1036.3 & 1044.1 \\
-  & gemma-3-12b              &  0.4 & 0.996 & 1013.1 & 1042.5 & 1050.4 \\
-  & gemma-3-27b              &  0.2 & 0.998 & 1016.3 & 1045.8 & 1053.4 \\
+  & \texttt{gpt-oss-20b}              & 86.0 & 0.140 &  145.3 &  158.0 &  161.2 \\
+  & \texttt{phi-4}                    & 80.1 & 0.199 &  172.3 &  185.5 &  189.1 \\
+  & \texttt{gpt-oss-120b}             & 75.1 & 0.249 &  257.8 &  274.4 &  278.6 \\
+  & \texttt{qwen3-30b-a3b}            & 47.7 & 0.523 &  518.2 &  541.2 &  546.9 \\
+  & \texttt{qwq-32b}                  & 36.5 & 0.635 &  627.6 &  652.3 &  658.4 \\
+  & \texttt{granite-3.2-8b}           & 29.5 & 0.705 &  733.7 &  760.2 &  767.0 \\
+  & \texttt{qwen2.5-72b}              & 25.8 & 0.742 &  752.2 &  778.8 &  785.3 \\
+  & \texttt{qwen3-14b}                & 20.1 & 0.799 &  811.5 &  839.0 &  845.8 \\
+  & \texttt{deepseek-r1-distill-70b}  & 15.0 & 0.850 &  833.4 &  860.9 &  867.8 \\
+  & \texttt{llama-3.3-70b}            &  0.9 & 0.991 & 1006.7 & 1036.3 & 1044.1 \\
+  & \texttt{gemma-3-12b}              &  0.4 & 0.996 & 1013.1 & 1042.5 & 1050.4 \\
+  & \texttt{gemma-3-27b}              &  0.2 & 0.998 & 1016.3 & 1045.8 & 1053.4 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{medmcqa}}
-  & gpt-oss-20b              & 100.0 & 0.000 &   0.4 &   1.1 &   1.5 \\
-  & gpt-oss-120b             &  99.9 & 0.001 &   0.8 &   2.0 &   2.3 \\
-  & deepseek-r1-distill-70b  &  97.7 & 0.023 &  42.2 &  49.7 &  51.6 \\
-  & phi-4                    &  95.7 & 0.043 &  66.4 &  75.5 &  78.0 \\
-  & llama-3.3-70b            &  90.4 & 0.096 & 178.6 & 193.4 & 197.3 \\
-  & qwq-32b                  &  89.9 & 0.101 & 183.1 & 198.2 & 202.1 \\
-  & qwen3-30b-a3b            &  89.8 & 0.102 & 191.0 & 206.5 & 210.6 \\
-  & qwen3-14b                &  84.0 & 0.160 & 302.7 & 321.7 & 326.7 \\
-  & qwen2.5-72b              &  80.3 & 0.197 & 386.9 & 408.5 & 414.0 \\
-  & granite-3.2-8b           &  70.4 & 0.296 & 588.7 & 614.7 & 621.2 \\
-  & gemma-3-27b              &  68.3 & 0.317 & 625.6 & 651.9 & 659.1 \\
-  & gemma-3-12b              &  61.6 & 0.384 & 760.2 & 789.1 & 796.2 \\
+  & \texttt{gpt-oss-20b}              & 100.0 & 0.000 &   0.4 &   1.1 &   1.5 \\
+  & \texttt{gpt-oss-120b}             &  99.9 & 0.001 &   0.8 &   2.0 &   2.3 \\
+  & \texttt{deepseek-r1-distill-70b}  &  97.7 & 0.023 &  42.2 &  49.7 &  51.6 \\
+  & \texttt{phi-4}                    &  95.7 & 0.043 &  66.4 &  75.5 &  78.0 \\
+  & \texttt{llama-3.3-70b}            &  90.4 & 0.096 & 178.6 & 193.4 & 197.3 \\
+  & \texttt{qwq-32b}                  &  89.9 & 0.101 & 183.1 & 198.2 & 202.1 \\
+  & \texttt{qwen3-30b-a3b}            &  89.8 & 0.102 & 191.0 & 206.5 & 210.6 \\
+  & \texttt{qwen3-14b}                &  84.0 & 0.160 & 302.7 & 321.7 & 326.7 \\
+  & \texttt{qwen2.5-72b}              &  80.3 & 0.197 & 386.9 & 408.5 & 414.0 \\
+  & \texttt{granite-3.2-8b}           &  70.4 & 0.296 & 588.7 & 614.7 & 621.2 \\
+  & \texttt{gemma-3-27b}              &  68.3 & 0.317 & 625.6 & 651.9 & 659.1 \\
+  & \texttt{gemma-3-12b}              &  61.6 & 0.384 & 760.2 & 789.1 & 796.2 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{ddi}}
-  & deepseek-r1-distill-70b  & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & gemma-3-12b              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & gemma-3-27b              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & gpt-oss-120b             & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & gpt-oss-20b              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & llama-3.3-70b            & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & phi-4                    & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & qwen2.5-72b              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
-  & qwen3-14b                &  99.9 & 0.001 & 0.0 & 0.0 & 0.0 \\
-  & qwq-32b                  &  99.9 & 0.001 & 0.0 & 0.0 & 0.0 \\
-  & granite-3.2-8b           &  99.9 & 0.001 & 0.5 & 0.8 & 0.9 \\
-  & qwen3-30b-a3b            &  99.9 & 0.001 & 1.0 & 2.1 & 2.6 \\
+  & \texttt{deepseek-r1-distill-70b}  & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{gemma-3-12b}              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{gemma-3-27b}              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{gpt-oss-120b}             & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{gpt-oss-20b}              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{llama-3.3-70b}            & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{phi-4}                    & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{qwen2.5-72b}              & 100.0 & 0.000 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{qwen3-14b}                &  99.9 & 0.001 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{qwq-32b}                  &  99.9 & 0.001 & 0.0 & 0.0 & 0.0 \\
+  & \texttt{granite-3.2-8b}           &  99.9 & 0.001 & 0.5 & 0.8 & 0.9 \\
+  & \texttt{qwen3-30b-a3b}            &  99.9 & 0.001 & 1.0 & 2.1 & 2.6 \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -2091,32 +2068,32 @@ is near-saturation.}\label{tab:results-insurance}
 Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_{95}$ \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{judgebert}}
-  & gpt-oss-20b              & 28.5 & 0.715 & 448.8 & 464.2 & 468.4 \\
-  & qwen3-14b                & 26.2 & 0.738 & 450.1 & 465.4 & 469.5 \\
-  & gemma-3-27b              & 27.0 & 0.730 & 452.6 & 468.0 & 471.9 \\
-  & granite-3.2-8b           & 25.1 & 0.749 & 456.7 & 472.1 & 476.3 \\
-  & gemma-3-12b              & 24.7 & 0.753 & 460.4 & 476.2 & 480.2 \\
-  & qwq-32b                  & 24.7 & 0.753 & 460.7 & 476.3 & 480.3 \\
-  & gpt-oss-120b             & 24.9 & 0.751 & 463.7 & 479.3 & 483.3 \\
-  & phi-4                    & 21.8 & 0.782 & 464.8 & 480.3 & 484.2 \\
-  & qwen2.5-72b              & 23.9 & 0.761 & 465.0 & 480.6 & 484.6 \\
-  & qwen3-30b-a3b            & 25.4 & 0.746 & 465.4 & 481.1 & 485.1 \\
-  & llama-3.3-70b            & 19.2 & 0.808 & 476.1 & 491.8 & 495.9 \\
-  & deepseek-r1-distill-70b  & 20.0 & 0.800 & 504.8 & 520.7 & 524.9 \\
+  & \texttt{gpt-oss-20b}              & 28.5 & 0.715 & 448.8 & 464.2 & 468.4 \\
+  & \texttt{qwen3-14b}                & 26.2 & 0.738 & 450.1 & 465.4 & 469.5 \\
+  & \texttt{gemma-3-27b}              & 27.0 & 0.730 & 452.6 & 468.0 & 471.9 \\
+  & \texttt{granite-3.2-8b}           & 25.1 & 0.749 & 456.7 & 472.1 & 476.3 \\
+  & \texttt{gemma-3-12b}              & 24.7 & 0.753 & 460.4 & 476.2 & 480.2 \\
+  & \texttt{qwq-32b}                  & 24.7 & 0.753 & 460.7 & 476.3 & 480.3 \\
+  & \texttt{gpt-oss-120b}             & 24.9 & 0.751 & 463.7 & 479.3 & 483.3 \\
+  & \texttt{phi-4}                    & 21.8 & 0.782 & 464.8 & 480.3 & 484.2 \\
+  & \texttt{qwen2.5-72b}              & 23.9 & 0.761 & 465.0 & 480.6 & 484.6 \\
+  & \texttt{qwen3-30b-a3b}            & 25.4 & 0.746 & 465.4 & 481.1 & 485.1 \\
+  & \texttt{llama-3.3-70b}            & 19.2 & 0.808 & 476.1 & 491.8 & 495.9 \\
+  & \texttt{deepseek-r1-distill-70b}  & 20.0 & 0.800 & 504.8 & 520.7 & 524.9 \\
 \midrule
 \multirow{12}{*}{\rotatebox{90}{privacyqa}}
-  & gpt-oss-120b             & 99.7 & 0.003 &  0.9 &  1.6 &  1.9 \\
-  & gpt-oss-20b              & 99.6 & 0.004 &  1.0 &  1.8 &  2.1 \\
-  & phi-4                    & 97.1 & 0.029 &  6.1 &  8.0 &  8.6 \\
-  & qwen3-14b                & 95.4 & 0.046 &  6.9 &  9.0 &  9.5 \\
-  & deepseek-r1-distill-70b  & 95.9 & 0.041 &  7.2 &  9.3 &  9.9 \\
-  & qwq-32b                  & 94.9 & 0.051 &  7.9 & 10.1 & 10.7 \\
-  & qwen2.5-72b              & 93.5 & 0.065 & 12.6 & 15.3 & 16.1 \\
-  & qwen3-30b-a3b            & 93.1 & 0.069 & 15.0 & 18.1 & 18.9 \\
-  & granite-3.2-8b           & 91.0 & 0.090 & 17.5 & 20.8 & 21.7 \\
-  & gemma-3-27b              & 87.5 & 0.125 & 23.9 & 27.7 & 28.7 \\
-  & gemma-3-12b              & 84.6 & 0.154 & 30.1 & 34.4 & 35.5 \\
-  & llama-3.3-70b            & 83.3 & 0.167 & 35.4 & 40.1 & 41.3 \\
+  & \texttt{gpt-oss-120b}             & 99.7 & 0.003 &  0.9 &  1.6 &  1.9 \\
+  & \texttt{gpt-oss-20b}              & 99.6 & 0.004 &  1.0 &  1.8 &  2.1 \\
+  & \texttt{phi-4}                    & 97.1 & 0.029 &  6.1 &  8.0 &  8.6 \\
+  & \texttt{qwen3-14b}                & 95.4 & 0.046 &  6.9 &  9.0 &  9.5 \\
+  & \texttt{deepseek-r1-distill-70b}  & 95.9 & 0.041 &  7.2 &  9.3 &  9.9 \\
+  & \texttt{qwq-32b}                  & 94.9 & 0.051 &  7.9 & 10.1 & 10.7 \\
+  & \texttt{qwen2.5-72b}              & 93.5 & 0.065 & 12.6 & 15.3 & 16.1 \\
+  & \texttt{qwen3-30b-a3b}            & 93.1 & 0.069 & 15.0 & 18.1 & 18.9 \\
+  & \texttt{granite-3.2-8b}           & 91.0 & 0.090 & 17.5 & 20.8 & 21.7 \\
+  & \texttt{gemma-3-27b}              & 87.5 & 0.125 & 23.9 & 27.7 & 28.7 \\
+  & \texttt{gemma-3-12b}              & 84.6 & 0.154 & 30.1 & 34.4 & 35.5 \\
+  & \texttt{llama-3.3-70b}            & 83.3 & 0.167 & 35.4 & 40.1 & 41.3 \\
 \bottomrule
 \end{tabular}
 \end{table*}
