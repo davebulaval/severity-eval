@@ -149,22 +149,22 @@ with annotations and calibration evidence.
 \section{Introduction}
 \label{sec:introduction}
 
-Accuracy and other automatic metrics (AM) treat every error as
+Accuracy and other automatic metrics treat every error as
 equally costly~\citep{elkan2001foundations}: a misclassified
 spam email and a misclassified cancer diagnosis count the same.
-As LLMs enter high-stakes deployments across medicine, finance,
-insurance, and law~\citep{weidinger2022taxonomy,bedi2025medhelm,guha2023legalbench},
-that assumption breaks. \citet{bedi2025medhelm}
+As LLMs enter high-stakes deployments across law
+\citep{guha2023legalbench}, medicine \citep{bedi2025medhelm},
+finance \citep{islam2023financebench}, and insurance
+\citep{beauchemin2024quebec}, that assumption breaks. \citet{bedi2025medhelm}
 evaluate $9$ frontier LLMs across $35$ medical benchmarks and
 report normalized accuracies spanning $0.53$--$0.85$ across task
 categories, from clinical decision support at the low end to
 clinical note generation at the high end. The per-error
 \emph{consequence} spans an even wider range than the per-task
 accuracy does: an erroneous treatment recommendation and a
-phrasing variant in a discharge summary share the same AM
+phrasing variant in a discharge summary share the same accuracy
 penalty but a vastly different operational cost. This dollar
-gap is what an accuracy-only leaderboard hides; quantifying it
-is the contribution this paper measures.
+gap is what an accuracy-only leaderboard hides.
 
 \citet{beauchemin2026position} proposed importing actuarial
 frequency-severity models from insurance mathematics. The
