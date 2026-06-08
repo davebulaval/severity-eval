@@ -150,9 +150,11 @@ with annotations and calibration evidence.
 \label{sec:introduction}
 
 Accuracy and other automatic metrics (AM) treat every error as
-equally costly: a misclassified spam email and a misclassified
-cancer diagnosis count the same. As LLMs enter high-stakes
-deployments, that assumption breaks. \citet{bedi2025medhelm}
+equally costly~\citep{elkan2001foundations}: a misclassified
+spam email and a misclassified cancer diagnosis count the same.
+As LLMs enter high-stakes deployments across medicine, finance,
+insurance, and law~\citep{weidinger2022taxonomy,bedi2025medhelm,guha2023legalbench},
+that assumption breaks. \citet{bedi2025medhelm}
 evaluate $9$ frontier LLMs across $35$ medical benchmarks and
 report normalized accuracies spanning $0.53$--$0.85$ across task
 categories, from clinical decision support at the low end to
