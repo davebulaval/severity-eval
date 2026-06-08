@@ -172,10 +172,11 @@ framework splits operational risk into an error rate $p$ and a
 severity distribution $\bpi$ over cost levels, yielding a
 compound loss $S = \sum_{i=1}^{N} X_i$ whose expected value, tail
 quantiles, and required reserves are computable in closed form
-or by Monte Carlo. That contribution was conceptual: feasibility
-on a single $82$-query insurance corpus, no validation across
-domains, models, or full-scale corpora; the accuracy-vs-cost
-ranking divergence reported there had unknown stability at scale.
+or by Monte Carlo simulation. They illustrate the framework on
+a single $82$-query insurance pilot and report a striking
+accuracy-vs-cost ranking divergence; whether that divergence
+generalises across domains, model families, and full-scale
+corpora was left open.
 We provide that validation: $12$ open-weight LLMs
 ($8$\,B--$120$\,B parameters, dense, MoE, and reasoning-tuned)
 plus random and majority baselines on $11$ benchmarks across
