@@ -127,23 +127,20 @@ Accuracy treats every LLM error as equally costly. The actuarial
 frequency-severity framework of \citet{beauchemin2026position}
 addresses this in theory but was demonstrated on a single
 $82$-query insurance corpus. We provide the first multi-domain
-empirical evaluation: $12$ open-weight LLMs plus two trivial
-baselines (random, majority) on $11$ benchmarks across finance,
-medicine, law, and insurance, with severity labels from each
-corpus's structured fields. At full corpus, accuracy and
-$\widehat{\ES}$ rankings are positively correlated in every
-domain (Kendall $\tau$ $0.69$--$0.96$); the framework's value
-lies in the dollar magnitudes the ordering hides. We find $74$
-accuracy-vs-cost inversions worth \$0.28\,B mis-attributed
-(median \$1.90\,M, max \$28.69\,M per $10{,}000$ outputs); the
-severity share of inter-model variance is $0.06$--$0.27$
-across the four domains, all frequency-dominated under the
-analytic CV-ratio decomposition; and excess-of-loss routing
-cuts $\widehat{\ES}$ by $84.59\%$ in finance at $19.73\%$
-deferral and by $93.28$--$98.32\%$ in the other three domains. We release \seveval{}\footnote{Code, severity
-annotations, and evaluation results: \coderepo.}, a
-HuggingFace-style library, with annotations and calibration
-evidence.
+empirical evaluation: $12$ open-weight LLMs plus random and
+majority baselines on $11$ benchmarks across finance, medicine,
+law, and insurance. At full corpus, accuracy and $\widehat{\ES}$
+rankings are positively correlated in every domain (Kendall
+$\tau$ $0.69$--$0.96$); the framework's value lies in the dollar
+magnitudes the ordering hides. We surface $74$ accuracy-vs-cost
+inversions worth \$0.28\,B mis-attributed (median \$1.90\,M,
+max \$28.69\,M per $10{,}000$ outputs), severity-share
+decomposition showing all four domains frequency-dominated
+($0.06$--$0.27$), and excess-of-loss routing cutting
+$\widehat{\ES}$ by $84.59$--$98.32\%$. We release
+\seveval{}\footnote{Code, severity annotations, and evaluation
+results: \coderepo.}, a HuggingFace-style library, with
+annotations and calibration evidence.
 \end{abstract}
 
 % ============================================================================
@@ -185,23 +182,19 @@ each evaluated on the \emph{full} test set. The aim is not to
 crown a best model; it is to characterise where the framework
 adds signal beyond accuracy, and where it does not.
 
-Our three contributions are:
+Our two contributions are:
 (1)~\textbf{The first multi-domain empirical validation} of the
-actuarial frequency-severity framework on LLMs, characterising
-where it adds signal over accuracy and over the closest NLP
-precedent (MQM-weighted scoring) and where it does not.
-(2)~\textbf{An open-source Python library, \seveval{}}, that
-wraps the framework as a HuggingFace-style
-\texttt{evaluate.Metric} so any LLM evaluation pipeline can
-compute $\widehat{\ES}$, $\widehat{\TVaR}_{0.95}$, Lundberg
-reserves, and human-in-the-loop routing curves with a single
-call.
-(3)~\textbf{Reusable domain artifacts}: rule-based
-severity-annotation tables for the $11$ corpora, four cost-vector
-calibrations grounded in Basel LDA, regulatory-penalty,
-clinical-incident, and litigation data, and full per-cell
-evaluation results, all released to support reuse and
-stress-testing.
+framework, characterising where it adds signal over accuracy and
+MQM-weighted scoring and where it does not, together with the
+reusable artifacts (severity-annotation tables for the $11$
+corpora, four cost-vector calibrations from Basel LDA,
+regulatory, clinical, and litigation data, and full per-cell
+results).
+(2)~\textbf{An open-source library, \seveval{}}, that wraps the
+framework as a HuggingFace-style \texttt{evaluate.Metric} so any
+LLM evaluation pipeline can compute $\widehat{\ES}$,
+$\widehat{\TVaR}_{0.95}$, Lundberg reserves, and routing curves
+with a single call.
 
 \noindent The paper is organised as follows:
 \autoref{sec:framework} recapitulates the framework;
