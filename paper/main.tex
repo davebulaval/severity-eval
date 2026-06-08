@@ -175,9 +175,11 @@ domains, models, or full-scale corpora; the accuracy-vs-cost
 ranking divergence reported there had unknown stability at scale.
 We provide that validation: $12$ open-weight LLMs
 ($8$\,B--$120$\,B parameters, dense, MoE, and reasoning-tuned)
-on $11$ benchmarks across finance, medicine, law, and insurance,
-$\sim$$440$\,K predictions over $132$ (model, dataset) cells
-each evaluated on the \emph{full} test set. The aim is not to
+plus random and majority baselines on $11$ benchmarks across
+finance, medicine, law, and insurance ($\sim$$445$\,K test
+instances, $5.34$\,M LLM predictions over $132$ LLM cells plus
+$22$ baseline cells, each evaluated on the \emph{full} test
+set). The aim is not to
 crown a best model; it is to characterise where the framework
 adds signal beyond accuracy, and where it does not.
 
