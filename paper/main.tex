@@ -161,12 +161,11 @@ report normalized accuracies spanning $0.53$--$0.85$ across task
 categories, from clinical decision support at the low end to
 clinical note generation at the high end. The per-error
 \emph{consequence} spans an even wider range than the per-task
-accuracy does: an erroneous treatment recommendation and a
-phrasing variant in a discharge summary share the same accuracy
-penalty but a vastly different operational cost. This dollar
-gap is what an accuracy-only leaderboard hides.
+accuracy does: an erroneous treatment recommendation and a phrasing variant in a discharge summary share the same accuracy
+penalty, but a vastly different operational cost.
+This dollar gap is what an accuracy-only leaderboard hides.
 
-\citet{beauchemin2026position} proposed importing actuarial
+To address this lack of proper financial cost estimation of AI system error, \citet{beauchemin2026position} proposed importing actuarial
 frequency-severity models from insurance mathematics. The
 framework splits operational risk into an error rate $p$ and a
 severity distribution $\bpi$ over cost levels, yielding a
@@ -175,39 +174,26 @@ quantiles, and required reserves are computable in closed form
 or by Monte Carlo simulation. They illustrate the framework on
 a single $82$-query insurance pilot and report a striking
 accuracy-vs-cost ranking divergence; whether that divergence
-generalises across domains, model families, and full-scale
-corpora was left open.
+generalizing across domains, model families, and full-scale corpora was left open.
 In this paper, we empirically test the framework on $12$
-open-weight LLMs plus random and majority baselines across $11$
-benchmarks in finance, medicine, law, and insurance, each
-evaluated on the \emph{full} test set. The aim is not to crown
-a best model but to characterise where the framework adds
+open-weight LLMs plus two baselines across $11$
+benchmarks in finance, medicine, law, and insurance. The aim is not to crown a best model, but to characterize where the framework adds
 signal beyond accuracy and where it does not.
 
 Our contributions are twofold:
-(1)~\textbf{The first multi-domain empirical validation} of the
-framework, characterising where it adds signal over accuracy and
-over the Multidimensional Quality Metrics (MQM) framework
-\citep{lommel2014mqm}---the closest NLP precedent, which assigns
-severity-weighted scores to translation errors---and where it
-does not, together with the reusable artifacts (severity-
-annotation tables for the $11$ corpora, four cost-vector
-calibrations from Basel LDA, regulatory, clinical, and
-litigation data, and full per-cell results).
+(1)~\textbf{A multi-domain empirical validation} of the
+framework, characterizing where it adds signal over accuracy and
+the Multidimensional Quality Metrics (MQM) framework
+\citep{lommel2014mqm}---a severity-weighted scoring scheme from
+machine translation---and where it does not.
 (2)~\textbf{An open-source library, \seveval{}}, that wraps the
-framework as a HuggingFace-style \texttt{evaluate.Metric} so any
-LLM evaluation pipeline can compute $\widehat{\ES}$,
-$\widehat{\TVaR}_{0.95}$, Lundberg reserves, and routing curves
-with a single call.
+framework as a HuggingFace-style metric, so any evaluation pipeline can compute the appropriate risk metrics.
 
-\noindent The paper is organised as follows:
-\autoref{sec:framework} recapitulates the framework;
-\autoref{sec:experiments} details the setup; \autoref{sec:results}
-reports rankings, variance, and routing; \autoref{sec:discussion}
-discusses what the framework adds over accuracy and MQM. We
-release \seveval{}, a HuggingFace-style Python library, with
-severity tables (\autoref{sec:severity-annotation}) and cost
-calibrations (\autoref{sec:app-calibration}).
+The paper is organized as follows:
+\autoref{sec:framework} recapitulates the framework proposed by \citet{beauchemin2026position};
+\autoref{sec:experiments} details the experimental setup; \autoref{sec:results}
+reports the results, while, \autoref{sec:discussion}
+discusses what the framework adds over accuracy and MQM.
 
 % ============================================================================
 % 2. RELATED WORK
