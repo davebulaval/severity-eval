@@ -149,20 +149,23 @@ with annotations and calibration evidence.
 \section{Introduction}
 \label{sec:introduction}
 
-Accuracy treats every error as equally costly: a misclassified
-spam email and a misclassified cancer diagnosis count the same.
-As LLMs enter high-stakes deployments, that assumption breaks.
-Consider JudgeBERT, a French legal-simplification benchmark of
-\citet{judgebert2025} for assessing legal-meaning preservation
-between source and simplified statutes. On this benchmark,
-\texttt{DeepSeek-R1-70B} edges \texttt{Llama-3.3-70B} by $+0.74$
-accuracy points yet costs $\$28.69$\,M more per $10{,}000$
-outputs at calibrated severity weights; the leaderboard rewards
-the more expensive model. A
-revenue answer of \$$11.60$\,B instead of \$$14.20$\,B shifts a
-trading decision, and a missed sepsis cue delays intervention.
-Per-error costs span orders of magnitude, yet accuracy assigns
-them the same penalty. This kind of dollar gap is what an
+Accuracy and other automatic metrics (AM) treat every error as
+equally costly: a misclassified spam email and a misclassified
+cancer diagnosis count the same. As LLMs enter high-stakes
+deployments, that assumption breaks. Consider JudgeBERT, a
+French legal-simplification benchmark of \citet{judgebert2025}
+for assessing legal-meaning preservation between source and
+simplified statutes. On this benchmark, \texttt{DeepSeek-R1-70B}
+edges \texttt{Llama-3.3-70B} by $+0.74$ accuracy points yet costs
+$\$28.69$\,M more per $10{,}000$ outputs at calibrated severity
+weights; the leaderboard rewards the more expensive model. The
+gap is even starker in clinical settings:
+\citet{bedi2025medhelm} report that medical LLMs produce errors
+ranging from operationally trivial (a paraphrase of a correct
+recommendation) to potentially fatal (an order-of-magnitude
+dosage miscalculation or a missed contraindication), yet AM
+score them identically. Per-error costs span orders of
+magnitude. This kind of dollar gap is what an
 accuracy-only leaderboard hides; quantifying it is the
 contribution this paper measures.
 
