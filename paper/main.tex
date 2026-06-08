@@ -95,7 +95,7 @@
 \makeatletter
 \newcommand{\coderepo}{%
   \ifacl@anonymize
-    \emph{URL removed for double-blind review}%
+    Removed for double-blind review%
   \else
     \url{https://github.com/davebulaval/severity-eval}%
   \fi
@@ -138,9 +138,8 @@ max \$28.69\,M per $10{,}000$ outputs), severity-share
 decomposition showing all four domains frequency-dominated
 ($0.06$--$0.27$), and excess-of-loss routing cutting
 $\widehat{\ES}$ by $84.59$--$98.32\%$. We release
-\seveval{}\footnote{Code, severity annotations, and evaluation
-results: \coderepo.}, a HuggingFace-style library, with
-annotations and calibration evidence.
+\seveval{}\footnote{\coderepo.}, a HuggingFace-style library,
+with annotations and calibration evidence.
 \end{abstract}
 
 % ============================================================================
@@ -1209,12 +1208,6 @@ metric, can be used to inform but not replace human judgment
 
 \appendix
 
-\section{Cost Calibration Evidence}
-\label{sec:app-calibration}
-
-% Include from separate file
-\input{severity-annotation-guidelines}
-
 \section{The \seveval{} Library}
 \label{sec:app-library}
 
@@ -1305,6 +1298,78 @@ checkpoints, runs the analysis
 (\texttt{experiments/analysis.py}) and regenerates all paper
 figures and tables. Stages are idempotent and can be resumed with
 the corresponding \texttt{--skip-*} flag.
+
+\section{Cost Calibration Evidence}
+\label{sec:app-calibration}
+
+% Include from separate file
+\input{severity-annotation-guidelines}
+
+\section{Output-Level Severity Validation on FinanceBench}
+\label{sec:app-output-severity}
+
+For each (model, instance) cell where the model is wrong on
+FinanceBench, we re-label severity by sending the question, the
+gold answer, and the model's actual wrong prediction to Claude
+Sonnet 4 with the same four-tier rubric. FinanceBench is the
+only domain where severity is derived from a defensible
+answer-type by metric-type matrix rather than from a native
+structured field. The labelling script
+(\path{experiments/validate_severity_output_llm.py}) writes
+\path{results/output_severity_validation.{json,csv}}. We label
+all wrong predictions across the 12 models, $n=1090$.
+
+\begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Rule $\backslash$ LLM & negl. & minor & major & critical \\
+\midrule
+negligible & $96$  & $21$  & $15$ & $24$  \\
+minor      & $386$ & $47$  & $87$ & $189$ \\
+major      & $102$ & $8$   & $26$ & $65$  \\
+critical   & $16$  & $0$   & $0$  & $8$   \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
+$68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (\texttt{Qwen3-30B-A3B})
+to $0.042$ (\texttt{Llama-3.3-70B}), well below the rule-vs-LLM
+$\kappa = 0.46$ obtained when both annotators score the question
+\emph{type} rather than the model's output
+(\autoref{sec:app-severity-by-dataset}). The directions of
+disagreement are roughly balanced: $47.00\%$ of LLM labels are
+strictly lower-severity than the rule (paraphrases, immaterial
+digit changes, sign-preserving rounding), $36.80\%$ are
+strictly higher (sign flips on a yes/no question whose tier was
+\emph{minor}, magnitude errors on what the rule called a
+descriptive answer), and $16.20\%$ agree exactly. The two labels
+target different quantities: question-level severity is keyed to
+which answer-type$\times$metric-type combination is being
+asked; output-level severity is keyed to what the model
+actually produced relative to the gold. Per-model mean severity
+diverges between the two labels in non-trivial ways: the two
+gpt-oss models are the worst under the rule (mean rule-tier
+$1.17$--$1.19$) but the joint-best under the LLM ($0.49$),
+because their wrong predictions sit on harder question types yet
+produce close-to-gold outputs. Conversely, \texttt{Granite-3.2-8B} and
+the two Gemma models are mid-pack by rule ($1.05$--$1.07$) but
+worst by LLM ($1.64$--$1.94$). Kendall $\tau$ between per-model
+mean rule and LLM severities is $-0.364$: output-level
+annotation would not simply scale the rule-based $\widehat{\ES}$
+estimate; it can reorder models within the same domain. On
+FinanceBench specifically, the rank correlation between accuracy
+and $\widehat{\ES}$ is $\tau = 0.85$ under the rule label and
+$\tau = 0.12$ under the output label, so the RQ1 finding
+\emph{accuracy and $\widehat{\ES}$ rank models differently} is
+strengthened, not weakened, by output-aware severity. The body's
+reported $\widehat{\ES}$ values are therefore best read as a
+question-importance-weighted exposure under a defensible default
+labelling. (Note: the $24$ rule-critical predictions
+arise entirely from the FinanceBench cross-tabulation matrix;
+no FinanceBench question is natively labelled \emph{critical}
+without the dollar-large + core combination.)
 
 \section{Severity Annotation and Per-Domain Scales}
 \label{sec:app-severity-by-dataset}
@@ -1515,12 +1580,6 @@ avoid letting a small benchmark (financebench, $n{=}150$)
 dominate a large one (maud, $n{=}39{,}231$) when the per-dataset
 CIs differ by an order of magnitude.
 
-\section{Prompt Templates}
-\label{sec:app-prompts}
-
-% Include from separate file
-\input{prompt_documentation}
-
 \section{Robustness Analyses}
 \label{sec:app-robustness}
 
@@ -1694,204 +1753,6 @@ finite-sample effect in the two domains where the framework
 shows the most variance (finance: severity-driven, insurance:
 small model spread), not a property of the framework or of the
 specific datasets dropped.
-
-\section{Output-Level Severity Validation on FinanceBench}
-\label{sec:app-output-severity}
-
-For each (model, instance) cell where the model is wrong on
-FinanceBench, we re-label severity by sending the question, the
-gold answer, and the model's actual wrong prediction to Claude
-Sonnet 4 with the same four-tier rubric. FinanceBench is the
-only domain where severity is derived from a defensible
-answer-type by metric-type matrix rather than from a native
-structured field. The labelling script
-(\path{experiments/validate_severity_output_llm.py}) writes
-\path{results/output_severity_validation.{json,csv}}. We label
-all wrong predictions across the 12 models, $n=1090$.
-
-\begin{center}
-\small
-\begin{tabular}{lrrrr}
-\toprule
-Rule $\backslash$ LLM & negl. & minor & major & critical \\
-\midrule
-negligible & $96$  & $21$  & $15$ & $24$  \\
-minor      & $386$ & $47$  & $87$ & $189$ \\
-major      & $102$ & $8$   & $26$ & $65$  \\
-critical   & $16$  & $0$   & $0$  & $8$   \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\noindent Pooled Cohen $\kappa = 0.013$, adjacent agreement
-$68.30\%$. Per-model $\kappa$ ranges from $-0.017$ (\texttt{Qwen3-30B-A3B})
-to $0.042$ (\texttt{Llama-3.3-70B}), well below the rule-vs-LLM
-$\kappa = 0.46$ obtained when both annotators score the question
-\emph{type} rather than the model's output
-(\autoref{sec:app-severity-by-dataset}). The directions of
-disagreement are roughly balanced: $47.00\%$ of LLM labels are
-strictly lower-severity than the rule (paraphrases, immaterial
-digit changes, sign-preserving rounding), $36.80\%$ are
-strictly higher (sign flips on a yes/no question whose tier was
-\emph{minor}, magnitude errors on what the rule called a
-descriptive answer), and $16.20\%$ agree exactly. The two labels
-target different quantities: question-level severity is keyed to
-which answer-type$\times$metric-type combination is being
-asked; output-level severity is keyed to what the model
-actually produced relative to the gold. Per-model mean severity
-diverges between the two labels in non-trivial ways: the two
-gpt-oss models are the worst under the rule (mean rule-tier
-$1.17$--$1.19$) but the joint-best under the LLM ($0.49$),
-because their wrong predictions sit on harder question types yet
-produce close-to-gold outputs. Conversely, \texttt{Granite-3.2-8B} and
-the two Gemma models are mid-pack by rule ($1.05$--$1.07$) but
-worst by LLM ($1.64$--$1.94$). Kendall $\tau$ between per-model
-mean rule and LLM severities is $-0.364$: output-level
-annotation would not simply scale the rule-based $\widehat{\ES}$
-estimate; it can reorder models within the same domain. On
-FinanceBench specifically, the rank correlation between accuracy
-and $\widehat{\ES}$ is $\tau = 0.85$ under the rule label and
-$\tau = 0.12$ under the output label, so the RQ1 finding
-\emph{accuracy and $\widehat{\ES}$ rank models differently} is
-strengthened, not weakened, by output-aware severity. The body's
-reported $\widehat{\ES}$ values are therefore best read as a
-question-importance-weighted exposure under a defensible default
-labelling. (Note: the $24$ rule-critical predictions
-arise entirely from the FinanceBench cross-tabulation matrix;
-no FinanceBench question is natively labelled \emph{critical}
-without the dollar-large + core combination.)
-
-\section{Auxiliary Analyses}
-\label{sec:app-auxiliary}
-
-\subsection{Model-Class: Reasoning vs Non-Reasoning}
-\label{sec:app-model-class}
-
-\emph{This is an anecdotal observation and is not used as
-evidence anywhere else in the paper. It is included for
-completeness and to forestall the question.}
-
-The four reasoning-tuned checkpoints in our roster
-(\texttt{DeepSeek-R1-Distill-70B}, \texttt{QwQ-32B}, \texttt{Qwen3-14B}, \texttt{Qwen3-30B-A3B})
-achieve lower mean $\widehat{\ES}$ than the eight non-reasoning
-checkpoints in three of the four domains: $-\$28.49$\,M in
-medical, $-\$12.17$\,M in legal, $-\$2.73$\,M in finance, per
-$10{,}000$ outputs (unweighted mean across the reasoning vs.\
-non-reasoning groups, computed from
-\path{results/metrics_by_domain.csv}). Insurance is the
-exception: the reasoning mean is $\$1.27$\,M \emph{higher} than
-the non-reasoning mean, driven by \texttt{DeepSeek-R1-Distill-70B} at
-$\$255.99$\,M, which exceeds three of the eight non-reasoning
-checkpoints on that domain. The three-of-four sign consistency
-corresponds to a sign-test $p$-value of $\binom{4}{3}/2^4=0.25$
-under the strict null, which is not informative at $n=4$.
-
-The reasoning sample is small ($n=4$) and vendor-correlated.
-Three of the four reasoning models are from Alibaba (\texttt{Qwen3-14B},
-\texttt{Qwen3-30B-A3B}, \texttt{QwQ-32B}); the same vendor's non-reasoning
-checkpoint \texttt{Qwen2.5-72B} lands among the more expensive models on
-HEAD-QA ($\widehat{\ES} = \$752$\,M, the most-expensive medical
-dataset), so vendor and
-post-training procedure are confounded with the reasoning label.
-A controlled within-vendor comparison would require evaluating
-the same base model with and without reasoning fine-tuning,
-which is not available in the open-weight checkpoints we used.
-We report the observation but do not use it to support any
-claim in the body.
-
-\subsection{Slopegraphs for All Four Domains}
-\label{sec:app-slopegraphs}
-
-\autoref{fig:ranking_finance} in the body shows the finance
-slopegraph. The other three domains are reproduced below at the
-same model order (top to bottom by accuracy) but with smaller
-vertical scale. Legal is fully monotone ($\tau{=}0.97$, one
-adjacent swap); medical has two adjacent swaps ($\tau{=}0.94$).
-Insurance has $\tau{=}0.73$ with nine discordant model pairs;
-the swaps are spread across the middle of the ranking rather
-than concentrated at the top, which is why the visual impression
-remains close to monotone even though the rank correlation is
-moderate.
-
-\begin{figure*}[t]
-\centering
-\resizebox{0.9\textwidth}{!}{%
-\begin{tikzpicture}[
-    yscale=0.32, xscale=1.0,
-    every node/.style={font=\scriptsize},
-    flat/.style={draw=black!35, line width=0.5pt},
-    swap/.style={draw=sevNeg, line width=1.1pt},
-    dot/.style={circle, fill=black!60, inner sep=0.9pt},
-    panel/.style={anchor=north west},
-]
-  % ===== Medical (top-left): one swap (5,6) =====
-  \node[panel, font=\footnotesize\bfseries] at (0, 2) {Medical \scriptsize($\tau{=}0.94$)};
-  \draw[flat] (0,-1) -- (5,-1);    % \texttt{gpt-oss-20b}
-  \draw[flat] (0,-2) -- (5,-2);    % \texttt{gpt-oss-120b}
-  \draw[flat] (0,-3) -- (5,-3);    % \texttt{phi-4}
-  \draw[flat] (0,-4) -- (5,-4);    % deepseek-r1
-  \draw[swap] (0,-5) -- (5,-6);    % \texttt{qwen3-30b-a3b} swap
-  \draw[swap] (0,-6) -- (5,-5);    % \texttt{qwq-32b} swap
-  \draw[flat] (0,-7) -- (5,-7);    % \texttt{llama-3.3-70b}
-  \draw[flat] (0,-8) -- (5,-8);    % \texttt{qwen3-14b}
-  \draw[flat] (0,-9) -- (5,-9);    % \texttt{qwen2.5-72b}
-  \draw[flat] (0,-10) -- (5,-10);  % granite
-  \draw[flat] (0,-11) -- (5,-11);  % gemma-27b
-  \draw[flat] (0,-12) -- (5,-12);  % gemma-12b
-  \foreach \y in {1,...,12}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
-
-  % ===== Legal (top-right): no crossings =====
-  \node[panel, font=\footnotesize\bfseries] at (8, 2) {Legal \scriptsize($\tau{=}0.97$)};
-  \foreach \y in {1,...,12}{
-    \draw[flat] (8,-\y) -- (13,-\y);
-    \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){};
-  }
-
-  % ===== Insurance (bottom-left): tau=0.73, 9 discordant pairs =====
-  \node[panel, font=\footnotesize\bfseries] at (0, -14) {Insurance \scriptsize($\tau{=}0.73$)};
-  \draw[flat] (0,-17) -- (5,-17);  % \texttt{gpt-oss-20b}      1->1
-  \draw[swap] (0,-18) -- (5,-19);  % \texttt{gpt-oss-120b}     2->3
-  \draw[swap] (0,-19) -- (5,-18);  % \texttt{qwen3-14b}        3->2
-  \draw[flat] (0,-20) -- (5,-20);  % \texttt{qwq-32b}          4->4
-  \draw[flat] (0,-21) -- (5,-21);  % \texttt{phi-4}            5->5
-  \draw[swap] (0,-22) -- (5,-25);  % \texttt{qwen3-30b-a3b}    6->9
-  \draw[swap] (0,-23) -- (5,-24);  % \texttt{qwen2.5-72b}      7->8
-  \draw[swap] (0,-24) -- (5,-22);  % \texttt{granite-3.2-8b}   8->6
-  \draw[swap] (0,-25) -- (5,-28);  % deepseek         9->12
-  \draw[swap] (0,-26) -- (5,-23);  % \texttt{gemma-3-27b}      10->7
-  \draw[swap] (0,-27) -- (5,-26);  % \texttt{gemma-3-12b}      11->10
-  \draw[swap] (0,-28) -- (5,-27);  % \texttt{llama-3.3-70b}    12->11
-  \foreach \y in {17,...,28}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
-
-  % ===== Finance (bottom-right): reference =====
-  \node[panel, font=\footnotesize\bfseries] at (8, -14) {Finance \scriptsize($\tau{=}0.58$, see Fig.~1)};
-  \draw[flat] (8,-17) -- (13,-18);   % \texttt{gemma-3-27b}
-  \draw[flat] (8,-18) -- (13,-20);   % \texttt{qwen3-14b}
-  \draw[flat] (8,-19) -- (13,-22);   % \texttt{qwen3-30b-a3b}
-  \draw[swap] (8,-20) -- (13,-17);   % deepseek rise
-  \draw[flat] (8,-21) -- (13,-23);
-  \draw[flat] (8,-22) -- (13,-21);
-  \draw[flat] (8,-23) -- (13,-24);
-  \draw[flat] (8,-24) -- (13,-25);
-  \draw[swap] (8,-25) -- (13,-19);   % \texttt{gpt-oss-20b} rise
-  \draw[flat] (8,-26) -- (13,-26);
-  \draw[flat] (8,-27) -- (13,-27);
-  \draw[flat] (8,-28) -- (13,-28);
-  \foreach \y in {17,...,28}{ \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){}; }
-  \node[font=\scriptsize, anchor=north] at (2.5,-29) {Accuracy $\to$ $\widehat{\ES}$};
-  \node[font=\scriptsize, anchor=north] at (10.5,-29) {Accuracy $\to$ $\widehat{\ES}$};
-\end{tikzpicture}%
-}
-\caption{Per-domain slopegraphs (small multiples). Each panel
-shows 12 models in accuracy rank order on the left and
-$\widehat{\ES}$ rank on the right; blue line segments mark
-discordant pairs. Legal has one adjacent swap; medical has two;
-insurance has nine discordant pairs concentrated in the middle
-of the ranking; finance has the largest reshuffles at the top
-and is shown in detail in \autoref{fig:ranking_finance}.}
-\label{fig:slopegraphs_all_domains}
-\vspace{-1em}
-\end{figure*}
 
 \section{Full Results Tables}
 \label{sec:app-full-results}
@@ -2104,3 +1965,141 @@ Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_
 \end{table*}
 
 \end{document}
+\section{Auxiliary Analyses}
+\label{sec:app-auxiliary}
+
+\subsection{Model-Class: Reasoning vs Non-Reasoning}
+\label{sec:app-model-class}
+
+\emph{This is an anecdotal observation and is not used as
+evidence anywhere else in the paper. It is included for
+completeness and to forestall the question.}
+
+The four reasoning-tuned checkpoints in our roster
+(\texttt{DeepSeek-R1-Distill-70B}, \texttt{QwQ-32B}, \texttt{Qwen3-14B}, \texttt{Qwen3-30B-A3B})
+achieve lower mean $\widehat{\ES}$ than the eight non-reasoning
+checkpoints in three of the four domains: $-\$28.49$\,M in
+medical, $-\$12.17$\,M in legal, $-\$2.73$\,M in finance, per
+$10{,}000$ outputs (unweighted mean across the reasoning vs.\
+non-reasoning groups, computed from
+\path{results/metrics_by_domain.csv}). Insurance is the
+exception: the reasoning mean is $\$1.27$\,M \emph{higher} than
+the non-reasoning mean, driven by \texttt{DeepSeek-R1-Distill-70B} at
+$\$255.99$\,M, which exceeds three of the eight non-reasoning
+checkpoints on that domain. The three-of-four sign consistency
+corresponds to a sign-test $p$-value of $\binom{4}{3}/2^4=0.25$
+under the strict null, which is not informative at $n=4$.
+
+The reasoning sample is small ($n=4$) and vendor-correlated.
+Three of the four reasoning models are from Alibaba (\texttt{Qwen3-14B},
+\texttt{Qwen3-30B-A3B}, \texttt{QwQ-32B}); the same vendor's non-reasoning
+checkpoint \texttt{Qwen2.5-72B} lands among the more expensive models on
+HEAD-QA ($\widehat{\ES} = \$752$\,M, the most-expensive medical
+dataset), so vendor and
+post-training procedure are confounded with the reasoning label.
+A controlled within-vendor comparison would require evaluating
+the same base model with and without reasoning fine-tuning,
+which is not available in the open-weight checkpoints we used.
+We report the observation but do not use it to support any
+claim in the body.
+
+\subsection{Slopegraphs for All Four Domains}
+\label{sec:app-slopegraphs}
+
+\autoref{fig:ranking_finance} in the body shows the finance
+slopegraph. The other three domains are reproduced below at the
+same model order (top to bottom by accuracy) but with smaller
+vertical scale. Legal is fully monotone ($\tau{=}0.97$, one
+adjacent swap); medical has two adjacent swaps ($\tau{=}0.94$).
+Insurance has $\tau{=}0.73$ with nine discordant model pairs;
+the swaps are spread across the middle of the ranking rather
+than concentrated at the top, which is why the visual impression
+remains close to monotone even though the rank correlation is
+moderate.
+
+\begin{figure*}[t]
+\centering
+\resizebox{0.9\textwidth}{!}{%
+\begin{tikzpicture}[
+    yscale=0.32, xscale=1.0,
+    every node/.style={font=\scriptsize},
+    flat/.style={draw=black!35, line width=0.5pt},
+    swap/.style={draw=sevNeg, line width=1.1pt},
+    dot/.style={circle, fill=black!60, inner sep=0.9pt},
+    panel/.style={anchor=north west},
+]
+  % ===== Medical (top-left): one swap (5,6) =====
+  \node[panel, font=\footnotesize\bfseries] at (0, 2) {Medical \scriptsize($\tau{=}0.94$)};
+  \draw[flat] (0,-1) -- (5,-1);    % \texttt{gpt-oss-20b}
+  \draw[flat] (0,-2) -- (5,-2);    % \texttt{gpt-oss-120b}
+  \draw[flat] (0,-3) -- (5,-3);    % \texttt{phi-4}
+  \draw[flat] (0,-4) -- (5,-4);    % deepseek-r1
+  \draw[swap] (0,-5) -- (5,-6);    % \texttt{qwen3-30b-a3b} swap
+  \draw[swap] (0,-6) -- (5,-5);    % \texttt{qwq-32b} swap
+  \draw[flat] (0,-7) -- (5,-7);    % \texttt{llama-3.3-70b}
+  \draw[flat] (0,-8) -- (5,-8);    % \texttt{qwen3-14b}
+  \draw[flat] (0,-9) -- (5,-9);    % \texttt{qwen2.5-72b}
+  \draw[flat] (0,-10) -- (5,-10);  % granite
+  \draw[flat] (0,-11) -- (5,-11);  % gemma-27b
+  \draw[flat] (0,-12) -- (5,-12);  % gemma-12b
+  \foreach \y in {1,...,12}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
+
+  % ===== Legal (top-right): no crossings =====
+  \node[panel, font=\footnotesize\bfseries] at (8, 2) {Legal \scriptsize($\tau{=}0.97$)};
+  \foreach \y in {1,...,12}{
+    \draw[flat] (8,-\y) -- (13,-\y);
+    \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){};
+  }
+
+  % ===== Insurance (bottom-left): tau=0.73, 9 discordant pairs =====
+  \node[panel, font=\footnotesize\bfseries] at (0, -14) {Insurance \scriptsize($\tau{=}0.73$)};
+  \draw[flat] (0,-17) -- (5,-17);  % \texttt{gpt-oss-20b}      1->1
+  \draw[swap] (0,-18) -- (5,-19);  % \texttt{gpt-oss-120b}     2->3
+  \draw[swap] (0,-19) -- (5,-18);  % \texttt{qwen3-14b}        3->2
+  \draw[flat] (0,-20) -- (5,-20);  % \texttt{qwq-32b}          4->4
+  \draw[flat] (0,-21) -- (5,-21);  % \texttt{phi-4}            5->5
+  \draw[swap] (0,-22) -- (5,-25);  % \texttt{qwen3-30b-a3b}    6->9
+  \draw[swap] (0,-23) -- (5,-24);  % \texttt{qwen2.5-72b}      7->8
+  \draw[swap] (0,-24) -- (5,-22);  % \texttt{granite-3.2-8b}   8->6
+  \draw[swap] (0,-25) -- (5,-28);  % deepseek         9->12
+  \draw[swap] (0,-26) -- (5,-23);  % \texttt{gemma-3-27b}      10->7
+  \draw[swap] (0,-27) -- (5,-26);  % \texttt{gemma-3-12b}      11->10
+  \draw[swap] (0,-28) -- (5,-27);  % \texttt{llama-3.3-70b}    12->11
+  \foreach \y in {17,...,28}{ \node[dot] at (0,-\y){}; \node[dot] at (5,-\y){}; }
+
+  % ===== Finance (bottom-right): reference =====
+  \node[panel, font=\footnotesize\bfseries] at (8, -14) {Finance \scriptsize($\tau{=}0.58$, see Fig.~1)};
+  \draw[flat] (8,-17) -- (13,-18);   % \texttt{gemma-3-27b}
+  \draw[flat] (8,-18) -- (13,-20);   % \texttt{qwen3-14b}
+  \draw[flat] (8,-19) -- (13,-22);   % \texttt{qwen3-30b-a3b}
+  \draw[swap] (8,-20) -- (13,-17);   % deepseek rise
+  \draw[flat] (8,-21) -- (13,-23);
+  \draw[flat] (8,-22) -- (13,-21);
+  \draw[flat] (8,-23) -- (13,-24);
+  \draw[flat] (8,-24) -- (13,-25);
+  \draw[swap] (8,-25) -- (13,-19);   % \texttt{gpt-oss-20b} rise
+  \draw[flat] (8,-26) -- (13,-26);
+  \draw[flat] (8,-27) -- (13,-27);
+  \draw[flat] (8,-28) -- (13,-28);
+  \foreach \y in {17,...,28}{ \node[dot] at (8,-\y){}; \node[dot] at (13,-\y){}; }
+  \node[font=\scriptsize, anchor=north] at (2.5,-29) {Accuracy $\to$ $\widehat{\ES}$};
+  \node[font=\scriptsize, anchor=north] at (10.5,-29) {Accuracy $\to$ $\widehat{\ES}$};
+\end{tikzpicture}%
+}
+\caption{Per-domain slopegraphs (small multiples). Each panel
+shows 12 models in accuracy rank order on the left and
+$\widehat{\ES}$ rank on the right; blue line segments mark
+discordant pairs. Legal has one adjacent swap; medical has two;
+insurance has nine discordant pairs concentrated in the middle
+of the ranking; finance has the largest reshuffles at the top
+and is shown in detail in \autoref{fig:ranking_finance}.}
+\label{fig:slopegraphs_all_domains}
+\vspace{-1em}
+\end{figure*}
+
+\section{Prompt Templates}
+\label{sec:app-prompts}
+
+% Include from separate file
+\input{prompt_documentation}
+
