@@ -419,6 +419,7 @@ Domain & Dataset & Inst.\ & Task & Severity source & Reference \\
 \caption{Datasets evaluated. \enquote{Inst.} denotes the number of
 test-set instances.}
 \label{tab:datasets}
+\vspace{-1em}
 \end{table*}
 
 % ----------------------------------------------------------------------------
@@ -446,8 +447,8 @@ Insurance & \$100  & \$2k   & \$10k  & \$250k \\
 \caption{Cost vectors by domain (three orders of magnitude per
 domain; calibration in \autoref{sec:app-calibration}).}
 \label{tab:costs}
-\end{table}
 \vspace{-1em}
+\end{table}
 
 The calibration of each cost level draws on multiple sources:
 regulatory penalties (SEC SAB~99, SOX~\S906, FINRA, FDA, EU~AI~Act),
@@ -624,8 +625,8 @@ Finance is moderate ($\tau{=}0.69$); the other three are strong
 ($\tau \geq 0.80$). Bootstrap CIs are wider for finance and
 insurance given the smaller per-domain variance.}
 \label{tab:h1}
-\end{table}
 \vspace{-1em}
+\end{table}
 
 \begin{figure*}[t]
 \centering
@@ -697,6 +698,7 @@ random and majority sit at the bottom on both axes. Mini-slopegraphs
 for the other three domains in
 \autoref{fig:slopegraphs_all_domains}.}
 \label{fig:ranking_finance}
+\vspace{-1em}
 \end{figure*}
 
 \subsection{RQ2: Severity vs.\ frequency variance}
@@ -780,8 +782,8 @@ Domain & CV($c$) & $\rho_{1/2}$ & $\widehat{\ES}$ reduction \\
 $\rho_{1/2}$ = median deferred share). Finance is cheap-routing;
 the others are deep-routing.}
 \label{tab:h4}
-\end{table}
 \vspace{-1em}
+\end{table}
 
 \begin{figure}[t]
 \centering
@@ -821,53 +823,58 @@ contribution, summing to 100\%. All four domains are
 frequency-dominated; legal and medical have the largest severity
 contribution.}
 \label{fig:variance}
-\end{figure}
 \vspace{-1em}
+\end{figure}
 
 \begin{figure}[t]
 \centering
+\resizebox{\columnwidth}{!}{%
 \begin{tikzpicture}[
     font=\footnotesize,
-    yscale=0.7,
+    yscale=0.55,
 ]
-  \def\bh{0.18}
-  % headers
-  \node[font=\scriptsize, text=black!60, anchor=south] at (1.5,0.05)
-    {\% queries deferred ($\rho_{1/2}$)};
-  \node[font=\scriptsize, text=accentBlue!95!black, anchor=south] at (4.5,0.05)
-    {$\widehat{\ES}$ reduction (\%)};
-  % rows: domain / deferred / reduction / leverage_label
+  \def\bh{0.30}
+  % Header
+  \node[font=\scriptsize, text=black!55, anchor=west] at (0,0.25)
+    {\textcolor{black!55}{\rule{6pt}{6pt}}\,deferred \;\;
+     \textcolor{accentBlue}{\rule{6pt}{6pt}}\,$\widehat{\ES}$ reduction};
+  % rows: y / domain / deferred% / reduction% / leverage
   \foreach \y/\dom/\rt/\red/\lev in {%
-      1/Finance/19.73/84.59/4.29\,$\times$,%
-      2/Insurance/41.36/98.32/2.38\,$\times$,%
-      3/Legal/53.15/98.04/1.84\,$\times$,%
-      4/Medical/51.65/93.28/1.81\,$\times$}{%
-    \node[anchor=east] at (-0.1,-\y-0.2) {\dom};
-    % deferred bar (gray, top), reduction bar (blue, bottom)
+      1/Finance/19.73/84.59/4.29,%
+      2/Insurance/41.36/98.32/2.38,%
+      3/Legal/53.15/98.04/1.84,%
+      4/Medical/51.65/93.28/1.81}{%
+    \node[anchor=east, font=\scriptsize] at (-0.1,-\y) {\dom\;(\lev$\times$)};
     \pgfmathsetmacro{\rtx}{\rt*0.06}
     \pgfmathsetmacro{\redx}{\red*0.06}
-    \fill[black!50]  (0,-\y-\bh)         rectangle (\rtx,-\y+\bh);
-    \fill[accentBlue] (0,-\y-2*\bh-0.45) rectangle (\redx,-\y-0.45+0);
-    \node[font=\scriptsize, text=black!75, anchor=west] at (\rtx,-\y) {\rt\%};
-    \node[font=\scriptsize, text=accentBlue!95!black, anchor=west] at (\redx,-\y-0.45) {\red\%};
-    \node[font=\scriptsize, text=black!55, anchor=west] at (6.0,-\y-0.22)
-      {leverage \lev};
+    % background track
+    \draw[black!12, line width=0.5pt] (0,-\y) -- (6,-\y);
+    % reduction bar (blue, full extent)
+    \fill[accentBlue] (0,-\y-\bh) rectangle (\redx,-\y+\bh);
+    % deferred bar (gray) overlaid on top portion
+    \fill[black!55] (0,-\y-\bh) rectangle (\rtx,-\y+\bh);
+    \node[font=\scriptsize, text=black, anchor=west] at (\redx+0.05,-\y) {\red\%};
+    \node[font=\tiny, text=white, anchor=center] at (\rtx*0.5,-\y) {\rt\%};
   }
   % x axis ticks
-  \node[font=\scriptsize, text=black!55] at (0,-5.1) {0\%};
-  \node[font=\scriptsize, text=black!55] at (3,-5.1) {50\%};
-  \node[font=\scriptsize, text=black!55] at (6,-5.1) {100\%};
-\end{tikzpicture}
-\caption{Per domain: \textcolor{black!60}{gray bar} = fraction
-of queries deferred to a human reviewer, \textcolor{accentBlue!95!black}{blue
-bar} = resulting $\widehat{\ES}$ reduction (both on a $0$--$100\%$
-axis; $d{=}c_3$, $h{=}\$50$, full corpus). Leverage = reduction\,/\,deferred;
-finance is the cheap-routing regime ($4.29\times$), while the
-others get near-total cuts but only after deferring around half
-the queries ($1.81$--$2.38\times$).}
+  \draw[black!30, line width=0.4pt] (0,-4.7) -- (6,-4.7);
+  \foreach \x/\v in {0/0, 1.5/25, 3/50, 4.5/75, 6/100} {
+    \draw[black!30] (\x,-4.7) -- (\x,-4.6);
+    \node[font=\scriptsize, text=black!55, anchor=north] at (\x,-4.75) {\v};
+  }
+  \node[font=\scriptsize, text=black!55, anchor=north] at (6.4,-4.75) {\%};
+\end{tikzpicture}}%
+\caption{HITL routing per domain ($d{=}c_3$, $h{=}\$50$, full
+corpus). For each domain, the blue bar shows the $\widehat{\ES}$
+reduction reached when the gray bar's fraction of queries is
+deferred to a human reviewer. Domain leverage
+(reduction\,/\,deferred) is shown next to the domain name:
+finance is the cheap-routing regime ($4.29\times$); the other
+three reach near-total cuts but at $1.81$--$2.38\times$ leverage
+because they require deferring around half their queries.}
 \label{fig:routing}
-\end{figure}
 \vspace{-1em}
+\end{figure}
 
 % ============================================================================
 % 7. DISCUSSION
@@ -1434,8 +1441,8 @@ by vLLM (RedHatAI FP8, Qwen-native FP8, MXFP4 for gpt-oss, FP16 for
 Granite). $70$--$72$\,B and $120$\,B models use TP$=2$; others
 single-GPU.}
 \label{tab:models}
-\end{table}
 \vspace{-1em}
+\end{table}
 
 \paragraph{Inference hardware and quantization.}
 Local open-weight models are served by vLLM with FP8 quantization
@@ -1890,6 +1897,7 @@ insurance has nine discordant pairs concentrated in the middle
 of the ranking; finance has the largest reshuffles at the top
 and is shown in detail in \autoref{fig:ranking_finance}.}
 \label{fig:slopegraphs_all_domains}
+\vspace{-1em}
 \end{figure*}
 
 \section{Full Results Tables}
@@ -1954,6 +1962,7 @@ Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_
   & \texttt{phi-4}                    & 43.5 & 0.565 & 25.3 & 27.3 & 27.9 \\
 \bottomrule
 \end{tabular}
+\vspace{-1em}
 \end{table*}
 
 \begin{table*}[t]\centering\caption{\textbf{Legal} per-(dataset, model) accuracy and risk
@@ -2005,6 +2014,7 @@ Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_
   & \texttt{phi-4}                    & 16.8 & 0.832 & 525.7 & 538.9 & 542.4 \\
 \bottomrule
 \end{tabular}
+\vspace{-1em}
 \end{table*}
 
 \begin{table*}[t]\centering\caption{\textbf{Medical} per-(dataset, model) accuracy
@@ -2057,6 +2067,7 @@ Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_
   & \texttt{qwen3-30b-a3b}            &  99.9 & 0.001 & 1.0 & 2.1 & 2.6 \\
 \bottomrule
 \end{tabular}
+\vspace{-1em}
 \end{table*}
 
 \begin{table*}[t]\centering\caption{\textbf{Insurance} per-(dataset,
@@ -2096,6 +2107,7 @@ Dataset & Model & Acc.\ (\%) & $\hat{p}$ & $\widehat{\ES}$ & VaR$_{95}$ & TVaR$_
   & \texttt{llama-3.3-70b}            & 83.3 & 0.167 & 35.4 & 40.1 & 41.3 \\
 \bottomrule
 \end{tabular}
+\vspace{-1em}
 \end{table*}
 
 \end{document}
